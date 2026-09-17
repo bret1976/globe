@@ -1,0 +1,15 @@
+node_modules
+.git
+.env
+.gev-cache
+.gev-logs
+dist
+screenshots
+qa-shots
+output
+.DS_Store
+.gstack
+3d-models
+pinokio/ENVIRONMENT
+pinokio/.installed
+*.log

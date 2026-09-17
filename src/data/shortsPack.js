@@ -1,0 +1,240 @@
+/**
+ * GodsEye Shorts pack (2026-09-10 → 2026-09-15) — Bret Railway globe.
+ *
+ * Reimplements ideas from Bilawal Sidhu's free/public Shorts on HIS hosted globe:
+ *  1) Bay Area air + marine traffic
+ *  2) Digital nervous system (HUD + OSM datacenters ONLY — no TeleGeography geometry)
+ *  3) Delta / voice cockpit (uses existing cockpit HUD; this pack flies a Delta-style approach)
+ *  4) Area 51 TR-3B easter egg (fly Groom Lake + surface TR-3B toggle tip)
+ *  5) Nepal floods reconstruction (enables upstream Bhote Koshi scene layers)
+ *
+ * Free/public data only. TeleGeography proprietary cable GeoJSON is not shipped.
+ */
+import * as Cesium from 'cesium';
+
+export const SHORTS_PACK_VERSION = '2026-09-17-shorts';
+export const SHORTS_PARAM = 'shorts';
+
+/** Hash/query values → pack id */
+export const SHORTS_ALIASES = Object.freeze({
+  bay: 'bay-area',
+  'bay-area': 'bay-area',
+  sf: 'bay-area',
+  nervous: 'nervous',
+  cables: 'nervous',
+  dns: 'nervous',
+  cockpit: 'cockpit',
+  delta: 'cockpit',
+  voice: 'cockpit',
+  a51: 'area51',
+  area51: 'area51',
+  'area-51': 'area51',
+  tr3b: 'area51',
+  nepal: 'nepal',
+  flood: 'nepal',
+  'bhote-koshi': 'nepal',
+});
+
+const BAY_VIEW = Object.freeze({
+  lon: -122.35,
+  lat: 37.75,
+  height: 85_000,
+  heading: 20,
+  pitch: -55,
+  duration: 2.8,
+});
+
+const NERVOUS_VIEW = Object.freeze({
+  lon: -32,
+  lat: 32,
+  height: 9_200_000,
+  heading: 10,
+  pitch: -85,
+  duration: 3.0,
+});
+
+const NERVOUS_FRANCE = Object.freeze({
+  lon: 2.4,
+  lat: 46.6,
+  height: 1_200_000,
+  heading: 0,
+  pitch: -70,
+  duration: 2.6,
+});
+
+const AREA51_VIEW = Object.freeze({
+  lon: -115.8111,
+  lat: 37.235,
+  height: 18_000,
+  heading: 35,
+  pitch: -42,
+  duration: 3.0,
+});
+
+const NEPAL_VIEW = Object.freeze({
+  lon: 85.9,
+  lat: 27.85,
+  height: 55_000,
+  heading: 15,
+  pitch: -45,
+  duration: 3.0,
+});
+
+const COCKPIT_SFO = Object.freeze({
+  lon: -122.379,
+  lat: 37.55,
+  height: 4_200,
+  heading: 350,
+  pitch: -12,
+  duration: 2.4,
+});
+
+function flyTo(viewer, shot) {
+  if (!viewer?.camera || !Cesium) return Promise.resolve();
+  const reduced =
+    typeof matchMedia === 'function' &&
+    matchMedia('(prefers-reduced-motion: reduce)').matches;
+  return new Promise((resolve) => {
+    viewer.camera.flyTo({
+      destination: Cesium.Cartesian3.fromDegrees(
+        shot.lon,
+        shot.lat,
+        shot.height,
+      ),
+      orientation: {
+        heading: Cesium.Math.toRadians(shot.heading || 0),
+        pitch: Cesium.Math.toRadians(shot.pitch || -45),
+        roll: 0,
+      },
+      duration: reduced ? 0 : shot.duration || 2.5,
+      complete: resolve,
+      cancel: resolve,
+    });
+  });
+}
+
+function toast(message) {
+  const el = document.getElementById('toast');
+  if (!el) return;
+  el.textContent = message;
+  el.classList.add('show');
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => el.classList.remove('show'), 4200);
+}
+
+function ensureBadge() {
+  let badge = document.getElementById('shorts-pack-badge');
+  if (badge) return badge;
+  badge = document.createElement('div');
+  badge.id = 'shorts-pack-badge';
+  badge.setAttribute('role', 'status');
+  badge.style.cssText =
+    'position:fixed;top:72px;left:50%;transform:translateX(-50%);z-index:40;' +
+    'padding:6px 12px;border:1px solid rgba(127,255,212,.45);border-radius:999px;' +
+    'background:rgba(4,12,18,.78);color:#9fffe0;font:600 11px/1.2 "JetBrains Mono",monospace;' +
+    'letter-spacing:.04em;pointer-events:none;backdrop-filter:blur(6px)';
+  badge.textContent = `SHORTS PACK · ${SHORTS_PACK_VERSION}`;
+  document.body.appendChild(badge);
+  return badge;
+}
+
+async function enableLayers(dataManager, ids = []) {
+  if (!dataManager?.setEnabled) return;
+  for (const id of ids) {
+    try {
+      await dataManager.setEnabled(id, true, { origin: 'user' });
+    } catch {
+      /* layer may be key-gated or absent */
+    }
+  }
+}
+
+/**
+ * Parse shorts pack id from hash or search.
+ * @returns {string|null}
+ */
+export function parseShortsPackFromLocation(loc = window.location) {
+  try {
+    const hash = String(loc.hash || '').replace(/^#/, '');
+    const params = new URLSearchParams(hash);
+    // also allow ?shorts= in search for smoke links
+    const search = new URLSearchParams(String(loc.search || '').replace(/^\?/, ''));
+    const raw = params.get(SHORTS_PARAM) || search.get(SHORTS_PARAM);
+    if (!raw) return null;
+    const key = String(raw).trim().toLowerCase();
+    return SHORTS_ALIASES[key] || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Run a shorts pack cinematic against the live globe.
+ * @param {object} input
+ * @param {import('cesium').Viewer} input.viewer
+ * @param {object} [input.dataManager]
+ */
+export async function runShortsPack(input = {}) {
+  const { viewer, dataManager } = input;
+  const pack = input.pack || parseShortsPackFromLocation();
+  if (!pack || !viewer) return null;
+
+  ensureBadge();
+
+  if (pack === 'bay-area') {
+    toast('SHORTS · Bay Area air + marine (OpenSky / AIS)');
+    await enableLayers(dataManager, ['flights', 'ais-vessels', 'military']);
+    await flyTo(viewer, BAY_VIEW);
+    return pack;
+  }
+
+  if (pack === 'nervous') {
+    toast('SHORTS · Digital nervous system (OSM DCs + HUD — no TeleGeography copy)');
+    await enableLayers(dataManager, ['local-datacenters', 'local-dams']);
+    // cables layer stays available but empty (geometry removed)
+    await flyTo(viewer, NERVOUS_VIEW);
+    await flyTo(viewer, NERVOUS_FRANCE);
+    return pack;
+  }
+
+  if (pack === 'cockpit') {
+    toast('SHORTS · Cockpit / voice approach (SFO)');
+    await enableLayers(dataManager, ['flights']);
+    await flyTo(viewer, COCKPIT_SFO);
+    // Surface cockpit if the app exposes the view switcher button
+    document.getElementById('enter-cockpit')?.click?.();
+    document.querySelector('[data-view="cockpit"]')?.click?.();
+    return pack;
+  }
+
+  if (pack === 'area51') {
+    toast('SHORTS · Area 51 · track a contact then 🛸 TR-3B');
+    await enableLayers(dataManager, ['flights', 'military']);
+    await flyTo(viewer, AREA51_VIEW);
+    return pack;
+  }
+
+  if (pack === 'nepal') {
+    toast('SHORTS · Nepal floods reconstruction');
+    await enableLayers(dataManager, [
+      'bhote-koshi-2026',
+      'bhote-koshi-locator',
+      'earthquakes',
+    ]);
+    await flyTo(viewer, NEPAL_VIEW);
+    return pack;
+  }
+
+  return null;
+}
+
+/**
+ * Boot hook — call after viewer + dataManager exist.
+ */
+export function initShortsPack(input = {}) {
+  ensureBadge();
+  const pack = parseShortsPackFromLocation();
+  if (!pack) return { pack: null, promise: Promise.resolve(null) };
+  const promise = runShortsPack({ ...input, pack });
+  return { pack, promise };
+}
