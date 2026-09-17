@@ -33,12 +33,17 @@ export function layerFeedState(stats = {}) {
   if (GUIDANCE_STATUSES.includes(status)) {
     return state.stale ? 'stale' : 'nominal';
   }
+  // Explicit fallback:false marks an intentional primary feed (military
+  // adsb.lol, or civilian regional live when OpenSky is unreachable). That
+  // must beat source/coverage string heuristics — otherwise a coverage label
+  // containing the word "fallback" falsely paints a healthy live chip yellow.
+  if (state.fallback === true || status === 'fallback' || state.mode === 'sim') {
+    return 'fallback';
+  }
   if (
-    state.fallback === true ||
-    status === 'fallback' ||
-    state.mode === 'sim' ||
-    /\bfallback\b/i.test(source) ||
-    (!hasExplicitFallback && /\badsb\.lol\b/i.test(source))
+    state.fallback !== false &&
+    (/\bfallback\b/i.test(source) ||
+      (!hasExplicitFallback && /\badsb\.lol\b/i.test(source)))
   ) {
     return 'fallback';
   }

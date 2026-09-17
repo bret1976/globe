@@ -926,6 +926,13 @@ export function createQueries({
             Math.ceil((flightState.feed._retryAt - Date.now()) / 1000),
           )
         : 0;
+      const source = flightState.feed._lastSource;
+      const coverage = flightState.feed._lastCoverage;
+      // adsb.lol regional is the intentional free live path when OpenSky is
+      // unreachable (TLS/network). Treat it as primary, not a broken fallback.
+      const adsbPrimary =
+        /\badsb\.lol\b/i.test(String(source || '')) &&
+        !flightState.feed._lastError;
       return {
         count: flightState.feed._count,
         lastUpdate: flightState.feed._lastUpdate,
@@ -933,8 +940,9 @@ export function createQueries({
         error: flightState.feed._lastError,
         status: flightState.feed._lastStatus,
         retryInSec,
-        source: flightState.feed._lastSource,
-        coverage: flightState.feed._lastCoverage,
+        source,
+        coverage,
+        fallback: adsbPrimary ? false : undefined,
       };
     },
   };

@@ -355,14 +355,19 @@ export function createLifecycle({
           );
         return Boolean(coverage && layerState._recordById.has(coverage[1]));
       });
+      // Prefer a real activation (frame + source badge + projection). The old
+      // bare `_activeCameraId = records[0]` assignment left SOURCE · UNKNOWN
+      // and a black player until the operator clicked a camera.
       if (!layerState._activeCameraId && layerState._records.length) {
-        layerState._activeCameraId = layerState._records[0].camera.id;
-        layerState._autoHopSuspended = false;
-      }
-      const activeRecord = parts.selection.getActiveRecord();
-      if (activeRecord) {
-        parts.projection.ensureProjectionRuntime(activeRecord);
-        parts.frames.refreshProjectionImage(activeRecord, true);
+        const nearest =
+          parts.navigation.nearestCameraIdToViewer?.() ||
+          layerState._records[0].camera.id;
+        parts.selection.setActiveCamera(nearest);
+      } else if (
+        layerState._activeCameraId &&
+        !parts.selection.getActiveRecord()?.activationDone
+      ) {
+        parts.selection.setActiveCamera(layerState._activeCameraId);
       }
       parts.geometryQueue.startGeometryLoadQueue();
       parts.rendering.refreshCoverageStyles();

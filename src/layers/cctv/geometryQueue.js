@@ -200,6 +200,29 @@ export function createGeometryQueue({
       stopGeometryLoadQueue();
       return;
     }
+    // Stall watchdog: if drain progress freezes (terrain/mesh hang), finish the
+    // chip so the HUD does not stick on refining coverage forever.
+    const nowMs = Date.now();
+    if (
+      layerState._geoLoading &&
+      layerState._geoProgressAt &&
+      nowMs - layerState._geoProgressAt > 20_000
+    ) {
+      console.warn(
+        '[Data:CCTV] geometry drain stalled — forcing completion',
+        `${layerState._geoLoadDone}/${layerState._geoLoadTotal}`,
+      );
+      layerState._geoQueue = [];
+      layerState._geoLoading = false;
+      layerState._geoLoadDone = layerState._geoLoadTotal;
+      if (layerState._enabled) {
+        parts.rendering.refreshCoverageStyles();
+        parts.cards.refreshAmbientCards();
+      }
+      layerState._geoProgressNotifier?.finish();
+      layerState._geoProgressNotifier = null;
+      return;
+    }
     // Active-camera-first is re-established every batch because the operator
     // can select a new camera while a long catalog drain is in flight.
     prioritizeActiveCctvGeometryRecord(
@@ -228,6 +251,8 @@ export function createGeometryQueue({
           layerState._geoLoadDone < layerState._geoLoadTotal
         ) {
           layerState._geoLoadDone += 1;
+          layerState._geoProgressAt = Date.now();
+          layerState._geoProgressDoneSnapshot = layerState._geoLoadDone;
         }
       },
       progress: () => layerState._geoProgressNotifier?.progress(),
@@ -320,6 +345,8 @@ export function createGeometryQueue({
     layerState._geoLoadTotal = layerState._geoQueue.length;
     layerState._geoLoadDone = 0;
     layerState._geoLoading = true;
+    layerState._geoProgressAt = Date.now();
+    layerState._geoProgressDoneSnapshot = 0;
     layerState._geoProgressNotifier = createGeometryProgressNotifier(
       parts.presentation.notifyListeners,
     );

@@ -41,6 +41,13 @@ const OPENSKY_CACHE_MS = 9000;
 let _openskyTtlMs = OPENSKY_CACHE_MS;
 /** @type {number} Epoch-ms before which no upstream fetch is attempted. */
 let _openskyCooldownUntil = 0;
+/** Consecutive upstream fetch failures (TLS/network) before skipping OpenSky. */
+let _openskyFailStreak = 0;
+/** Epoch-ms before which OpenSky upstream is skipped; adsb.lol is the live path. */
+let _openskySkipUntil = 0;
+const OPENSKY_FAIL_STREAK_SKIP = 2;
+const OPENSKY_UNREACHABLE_SKIP_MS = 5 * 60_000;
+const OPENSKY_FETCH_TIMEOUT_MS = 8_000;
 /**
  * Picks the cache TTL from the remaining daily credit budget.
  * Client polls every 30 s, so tiers ≤30 s cost the same 480 credits/h; the
@@ -309,7 +316,7 @@ async function serveAdsbLolPointFallback(req, res, requestedMode, reason) {
       reason,
     }),
     'X-Flight-Source': 'adsb.lol',
-    'X-Flight-Coverage': `${ADSBLOL_POINT_RADIUS_NM}nm regional fallback`,
+    'X-Flight-Coverage': `${ADSBLOL_POINT_RADIUS_NM}nm regional live`,
     'X-Flight-Count': String(fallback.count),
   });
   res.end(fallback.body);
@@ -356,6 +363,21 @@ export function openSkyProxy() {
         );
         const now = Date.now();
         const inCooldown = now < _openskyCooldownUntil;
+        // OpenSky TLS/network is currently unreachable from many hosted
+        // regions (Railway SG / shared egress). After a short fail streak,
+        // skip straight to the free live adsb.lol regional path so the HUD
+        // stays green instead of hammering a dead peer every poll.
+        if (now < _openskySkipUntil) {
+          if (
+            await serveAdsbLolPointFallback(
+              req,
+              res,
+              requestedMode,
+              'opensky_unreachable_regional_live',
+            )
+          )
+            return;
+        }
         // Fresh-enough cache (adaptive TTL) OR any cache during a 429
         // cooldown: serve it without touching upstream. Stale-during-cooldown
         // is deliberate (credit governor): last-good planes beat a dead layer.
@@ -470,10 +492,52 @@ export function openSkyProxy() {
           }
         }
 
-        let upstream = await fetch(
-          'https://opensky-network.org/api/states/all?extended=1',
-          { headers },
-        );
+        let upstream;
+        try {
+          upstream = await fetch(
+            'https://opensky-network.org/api/states/all?extended=1',
+            {
+              headers,
+              signal: AbortSignal.timeout(OPENSKY_FETCH_TIMEOUT_MS),
+            },
+          );
+          _openskyFailStreak = 0;
+          _openskySkipUntil = 0;
+        } catch (fetchErr) {
+          _openskyFailStreak += 1;
+          if (_openskyFailStreak >= OPENSKY_FAIL_STREAK_SKIP) {
+            _openskySkipUntil = now + OPENSKY_UNREACHABLE_SKIP_MS;
+          }
+          console.error('[OpenSky Proxy]', fetchErr?.message || fetchErr);
+          if (_openskyCacheBody) {
+            const cachedMeta = _openskyCacheMeta || {
+              requestedMode,
+              usedMode: 'unknown',
+              reason: 'cached_stale',
+            };
+            res.writeHead(
+              _openskyCacheStatus || 200,
+              buildOpenSkyHeaders({
+                cacheStatus: 'STALE',
+                requestedMode: cachedMeta.requestedMode || requestedMode,
+                usedMode: cachedMeta.usedMode || 'unknown',
+                reason: cachedMeta.reason || 'cached_stale',
+              }),
+            );
+            res.end(_openskyCacheBody);
+            return;
+          }
+          if (
+            await serveAdsbLolPointFallback(
+              req,
+              res,
+              requestedMode,
+              'opensky_unreachable_regional_live',
+            )
+          )
+            return;
+          throw fetchErr;
+        }
         // Auto-mode fallback: if OAuth was rejected, retry with Basic credentials
         if (
           (upstream.status === 401 || upstream.status === 403) &&
@@ -487,7 +551,10 @@ export function openSkyProxy() {
           };
           upstream = await fetch(
             'https://opensky-network.org/api/states/all?extended=1',
-            { headers: retryHeaders },
+            {
+              headers: retryHeaders,
+              signal: AbortSignal.timeout(OPENSKY_FETCH_TIMEOUT_MS),
+            },
           );
           usedMode = 'basic';
           reason = 'oauth_rejected_fallback_basic';
@@ -676,7 +743,7 @@ export function openSkyProxy() {
             req,
             res,
             requestedMode,
-            'opensky_proxy_error_regional_fallback',
+            'opensky_unreachable_regional_live',
           )
         )
           return;

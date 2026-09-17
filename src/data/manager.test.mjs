@@ -1828,6 +1828,20 @@ test('layer feed states distinguish unavailable, fallback, stale, and degraded c
     count: 10,
     lastUpdate: 1,
   }), 'nominal', 'an explicitly primary adsb.lol feed is not a fallback');
+  assert.equal(layerFeedState({
+    source: 'adsb.lol',
+    coverage: '250nm regional live',
+    fallback: false,
+    count: 712,
+    lastUpdate: 1,
+  }), 'nominal', 'regional live adsb.lol must not read as FALLBACK');
+  assert.equal(layerFeedState({
+    source: 'adsb.lol',
+    coverage: '250nm regional fallback',
+    fallback: false,
+    count: 712,
+    lastUpdate: 1,
+  }), 'nominal', 'explicit primary wins over coverage containing the word fallback');
   assert.equal(layerFeedState({ stale: true, count: 0, lastUpdate: 1 }), 'stale');
   assert.equal(layerFeedState({ error: 'partial group failure', count: 50, lastUpdate: 1 }), 'degraded');
   assert.equal(layerFeedState({ loading: true }), 'loading');
