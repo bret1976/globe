@@ -4,7 +4,7 @@ God's Eye View's **code** is [MIT](LICENSE)-licensed. **The MIT grant covers the
 
 How to read this:
 
-- **Free open cable geometry only on Bret Railway.** TeleGeography proprietary Submarine Cable Map GeoJSON is **not** shipped. The legacy folder path `telegeography_submarine_cables/` holds an **OpenStreetMap ODbL** extract instead (see `source.json`).
+- **TeleGeography map GeoJSON (CC BY-NC-SA 3.0) mirrored from gods-eye-view.** Same open-source wiring as bilawalsidhu/gods-eye-view. Commercial users must remove `src/data/local_data/telegeography_submarine_cables/` or license from TeleGeography. Do not scrape submarinecablemap.com.
 - **Nepal / other NC media** may still carry upstream NonCommercial terms — see event-specific notes below.
 - **Attribution is shown in-app** and listed here. Keep it intact. The required Google/Cesium credit renders on the on-globe credit line (bottom-left, `#cesium-credits`), and every per-layer credit below is registered into the expandable **"Data attribution"** lightbox on that line (`src/data/dataCredits.js` → `viewer.creditDisplay.addStaticCredit`). Both stay visible in clean-view and recording modes.
 - **Bundled model attribution lives beside the model files.** [`public/models/README.md`](public/models/README.md) records each shipped model's creator, source, license, and modification status.
@@ -97,14 +97,17 @@ The [Bhote Koshi event pack](public/events/bhote-koshi-2026/README.md), under `p
 | --------------------------------------------------------------------------- | --------------------------------- | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------ | --------------------------------------------------------------------------- |
 | **Datacenters** (~4.3K)                                                     | `datacenters/`                    | **ODbL 1.0** (OpenStreetMap extract)                                                                      | ✅ (attribution + share-alike on data)           | "© OpenStreetMap contributors"                                              |
 | **Dams** (704)                                                              | `dams/`                           | **ODbL 1.0** (OpenInfraMap / OSM extract)                                                                 | ✅ (attribution + share-alike on data)           | "© OpenStreetMap contributors" (+ Open Infrastructure Map)                  |
-| **OpenStreetMap submarine cables** (free extract; ~400 cables + landfalls) | `telegeography_submarine_cables/` (legacy path) + `osm_submarine_cables/` | **ODbL 1.0** | ✅ Free/open — attribute OSM | "© OpenStreetMap contributors" |
+| **TeleGeography Submarine Cable Map** (~712 cables + ~1,917 landings) | `telegeography_submarine_cables/` | **CC BY-NC-SA 3.0** | ❌ **NonCommercial — remove for commercial use** | "© TeleGeography — submarinecablemap.com" |
+| **OpenStreetMap submarine cables** (optional free extract) | `osm_submarine_cables/` | **ODbL 1.0** | ✅ Free/open — attribute OSM | "© OpenStreetMap contributors" |
 | **Natural Earth physical regions** (1,046 land + 292 marine named polygons) | `natural_earth/`                  | **Public domain**                                                                                         | ✅ (no restrictions)                             | "Made with Natural Earth" (courtesy credit — not legally required)          |
 | **DataSF Analysis Neighborhoods** (41 SF neighborhood polygons)             | `neighborhoods/`                  | **PDDL 1.0** (public domain)                                                                              | ✅ (no restrictions)                             | "City & County of San Francisco — DataSF" (courtesy — not legally required) |
 | **CCTV ground heights** (3,445 cameras)                                     | `cctv_ground_heights/`            | Precomputed camera placement heights, aligned to work with Google Photorealistic 3D Tiles (folder README) | —                                                | —                                                                           |
 
-### ✅ Submarine cables are OSM ODbL (TeleGeography dump removed)
+### ⚠️ TeleGeography cables are bundled (CC BY-NC-SA) like gods-eye-view
 
-Bret's Railway globe ships an **OpenStreetMap-derived** free extract under **ODbL 1.0**. The folder name `telegeography_submarine_cables/` is legacy path compatibility for the layer id `telegeography-submarine-cables` — the payload is **not** TeleGeography proprietary geometry.
+Bret's Railway globe mirrors the **same TeleGeography public map GeoJSON** shipped by bilawalsidhu/gods-eye-view under **CC BY-NC-SA 3.0**. Layer id remains `telegeography-submarine-cables`. An optional OSM ODbL extract also lives under `osm_submarine_cables/` for free/open fallbacks.
+
+Commercial deployments must delete the TeleGeography folder or obtain a TeleGeography commercial license. Do not scrape submarinecablemap.com.
 
 Attribution: © OpenStreetMap contributors — https://www.openstreetmap.org/copyright
 

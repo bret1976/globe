@@ -3,16 +3,17 @@
  *
  * Reimplements ideas from Bilawal Sidhu's free/public Shorts on HIS hosted globe:
  *  1) Bay Area air + marine traffic
- *  2) Digital nervous system (HUD + OSM datacenters ONLY — OSM free cable geometry)
+ *  2) Digital nervous system (TeleGeography cables + landings + OSM DCs + HUD)
  *  3) Delta / voice cockpit (uses existing cockpit HUD; this pack flies a Delta-style approach)
  *  4) Area 51 TR-3B easter egg (fly Groom Lake + surface TR-3B toggle tip)
  *  5) Nepal floods reconstruction (enables upstream Bhote Koshi scene layers)
  *
- * Free/public data only. TeleGeography proprietary cable GeoJSON is not shipped.
+ * Cable geometry: same bilawalsidhu/gods-eye-view bundled TeleGeography public map
+ * GeoJSON (CC BY-NC-SA 3.0). Not scraped from submarinecablemap.com in this change.
  */
 import * as Cesium from 'cesium';
 
-export const SHORTS_PACK_VERSION = '2026-09-17-shorts-osm';
+export const SHORTS_PACK_VERSION = '2026-09-17-nervous-tg';
 export const SHORTS_PARAM = 'shorts';
 
 /** Hash/query values → pack id */
@@ -157,7 +158,6 @@ export function parseShortsPackFromLocation(loc = window.location) {
   try {
     const hash = String(loc.hash || '').replace(/^#/, '');
     const params = new URLSearchParams(hash);
-    // also allow ?shorts= in search for smoke links
     const search = new URLSearchParams(String(loc.search || '').replace(/^\?/, ''));
     const raw = params.get(SHORTS_PARAM) || search.get(SHORTS_PARAM);
     if (!raw) return null;
@@ -183,20 +183,22 @@ export async function runShortsPack(input = {}) {
 
   if (pack === 'bay-area') {
     toast('SHORTS · Bay Area air + marine (OpenSky / AIS)');
-    await enableLayers(dataManager, ['flights', 'ais-vessels', 'military']);
+    await enableLayers(dataManager, [
+      'flights',
+      'ais-live-vessels',
+      'military',
+    ]);
     await flyTo(viewer, BAY_VIEW);
     return pack;
   }
 
   if (pack === 'nervous') {
-    toast('SHORTS · Digital nervous system (OSM cables + OSM DCs + HUD (free ODbL))');
+    toast('SHORTS · Digital nervous system (TeleGeography cables + OSM DCs)');
     await enableLayers(dataManager, [
+      'telegeography-submarine-cables',
       'local-datacenters',
       'local-dams',
-      'telegeography-submarine-cables',
-      'submarine-cables',
     ]);
-    // Folder path legacy; payload is OSM ODbL free extract (not TeleGeography dump)
     await flyTo(viewer, NERVOUS_VIEW);
     await flyTo(viewer, NERVOUS_FRANCE);
     return pack;
@@ -204,18 +206,25 @@ export async function runShortsPack(input = {}) {
 
   if (pack === 'cockpit') {
     toast('SHORTS · Cockpit / voice approach (SFO)');
-    await enableLayers(dataManager, ['flights']);
+    await enableLayers(dataManager, ['flights', 'ais-live-vessels']);
     await flyTo(viewer, COCKPIT_SFO);
-    // Surface cockpit if the app exposes the view switcher button
     document.getElementById('enter-cockpit')?.click?.();
     document.querySelector('[data-view="cockpit"]')?.click?.();
+    document.querySelector('[data-mode="cockpit"]')?.click?.();
     return pack;
   }
 
   if (pack === 'area51') {
     toast('SHORTS · Area 51 · track a contact then 🛸 TR-3B');
-    await enableLayers(dataManager, ['flights', 'military']);
+    await enableLayers(dataManager, [
+      'flights',
+      'military',
+      'military-installations',
+      'military-awareness',
+    ]);
     await flyTo(viewer, AREA51_VIEW);
+    document.querySelector('[data-easter="tr3b"]')?.click?.();
+    document.getElementById('tr3b-toggle')?.click?.();
     return pack;
   }
 
@@ -225,6 +234,7 @@ export async function runShortsPack(input = {}) {
       'bhote-koshi-2026',
       'bhote-koshi-locator',
       'earthquakes',
+      'local-dams',
     ]);
     await flyTo(viewer, NEPAL_VIEW);
     return pack;

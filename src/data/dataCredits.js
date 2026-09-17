@@ -261,9 +261,9 @@ export const DATA_CREDITS = [
   {
     key: 'telegeography',
     html:
-      'Submarine cables: © OpenStreetMap (ODbL free extract; not TeleGeography dump) — ' +
-      '<a href="https://www.www.openstreetmap.org/copyright" target="_blank" rel="noopener">www.openstreetmap.org/copyright</a> ' +
-      '(ODbL 1.0)',
+      'Submarine cables: © TeleGeography — ' +
+      '<a href="https://www.submarinecablemap.com" target="_blank" rel="noopener">submarinecablemap.com</a> ' +
+      '(CC BY-NC-SA 3.0; mirrored from gods-eye-view bundle)',
   },
 ];
 
