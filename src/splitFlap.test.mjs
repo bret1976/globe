@@ -42,7 +42,7 @@ test('the concatenated cells are exactly the target string — DOM text stays th
     ['loading frames', 'camera grid ready'],
     ['', 'LOAD FAILED'],
     ['TURNING OFF LIVE DATA', ''],
-    ['LIVE · TomTom flow · 87% cov', 'SIMULATED — add TomTom key for live'],
+    ['LIVE · TomTom flow · 87% cov', 'FREE · OpenStreetMap roads'],
   ];
   for (const [from, to] of cases) {
     assert.equal(settledText(planSplitFlap(from, to)), to, `${from} -> ${to}`);
@@ -72,7 +72,7 @@ test('every real chip transition finishes well under a second', () => {
     ['TURNING OFF LIVE DATA', 'LIVE DATA OFF'],
     ['loading frames', 'camera grid ready'],
     ['syncing road network', 'LIVE · TomTom flow · 100% cov'],
-    ['SIMULATED — traffic service unreachable', 'LIVE · TomTom flow · 42% cov'],
+    ['FREE · OSM roads · traffic status unreachable', 'LIVE · TomTom flow · 42% cov'],
   ];
   for (const [from, to] of transitions) {
     const plan = planSplitFlap(from, to);

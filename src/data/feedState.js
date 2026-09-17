@@ -37,7 +37,14 @@ export function layerFeedState(stats = {}) {
   // adsb.lol, or civilian regional live when OpenSky is unreachable). That
   // must beat source/coverage string heuristics — otherwise a coverage label
   // containing the word "fallback" falsely paints a healthy live chip yellow.
-  if (state.fallback === true || status === 'fallback' || state.mode === 'sim') {
+  // mode:'sim' is the historical keyless traffic marker. An explicit
+  // fallback:false means the free OSM path is intentional primary UX, not a
+  // yellow FALLBACK chip — TomTom remains the upgrade when TOMTOM_API_KEY is set.
+  if (
+    state.fallback === true ||
+    status === 'fallback' ||
+    (state.mode === 'sim' && state.fallback !== false)
+  ) {
     return 'fallback';
   }
   if (

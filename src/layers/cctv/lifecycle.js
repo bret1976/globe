@@ -207,10 +207,11 @@ export function createLifecycle({
       }
 
       layerState._count = layerState._records.length;
-      if (layerState._records.length > 0) {
-        // Projection runtime + first frame fetch are deferred to enable() so
-        // initializing the catalog stays render-cheap.
-        layerState._activeCameraId = layerState._records[0].camera.id;
+      // Do not bare-assign `_activeCameraId` here. A pre-set id without
+      // setActiveCamera left SOURCE · UNKNOWN / blank player until a click.
+      // enable() activates nearest (or first) camera with a real frame load.
+      if (!layerState._activeCameraId) {
+        layerState._activeCameraId = null;
       }
 
       // Task 5: if the prior batch lost init's bounded race, apply it post-hoc

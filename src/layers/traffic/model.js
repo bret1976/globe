@@ -226,8 +226,8 @@ export function createModel({ state: layerState, services, parts, source }) {
    * Derive the layer's honest feed presentation from its live-flow state.
    *
    * The three states a user can be in, and what each must read as:
-   *  - keyless → `mode:'sim'` (the manager maps that to a FALLBACK chip) with a
-   *    label that never claims live data;
+   *  - keyless → free OSM road path (`mode:'sim'`, `fallback:false`) — clean
+   *    nominal chip, never yellow FALLBACK; TomTom is the optional upgrade;
    *  - live and healthy → LIVE with real coverage;
    *  - live but flow-down → an `error` string, so the chip degrades and says
    *    the colors on screen are simulated. Never a stale "LIVE · N% cov".
@@ -238,7 +238,7 @@ export function createModel({ state: layerState, services, parts, source }) {
    * @param {string|null} [input.flowError] - `deriveTrafficFlowError` result, if any.
    * @param {number} [input.coveragePct] - Matched-road coverage, 0–100.
    * @param {boolean} [input.statusUnavailable] - The status probe itself failed.
-   * @returns {{mode:'live'|'sim', error:string|null, loadingLabel:string}}
+   * @returns {{mode:'live'|'sim', fallback?:boolean, error:string|null, loadingLabel:string}}
    */
 
   function trafficFeedPresentation({
@@ -269,15 +269,24 @@ export function createModel({ state: layerState, services, parts, source }) {
           : `LIVE · TomTom flow · ${coveragePct}% cov`,
       };
     }
-    // Keyless simulation — one terse line that names the mode and the remedy
-    // (owner's copy shape). The chip's own progress text carries "working";
-    // this line must never imply a live feed.
+    // Keyless free path — OSM roads with ambient motion. Mark fallback:false so
+    // the HUD stays nominal (not yellow FALLBACK) while remaining honest that
+    // live TomTom flow needs TOMTOM_API_KEY.
+    if (statusUnavailable) {
+      return {
+        mode,
+        fallback: false,
+        error: null,
+        loadingLabel: 'FREE · OSM roads · traffic status unreachable',
+      };
+    }
     return {
       mode,
+      fallback: false,
       error: null,
-      loadingLabel: statusUnavailable
-        ? 'SIMULATED — traffic service unreachable'
-        : 'SIMULATED — add TomTom key for live',
+      loadingLabel: fetching
+        ? 'syncing FREE street traffic'
+        : 'FREE · OpenStreetMap roads',
     };
   }
 

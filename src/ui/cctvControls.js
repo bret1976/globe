@@ -34,6 +34,7 @@ export class CctvControls {
     this._cctvChipHideTimer = null;
     this._cctvChipWasBusy = false;
     this._cctvFrameRequestToken = 0;
+    this._cctvFrameLoadTimer = null;
     this._cctvFramePreloader = null;
     this._calibrationEdit = null;
     this._actionGeneration = 0;

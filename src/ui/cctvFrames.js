@@ -1,5 +1,9 @@
 export function _clearCctvFrame() {
   this._cctvFrameRequestToken += 1;
+  if (this._cctvFrameLoadTimer) {
+    clearTimeout(this._cctvFrameLoadTimer);
+    this._cctvFrameLoadTimer = null;
+  }
   if (this._cctvFramePreloader) {
     this._cctvFramePreloader.onload = null;
     this._cctvFramePreloader.onerror = null;
@@ -27,6 +31,10 @@ export function _queueCctvFrame(src, cameraId, cameraChanged) {
     this._cctvFrameWrap?.classList.remove('has-frame');
   }
 
+  if (this._cctvFrameLoadTimer) {
+    clearTimeout(this._cctvFrameLoadTimer);
+    this._cctvFrameLoadTimer = null;
+  }
   if (this._cctvFramePreloader) {
     this._cctvFramePreloader.onload = null;
     this._cctvFramePreloader.onerror = null;
@@ -45,6 +53,11 @@ export function _queueCctvFrame(src, cameraId, cameraChanged) {
   this._cctvFramePreloader = preloader;
   preloader.onload = () => this._settleCctvFrame(token, src, true);
   preloader.onerror = () => this._settleCctvFrame(token, src, false);
+  // Upstream CCTV/image hosts can hang without firing error; fail cleanly.
+  this._cctvFrameLoadTimer = setTimeout(() => {
+    this._cctvFrameLoadTimer = null;
+    this._settleCctvFrame(token, src, false);
+  }, 12_000);
   preloader.src = src;
 }
 
@@ -55,6 +68,10 @@ export function _settleCctvFrame(token, src, ok) {
     token !== this._cctvFrameRequestToken
   )
     return;
+  if (this._cctvFrameLoadTimer) {
+    clearTimeout(this._cctvFrameLoadTimer);
+    this._cctvFrameLoadTimer = null;
+  }
   if (this._cctvFramePreloader) {
     this._cctvFramePreloader.onload = null;
     this._cctvFramePreloader.onerror = null;

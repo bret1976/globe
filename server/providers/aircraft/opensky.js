@@ -363,6 +363,21 @@ export function openSkyProxy() {
         );
         const now = Date.now();
         const inCooldown = now < _openskyCooldownUntil;
+        // Prefer free regional live (adsb.lol) whenever the client sends a
+        // view anchor. OpenSky global /states/all is dead or multi-second
+        // from Railway egress; treating adsb.lol as primary keeps the HUD
+        // green and avoids an 8s cold-start timeout painted as FALLBACK.
+        if (adsbLolFallbackAnchor(req)) {
+          if (
+            await serveAdsbLolPointFallback(
+              req,
+              res,
+              requestedMode,
+              'adsblol_regional_primary',
+            )
+          )
+            return;
+        }
         // OpenSky TLS/network is currently unreachable from many hosted
         // regions (Railway SG / shared egress). After a short fail streak,
         // skip straight to the free live adsb.lol regional path so the HUD

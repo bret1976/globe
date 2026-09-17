@@ -127,7 +127,7 @@ export function createControls({ state: layerState, services, parts, source }) {
     /**
      * Return current layer statistics for UI status chips.
      * `mode` is the CONFIGURED source — 'live' (a TomTom key is present) or
-     * 'sim' (keyless simulation, which the manager renders as a FALLBACK chip);
+     * 'sim' (keyless free OSM path; getStats sets fallback:false so the chip stays nominal);
      * `error` carries this instant's health, so a live-configured layer whose
      * flow feed went down reads DEGRADED with the reason instead of a stale
      * LIVE coverage number. `flowCoveragePct` is matched roads / roads with any
@@ -154,6 +154,7 @@ export function createControls({ state: layerState, services, parts, source }) {
         lastUpdate: layerState._lastUpdate,
         loading,
         mode: feed.mode,
+        ...(typeof feed.fallback === 'boolean' ? { fallback: feed.fallback } : {}),
         error: layerState._roadError || feed.error,
         flowCoveragePct: layerState._flowCoveragePct,
         tilesFetched: getFlowSessionStats().tilesFetched,

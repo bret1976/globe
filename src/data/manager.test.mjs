@@ -1821,6 +1821,12 @@ test('layer feed states distinguish unavailable, fallback, stale, and degraded c
     lastUpdate: 1,
   }), 'unavailable', 'an explicit total outage stays unavailable while last-good data is preserved');
   assert.equal(layerFeedState({ mode: 'sim', count: 100, lastUpdate: 1 }), 'fallback');
+  assert.equal(layerFeedState({
+    mode: 'sim',
+    fallback: false,
+    count: 100,
+    lastUpdate: 1,
+  }), 'nominal', 'intentional free keyless traffic is not yellow FALLBACK');
   assert.equal(layerFeedState({ source: 'adsb.lol', count: 10, lastUpdate: 1 }), 'fallback');
   assert.equal(layerFeedState({
     source: 'adsb.lol',
