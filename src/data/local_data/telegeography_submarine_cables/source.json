@@ -1,1 +1,7 @@
-{"type":"FeatureCollection","features":[]}
+{
+  "id": "osm-submarine-cables",
+  "name": "OpenStreetMap submarine cables (free ODbL)",
+  "license": "ODbL-1.0",
+  "attribution": "© OpenStreetMap contributors",
+  "note": "Replaces TeleGeography — free open extract for Bret Railway globe."
+}

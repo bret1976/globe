@@ -1,7 +1,6 @@
-# TeleGeography dataset intentionally removed
+# Free OSM submarine cables (ODbL 1.0)
 
-Bret's Railway globe ships **without** TeleGeography Submarine Cable Map
-geometry (CC BY-NC-SA NonCommercial). Digital Nervous System / cables UX uses
-HUD + free/open layers only (OSM datacenters, public interconnect callouts).
+TeleGeography proprietary GeoJSON is **not** shipped. This folder holds an
+OpenStreetMap-derived free extract for Digital Nervous System / cable layer.
 
-Do not re-add TeleGeography proprietary GeoJSON here.
+Attribution: © OpenStreetMap contributors (ODbL 1.0).

@@ -3,7 +3,7 @@
  *
  * Reimplements ideas from Bilawal Sidhu's free/public Shorts on HIS hosted globe:
  *  1) Bay Area air + marine traffic
- *  2) Digital nervous system (HUD + OSM datacenters ONLY — no TeleGeography geometry)
+ *  2) Digital nervous system (HUD + OSM datacenters ONLY — OSM free cable geometry)
  *  3) Delta / voice cockpit (uses existing cockpit HUD; this pack flies a Delta-style approach)
  *  4) Area 51 TR-3B easter egg (fly Groom Lake + surface TR-3B toggle tip)
  *  5) Nepal floods reconstruction (enables upstream Bhote Koshi scene layers)
@@ -12,7 +12,7 @@
  */
 import * as Cesium from 'cesium';
 
-export const SHORTS_PACK_VERSION = '2026-09-17-shorts';
+export const SHORTS_PACK_VERSION = '2026-09-17-shorts-osm';
 export const SHORTS_PARAM = 'shorts';
 
 /** Hash/query values → pack id */
@@ -189,9 +189,14 @@ export async function runShortsPack(input = {}) {
   }
 
   if (pack === 'nervous') {
-    toast('SHORTS · Digital nervous system (OSM DCs + HUD — no TeleGeography copy)');
-    await enableLayers(dataManager, ['local-datacenters', 'local-dams']);
-    // cables layer stays available but empty (geometry removed)
+    toast('SHORTS · Digital nervous system (OSM cables + OSM DCs + HUD (free ODbL))');
+    await enableLayers(dataManager, [
+      'local-datacenters',
+      'local-dams',
+      'telegeography-submarine-cables',
+      'submarine-cables',
+    ]);
+    // Folder path legacy; payload is OSM ODbL free extract (not TeleGeography dump)
     await flyTo(viewer, NERVOUS_VIEW);
     await flyTo(viewer, NERVOUS_FRANCE);
     return pack;

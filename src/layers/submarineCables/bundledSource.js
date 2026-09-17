@@ -1,5 +1,5 @@
-// This dataset is CC BY-NC-SA 3.0, not the project's MIT license.
-// Commercial users must remove it or obtain a TeleGeography license.
+// Free OpenStreetMap-derived submarine cable extract (ODbL 1.0).
+// TeleGeography proprietary dump is NOT shipped. Folder path is legacy.
 // See DATA_SOURCES.md and the bundled dataset's source.json.
 const cableUrl = new URL(
   '../../data/local_data/telegeography_submarine_cables/cable-geo.json',
@@ -30,7 +30,7 @@ export function createBundledCableSource({
     return json;
   }
   return {
-    label: 'Cables (geometry removed — HUD/open only)',
+    label: 'OpenStreetMap submarine cables (ODbL)',
     async fetch(signal) {
       const [cables, landingPoints] = await Promise.all([
         read(cableUrl, signal),

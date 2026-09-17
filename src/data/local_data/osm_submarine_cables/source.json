@@ -1,0 +1,7 @@
+{
+  "id": "osm-submarine-cables",
+  "name": "OpenStreetMap submarine cables",
+  "license": "ODbL-1.0",
+  "attribution": "\u00a9 OpenStreetMap contributors",
+  "note": "Free open reimplementation \u2014 not TeleGeography."
+}

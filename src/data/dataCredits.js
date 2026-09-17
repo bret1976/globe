@@ -6,7 +6,7 @@ import * as Cesium from 'cesium';
  * Legal requirement (see DATA_SOURCES.md, findings H10/H11 in
  * docs/pre-ship-audit-2026-07-01.md): every third-party data layer this app can
  * display carries its own license and required attribution — ODbL (OSM
- * datacenters/dams, adsb.lol, Overpass roads), CC BY-NC-SA (TeleGeography
+ * datacenters/dams, adsb.lol, Overpass roads), CC BY-NC-SA (OpenStreetMap (ODbL free extract; not TeleGeography dump)
  * cables), NASA FIRMS, CelesTrak, USGS, City of Austin, Fintraffic (CC BY 4.0),
  * The MIT code license does NOT cover this data.
  *
@@ -261,9 +261,9 @@ export const DATA_CREDITS = [
   {
     key: 'telegeography',
     html:
-      'Submarine cables: © TeleGeography — ' +
-      '<a href="https://www.submarinecablemap.com" target="_blank" rel="noopener">submarinecablemap.com</a> ' +
-      '(CC BY-NC-SA 3.0 — NonCommercial)',
+      'Submarine cables: © OpenStreetMap (ODbL free extract; not TeleGeography dump) — ' +
+      '<a href="https://www.www.openstreetmap.org/copyright" target="_blank" rel="noopener">www.openstreetmap.org/copyright</a> ' +
+      '(ODbL 1.0)',
   },
 ];
 
