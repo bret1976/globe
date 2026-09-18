@@ -102,7 +102,11 @@ test('OpenSky state and track routes share tokens, retain cache and use regional
     ],
     'HIT',
   );
-  assert.equal(calls.length, 2);
+  assert.equal(
+    calls.length,
+    1,
+    'adsb.lol primary + cache hit never touch OpenSky',
+  );
   const tracks = install(providers.trackBackfillProxies(), true);
   assert.equal(
     (await tracks('/api/opensky-track', '?icao24=ABC123')).statusCode,
@@ -137,6 +141,34 @@ test('OpenSky state and track routes share tokens, retain cache and use regional
   assert.equal(fallback.statusCode, 200);
   assert.equal(fallback.headers['x-flight-source'], 'adsb.lol');
   assert.equal(JSON.parse(fallback.body).states[0][0], 'abc123');
+});
+
+test('an unanchored OpenSky request still uses adsb.lol instead of an 8s OpenSky timeout', async (t) => {
+  environment(t, { OPENSKY_AUTH_MODE: 'anon' });
+  t.mock.method(console, 'error', () => {});
+  t.mock.method(globalThis, 'fetch', async (url) => {
+    if (url.includes('/states/'))
+      throw new Error(
+        'OpenSky must not be contacted without an exhausted adsb.lol path',
+      );
+    if (url.includes('/lat/'))
+      return Response.json({
+        now: Date.now() / 1000,
+        ac: [{ hex: 'def456', lat: 30.2672, lon: -97.7431, alt_baro: 8000 }],
+      });
+    throw Error(`Unexpected URL: ${url}`);
+  });
+  const fresh = await import(
+    `../../server/providers/aircraft/opensky.js?unanchored=${Date.now()}`
+  );
+  const response = await install(fresh.openSkyProxy())('/api/opensky');
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.headers['x-flight-source'], 'adsb.lol');
+  assert.equal(
+    response.headers['x-opensky-auth-reason'],
+    'adsblol_default_anchor',
+  );
+  assert.equal(JSON.parse(response.body).states[0][0], 'def456');
 });
 
 test('military aircraft route preserves fresh cache and stale response after upstream failure', async (t) => {

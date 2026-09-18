@@ -2,6 +2,28 @@ const KNOT_TO_MPS = 0.514444;
 const FOOT_TO_M = 0.3048;
 const FPM_TO_MPS = 0.00508;
 
+/** Startup / unanchored poll — matches the Austin fly-in so Railway never
+ *  waits 8s on OpenSky `/states/all` when the camera is not ready yet. */
+export const DEFAULT_FLIGHT_VIEW_ANCHOR = Object.freeze({
+  latitude: 30.2672,
+  longitude: -97.7431,
+});
+
+/** Resolve a camera-derived view query, or the Austin startup anchor. */
+export function resolveFlightViewQuery(latitude, longitude) {
+  if (
+    Number.isFinite(latitude) &&
+    Number.isFinite(longitude) &&
+    latitude >= -90 &&
+    latitude <= 90 &&
+    longitude >= -180 &&
+    longitude <= 180
+  ) {
+    return { latitude, longitude };
+  }
+  return { ...DEFAULT_FLIGHT_VIEW_ANCHOR };
+}
+
 function finiteNumber(value) {
   if (value === null || value === undefined || value === '') return null;
   const number = Number(value);

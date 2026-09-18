@@ -116,6 +116,16 @@
   visibility: visible;
 }
 
+/* Decorative HUD chrome must never steal globe / card clicks. */
+#intel-hud .hud-corner,
+#intel-hud .hud-content,
+#intel-hud .hud-edge,
+#intel-hud .hud-bracket,
+#intel-hud .hud-top-bar,
+#intel-hud .hud-bottom-bar {
+  pointer-events: none;
+}
+
 #intel-hud * {
   font-family: var(--font-mono);
   color: var(--hud-color);

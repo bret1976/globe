@@ -1,25 +1,30 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  DEFAULT_FLIGHT_VIEW_ANCHOR,
   normalizeAdsbLolAircraftState,
   normalizeAdsbLolPointResponse,
+  resolveFlightViewQuery,
 } from './adsbLolFallback.js';
 
 test('normalizes adsb.lol units into an OpenSky-compatible state vector', () => {
-  const state = normalizeAdsbLolAircraftState({
-    hex: 'A1B2C3',
-    flight: 'UAL123 ',
-    lat: 30,
-    lon: -97,
-    alt_baro: 10000,
-    alt_geom: 10200,
-    gs: 200,
-    track: 90,
-    baro_rate: 600,
-    seen_pos: 2,
-    seen: 1,
-    category: 'A3',
-  }, 1000);
+  const state = normalizeAdsbLolAircraftState(
+    {
+      hex: 'A1B2C3',
+      flight: 'UAL123 ',
+      lat: 30,
+      lon: -97,
+      alt_baro: 10000,
+      alt_geom: 10200,
+      gs: 200,
+      track: 90,
+      baro_rate: 600,
+      seen_pos: 2,
+      seen: 1,
+      category: 'A3',
+    },
+    1000,
+  );
 
   assert.equal(state[0], 'a1b2c3');
   assert.equal(state[1], 'UAL123');
@@ -48,4 +53,17 @@ test('keeps grounded fallback contacts and rejects rows without positions', () =
   assert.equal(normalized.states.length, 1);
   assert.equal(normalized.states[0][7], null);
   assert.equal(normalized.states[0][8], true);
+});
+
+test('unanchored flight polls default to the Austin startup view', () => {
+  assert.equal(DEFAULT_FLIGHT_VIEW_ANCHOR.latitude, 30.2672);
+  assert.equal(DEFAULT_FLIGHT_VIEW_ANCHOR.longitude, -97.7431);
+  assert.deepEqual(resolveFlightViewQuery(), { ...DEFAULT_FLIGHT_VIEW_ANCHOR });
+  assert.deepEqual(resolveFlightViewQuery(NaN, -97), {
+    ...DEFAULT_FLIGHT_VIEW_ANCHOR,
+  });
+  assert.deepEqual(resolveFlightViewQuery(37.77, -122.42), {
+    latitude: 37.77,
+    longitude: -122.42,
+  });
 });

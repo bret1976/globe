@@ -3,6 +3,10 @@ import {
   FRAME_ENDPOINT,
   MEDIA_ENDPOINT,
 } from './sourcePolicy.js';
+
+/** Catalog/health must fail cleanly so CCTV init cannot hang the HUD. */
+export const CCTV_SOURCE_CLIENT_TIMEOUT_MS = 12_000;
+
 function safeNumber(value, fallback = NaN) {
   const n = Number(value);
   return Number.isFinite(n) ? n : fallback;
@@ -31,16 +35,36 @@ function mediaUrlFor(camera) {
 /** Supply catalog/health records and the existing registered camera URL families. */
 export function createCctvSource({
   fetchImpl = (...args) => globalThis.fetch(...args),
+  timeoutMs = CCTV_SOURCE_CLIENT_TIMEOUT_MS,
+  timeoutSignal = null,
 } = {}) {
   async function read(path, key, { signal } = {}) {
     signal?.throwIfAborted();
-    const response = await fetchImpl(path, { cache: 'no-store', signal });
-    if (!response.ok) throw new Error('Camera source HTTP ' + response.status);
-    const payload = await response.json();
-    signal?.throwIfAborted();
-    if (!Array.isArray(payload?.[key]))
-      throw new Error('Malformed camera ' + key + ' snapshot');
-    return payload;
+    const timeout =
+      timeoutSignal ||
+      AbortSignal.timeout(
+        Number.isFinite(timeoutMs) && timeoutMs > 0
+          ? timeoutMs
+          : CCTV_SOURCE_CLIENT_TIMEOUT_MS,
+      );
+    const combined = signal ? AbortSignal.any([signal, timeout]) : timeout;
+    try {
+      const response = await fetchImpl(path, {
+        cache: 'no-store',
+        signal: combined,
+      });
+      if (!response.ok)
+        throw new Error('Camera source HTTP ' + response.status);
+      const payload = await response.json();
+      signal?.throwIfAborted();
+      if (!Array.isArray(payload?.[key]))
+        throw new Error('Malformed camera ' + key + ' snapshot');
+      return payload;
+    } catch (error) {
+      if (signal?.aborted) throw error;
+      if (timeout.aborted) throw new Error('Camera source timed out');
+      throw error;
+    }
   }
   return {
     getCatalog(options) {

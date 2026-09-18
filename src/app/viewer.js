@@ -1,4 +1,10 @@
 import * as Cesium from 'cesium';
+export {
+  GLOBE_CAMERA_MAX_ZOOM_M,
+  GLOBE_CAMERA_MIN_ZOOM_M,
+  configureGlobeFraming,
+} from './globeFraming.js';
+import { configureGlobeFraming } from './globeFraming.js';
 
 /** Create the standard globe viewer in caller-owned, visible containers. */
 export function createApplicationViewer({ container, creditContainer }) {
@@ -23,7 +29,7 @@ export function createApplicationViewer({ container, creditContainer }) {
   });
   try {
     viewer.targetFrameRate = 60;
-    viewer.scene.globe.show = false;
+    configureGlobeFraming(viewer);
     viewer.scene.skyAtmosphere.show = true;
     viewer.scene.skyAtmosphere.atmosphereLightIntensity = 18;
     viewer.scene.skyAtmosphere.saturationShift = -0.12;

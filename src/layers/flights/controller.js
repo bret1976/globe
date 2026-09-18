@@ -1,4 +1,13 @@
 import * as Cesium from 'cesium';
+import { resolveFlightViewQuery } from '../../data/adsbLolFallback.js';
+
+export function flightViewQuery(viewer) {
+  const cartographic = viewer?.camera?.positionCartographic;
+  return resolveFlightViewQuery(
+    cartographic ? Cesium.Math.toDegrees(cartographic.latitude) : NaN,
+    cartographic ? Cesium.Math.toDegrees(cartographic.longitude) : NaN,
+  );
+}
 
 export function createController({
   flightState,
@@ -14,13 +23,7 @@ export function createController({
   }
 
   function _flightQuery(viewer) {
-    const cartographic = viewer?.camera?.positionCartographic;
-    return cartographic
-      ? {
-          latitude: Cesium.Math.toDegrees(cartographic.latitude),
-          longitude: Cesium.Math.toDegrees(cartographic.longitude),
-        }
-      : {};
+    return flightViewQuery(viewer);
   }
   return { _abortActiveUpdates, _flightQuery };
 }

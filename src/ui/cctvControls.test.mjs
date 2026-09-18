@@ -72,6 +72,22 @@ test('failed refresh preserves settled pixels, but changing cameras clears them'
   assert.equal(controls._cctvFrameWrap.classList.contains('has-frame'), false);
 });
 
+test('a hung frame load settles UNAVAILABLE within 12s', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const { controls } = fixture(t);
+  controls._cctvSourceBadge = { textContent: '', dataset: {} };
+  controls._cctvState = {
+    enabled: true,
+    activeCamera: { sourceKind: 'image' },
+  };
+  controls._queueCctvFrame('hang.jpg', 'a', true);
+  assert.equal(controls._cctvFrame.dataset.loading, 'true');
+  t.mock.timers.tick(12_000);
+  assert.equal(controls._cctvFrame.dataset.loading, '');
+  assert.equal(controls._cctvFrame.dataset.error, 'true');
+  assert.equal(controls._cctvSourceBadge.textContent, 'FRAME · UNAVAILABLE');
+});
+
 test('destroy invalidates image callbacks and releases each subscription once', (t) => {
   const { controls, requests } = fixture(t);
   let unsubscribed = 0;
