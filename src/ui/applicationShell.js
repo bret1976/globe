@@ -30,8 +30,18 @@ import { ShellFeedback } from './shellFeedback.js';
 import { runCctvLayerEnableTransition } from '../cctvFocusPolicy.js';
 import {
   resolveOperatorLocation,
+  readCachedOperatorLocation,
   viewerCameraLatLon,
 } from '../data/operatorLocation.js';
+import { abortShortsPack } from '../data/shortsPack.js';
+import {
+  MAX_CCTV_NEAREST_KM,
+  isNearbyOperatorFocus,
+  snapViewerToLayerFocus,
+  layerFocusHeightM,
+  layerFocusPitchDeg,
+  focusCctvLiveDestination,
+} from '../app/layerFocus.js';
 
 /**
  * Central UI orchestrator for the God's Eye View application.
@@ -887,6 +897,22 @@ export class StyleManager extends ShellFacade {
     });
   }
 
+  _abortShortsPack() {
+    abortShortsPack();
+  }
+
+  _focusOperatorLocation(location) {
+    if (!location || !this.viewer) return false;
+    if (this.viewer.trackedEntity) this.viewer.trackedEntity = undefined;
+    return snapViewerToLayerFocus(
+      this.viewer,
+      location.lat,
+      location.lon,
+      layerFocusHeightM('cctv'),
+      layerFocusPitchDeg('cctv'),
+    );
+  }
+
   /** Compose camera panel controls from the existing camera port and application actions. */
   _initCctvPanel() {
     const { cctvLayer } = this.services;
@@ -925,6 +951,13 @@ export class StyleManager extends ShellFacade {
         toggleEnabled: (...args) => this._toggleCctvEnabled(...args),
         runExplicitFocus: (...args) => this._runExplicitCctvFocus(...args),
         resolveOperatorLocation: () => this._resolveOperatorLocation(),
+        peekOperatorLocation: () => readCachedOperatorLocation(),
+        abortCinematics: () => this._abortShortsPack(),
+        isNearbyCamera: (distKm) => isNearbyOperatorFocus(distKm, MAX_CCTV_NEAREST_KM),
+        focusOperatorLocation: (location) =>
+          this._focusOperatorLocation(location),
+        focusCctvLiveDestination: () =>
+          focusCctvLiveDestination(this.viewer, cctvLayer),
         setPanelCollapsed: (...args) => this.setPanelCollapsed(...args),
         showToast: (message) => this._showToast(message),
         syncViewport: () => this._syncCctvPanelViewport(),
@@ -962,12 +995,20 @@ export class StyleManager extends ShellFacade {
         this._dataManager.isEnabled('cctv') &&
         !this._cctvControls?.getState()?.activeCameraId,
       activate: async () => {
-        const location = await this._resolveOperatorLocation();
-        return cctvLayer.focusNearest({
-          focus: false,
-          lat: location?.lat,
-          lon: location?.lon,
-        });
+        const location = readCachedOperatorLocation();
+        const nearest =
+          Number.isFinite(location?.lat) && Number.isFinite(location?.lon)
+            ? cctvLayer.nearestCameraToLatLon?.(location.lat, location.lon)
+            : null;
+        if (nearest?.id && isNearbyOperatorFocus(nearest.distKm)) {
+          return cctvLayer.focusNearest({
+            focus: false,
+            lat: location.lat,
+            lon: location.lon,
+          });
+        }
+        focusCctvLiveDestination(this.viewer, cctvLayer);
+        return null;
       },
       fly: (cameraId) =>
         this._runExplicitCctvFocus(

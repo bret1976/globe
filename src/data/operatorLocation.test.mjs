@@ -5,10 +5,15 @@ import {
   haversineKm,
   isFiniteLatLon,
   nearestByHaversine,
+  isDefaultSpawnLocation,
+  peekOperatorLocation,
+  primeOperatorLocation,
   readCachedOperatorLocation,
   rememberOperatorLocation,
   resolveOperatorLocation,
+  resolveOperatorLocationFast,
   viewerCameraLatLon,
+  OPERATOR_STORAGE_KEY,
 } from './operatorLocation.js';
 
 test('haversine and nearest pick the closest catalog item', () => {
@@ -79,6 +84,22 @@ test('resolveOperatorLocation prefers GPS, then cache, then viewer fallback', as
   assert.equal(fromCache.lat, 40.758);
   assert.equal(fromCache.source, 'geolocation');
 
+  let lateCalls = 0;
+  const hanging = {
+    getCurrentPosition() {
+      lateCalls += 1;
+    },
+  };
+  const started = Date.now();
+  const cachedFirst = await resolveOperatorLocation({
+    geolocation: hanging,
+    fallback: { lat: 30.2672, lon: -97.7431, source: 'viewer' },
+    timeoutMs: 5_000,
+  });
+  assert.ok(Date.now() - started < 50);
+  assert.equal(cachedFirst.lat, 40.758);
+  assert.equal(lateCalls, 0);
+
   clearCachedOperatorLocation();
   const fromViewer = await resolveOperatorLocation({
     geolocation: denied,
@@ -100,4 +121,100 @@ test('operator cache expires and remember is a no-op for invalid coords', () => 
     readCachedOperatorLocation(60_000, () => 100_000),
     null,
   );
+});
+
+test('operator GPS persists to localStorage', () => {
+  const store = new Map();
+  globalThis.localStorage = {
+    getItem: (key) => (store.has(key) ? store.get(key) : null),
+    setItem: (key, value) => store.set(key, String(value)),
+    removeItem: (key) => store.delete(key),
+  };
+  clearCachedOperatorLocation();
+  rememberOperatorLocation(
+    { lat: 36.1699, lon: -115.1398, source: 'geolocation' },
+    () => 5_000,
+  );
+  const persisted = JSON.parse(store.get(OPERATOR_STORAGE_KEY));
+  assert.equal(persisted.lat, 36.1699);
+  assert.equal(persisted.lon, -115.1398);
+  clearCachedOperatorLocation();
+  assert.equal(store.has(OPERATOR_STORAGE_KEY), false);
+  delete globalThis.localStorage;
+});
+
+test('fast operator resolve uses cache and does not wait on GPS', async () => {
+  clearCachedOperatorLocation();
+  rememberOperatorLocation(
+    { lat: 36.1699, lon: -115.1398, source: 'geolocation' },
+    () => Date.now(),
+  );
+  let geoCalls = 0;
+  const hanging = {
+    getCurrentPosition() {
+      geoCalls += 1;
+    },
+  };
+  const started = Date.now();
+  const fast = await resolveOperatorLocationFast({
+    geolocation: hanging,
+    fallback: { lat: 37.7952, lon: -122.4028, source: 'viewer' },
+    timeoutMs: 40,
+    waitMs: 5_000,
+  });
+  assert.ok(Date.now() - started < 200);
+  assert.equal(fast.lat, 36.1699);
+  assert.equal(fast.source, 'geolocation');
+  assert.deepEqual(peekOperatorLocation({ lat: 0, lon: 0 }), {
+    lat: 36.1699,
+    lon: -115.1398,
+    source: 'geolocation',
+    accuracyM: null,
+    cachedAt: fast.cachedAt,
+  });
+  clearCachedOperatorLocation();
+  const peeked = peekOperatorLocation({
+    lat: 36.1699,
+    lon: -115.1398,
+    source: 'viewer',
+  });
+  assert.equal(peeked.source, 'viewer');
+  const raced = await resolveOperatorLocationFast({
+    geolocation: hanging,
+    fallback: { lat: 36.1699, lon: -115.1398, source: 'viewer' },
+    timeoutMs: 40,
+    waitMs: 20,
+  });
+  assert.equal(raced.source, 'viewer');
+  assert.ok(geoCalls >= 1);
+  assert.equal(
+    peekOperatorLocation({ lat: 30.2672, lon: -97.7431, source: 'viewer' }),
+    null,
+  );
+  assert.equal(isDefaultSpawnLocation({ lat: 30.2672, lon: -97.7431 }), true);
+  clearCachedOperatorLocation();
+});
+
+test('Nearest joins the in-flight GPS prompt instead of starting another', async () => {
+  clearCachedOperatorLocation();
+  let calls = 0;
+  const geo = {
+    getCurrentPosition(success) {
+      calls += 1;
+      setTimeout(() => {
+        success({
+          coords: { latitude: 36.1699, longitude: -115.1398, accuracy: 18 },
+        });
+      }, 40);
+    },
+  };
+  primeOperatorLocation({ geolocation: geo, timeoutMs: 1_000 });
+  const nearest = await resolveOperatorLocation({
+    geolocation: geo,
+    timeoutMs: 1_000,
+  });
+  assert.equal(calls, 1);
+  assert.equal(nearest.lat, 36.1699);
+  assert.equal(nearest.source, 'geolocation');
+  clearCachedOperatorLocation();
 });

@@ -56,7 +56,9 @@ test('user Data Layer enable with focus flies after the layer is on', async () =
   assert.deepEqual(prepared, []);
 
   focused.length = 0;
+  prepared.length = 0;
   await presentation.panel.focusLayer('bikeshare');
+  assert.deepEqual(prepared, [{ id: 'bikeshare', enabled: true }]);
   assert.deepEqual(focused, [{ id: 'bikeshare', enabled: true }]);
 
   presentation.destroy();

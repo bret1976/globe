@@ -1,29 +1,45 @@
 import * as Cesium from 'cesium';
 import {
   resolveOperatorLocation,
+  primeOperatorLocation,
   viewerCameraLatLon,
   nearestByHaversine,
   isFiniteLatLon,
   readCachedOperatorLocation,
 } from '../data/operatorLocation.js';
+import { abortShortsPack } from '../data/shortsPack.js';
 import {
   layerFocusHeightM,
   layerFocusPitchDeg,
   planEnabledLayerFocus,
   pickImmediateOperatorFocus,
   collectLayerFocusObjects,
+  shouldSnapOperatorBeforeEnable,
+  layerVenueFallback,
+  pickVesselFocusAnchor,
+  layerLiveDestination,
+  pickLayerFocusAnchor,
 } from './layerFocusPlan.js';
 
 export {
   LAYER_FOCUS_HEIGHT_M,
   SPACE_VIEW_HEIGHT_M,
+  MAX_CCTV_NEAREST_KM,
+  LAYER_LIVE_DESTINATIONS,
   layerFocusHeightM,
   layerFocusPitchDeg,
   isUsableOperatorCameraHeight,
+  isNearbyOperatorFocus,
   pickImmediateOperatorFocus,
   shouldFocusUserEnabledLayer,
+  shouldSnapOperatorBeforeEnable,
   planEnabledLayerFocus,
   collectLayerFocusObjects,
+  layerVenueFallback,
+  layerLiveDestination,
+  pickLayerFocusAnchor,
+  pickVesselFocusAnchor,
+  waitForLayerFocusObjects,
 } from './layerFocusPlan.js';
 
 function cartographicLatLon(cartesian) {
@@ -149,13 +165,12 @@ function collectFocusObjects(module) {
 }
 
 /**
- * Move the camera to the operator at the layer's working height BEFORE enable
- * so viewport feeds (flights, traffic, CCTV, ALPR) query the right place.
+ * Snap to the layer's live destination BEFORE enable. Do not wait on GPS —
+ * the permission dialog was leaving every Data Layer button stuck/disabled.
  */
 export async function prepareEnabledLayerFocus({
   viewer,
   layerId,
-  resolveLocation = createOperatorLocationResolver(viewer),
 } = {}) {
   if (!viewer?.camera) return { ok: false, reason: 'no-viewer' };
   if (
@@ -164,51 +179,84 @@ export async function prepareEnabledLayerFocus({
   ) {
     return { ok: false, reason: 'cockpit' };
   }
+  abortShortsPack();
   releaseStaleTracking(viewer);
 
-  const heightM = layerFocusHeightM(layerId);
-  const pitchDeg = layerFocusPitchDeg(layerId);
   const camera = resolveViewerOperatorFallback(viewer);
+  primeOperatorLocation({ fallback: camera });
+  const cached = readCachedOperatorLocation();
   const immediate = pickImmediateOperatorFocus({
-    cached: readCachedOperatorLocation(),
+    cached,
     camera,
     cameraHeightM: viewer.camera.positionCartographic?.height,
   });
-  if (immediate) {
-    snapViewerToLayerFocus(
-      viewer,
-      immediate.lat,
-      immediate.lon,
-      heightM,
-      pitchDeg,
-    );
+  if (!shouldSnapOperatorBeforeEnable(layerId)) {
+    const dest = layerLiveDestination(layerId);
+    if (dest) {
+      snapViewerToLayerFocus(
+        viewer,
+        dest.lat,
+        dest.lon,
+        dest.heightM,
+        dest.pitchDeg || layerFocusPitchDeg(layerId),
+      );
+      return { ok: true, location: dest, mode: 'venue' };
+    }
+    return { ok: true, location: cached || immediate || camera };
   }
 
-  const location = await resolveLocation();
-  if (location) {
+  const anchor = pickLayerFocusAnchor({
+    layerId,
+    location: cached || immediate,
+  });
+  if (anchor) {
     snapViewerToLayerFocus(
       viewer,
-      location.lat,
-      location.lon,
-      heightM,
-      pitchDeg,
+      anchor.lat,
+      anchor.lon,
+      anchor.heightM || layerFocusHeightM(layerId),
+      anchor.pitchDeg || layerFocusPitchDeg(layerId),
     );
-    return { ok: true, location };
+    return { ok: true, location: anchor, mode: anchor.mode };
   }
-  return immediate
-    ? { ok: true, location: immediate }
-    : { ok: false, reason: 'no-location' };
+  return { ok: false, reason: 'no-location' };
+}
+
+export function focusCctvLiveDestination(viewer, module) {
+  const dest = layerLiveDestination('cctv');
+  if (!dest || !viewer?.camera) return { ok: false, reason: 'no-destination' };
+  releaseStaleTracking(viewer);
+  abortShortsPack();
+  const nearest =
+    typeof module?.nearestCameraToLatLon === 'function'
+      ? module.nearestCameraToLatLon(dest.lat, dest.lon)
+      : null;
+  flyToLatLon(
+    viewer,
+    dest.lat,
+    dest.lon,
+    dest.heightM,
+    1.8,
+    dest.pitchDeg || layerFocusPitchDeg('cctv'),
+  );
+  if (nearest?.id) {
+    module.focusNearest?.({
+      focus: false,
+      lat: dest.lat,
+      lon: dest.lon,
+    });
+  }
+  return { ok: true, mode: 'venue', id: nearest?.id || null, destination: dest };
 }
 
 /**
- * After a Data Layers row enable, go to the operator and then to that
- * layer's nearest data so flights / bikeshare / CCTV populate around them.
+ * After a Data Layers row enable, fly to that layer's live data immediately.
+ * Cache-only location — never await the geolocation prompt.
  */
 export async function focusEnabledLayer({
   viewer,
   layerId,
   module,
-  resolveLocation = createOperatorLocationResolver(viewer),
 } = {}) {
   if (!viewer?.camera) return { ok: false, reason: 'no-viewer' };
   if (
@@ -217,31 +265,38 @@ export async function focusEnabledLayer({
   ) {
     return { ok: false, reason: 'cockpit' };
   }
+  abortShortsPack();
   releaseStaleTracking(viewer);
 
-  const location = await resolveLocation();
-  if (!location) return { ok: false, reason: 'no-location' };
+  const cached = readCachedOperatorLocation();
+  const camera = resolveViewerOperatorFallback(viewer);
+  const location = pickImmediateOperatorFocus({
+    cached,
+    camera,
+    cameraHeightM: viewer.camera.positionCartographic?.height,
+  });
 
   let nearestCameraId = null;
-  if (layerId === 'cctv' && typeof module?.focusNearest === 'function') {
-    nearestCameraId = module.focusNearest({
-      focus: false,
-      lat: location.lat,
-      lon: location.lon,
-    });
+  let nearestCameraDistKm = null;
+  if (layerId === 'cctv' && typeof module?.nearestCameraToLatLon === 'function') {
+    const probe = location || layerLiveDestination('cctv');
+    const nearest = probe
+      ? module.nearestCameraToLatLon(probe.lat, probe.lon)
+      : null;
+    nearestCameraId = nearest?.id || null;
+    nearestCameraDistKm = nearest?.distKm ?? null;
   }
 
   const objects = collectFocusObjects(module);
-  const nearestObject = pickNearestDetectable(
-    objects,
-    location.lat,
-    location.lon,
-  );
+  const nearestObject = location
+    ? pickNearestDetectable(objects, location.lat, location.lon)
+    : null;
 
   const plan = planEnabledLayerFocus({
     layerId,
     location,
     nearestCameraId,
+    nearestCameraDistKm,
     hasAlprFocus:
       layerId === 'alpr-cameras' && typeof module?.focusNearest === 'function',
     nearestObject,
@@ -255,52 +310,63 @@ export async function focusEnabledLayer({
   if (plan.mode === 'alpr') {
     flyToLatLon(
       viewer,
-      location.lat,
-      location.lon,
+      plan.lat ?? location?.lat,
+      plan.lon ?? location?.lon,
       plan.heightM,
       1.4,
       layerFocusPitchDeg(layerId),
     );
     module.focusNearest();
-    return { ok: true, mode: 'alpr', location };
+    return { ok: true, mode: 'alpr', location: plan };
+  }
+
+  if (layerId === 'satellites') {
+    const iss = module.findByQuery?.('25544') || module.findByQuery?.('ISS');
+    if (iss && module.trackById?.(iss.noradId || 25544)) {
+      return { ok: true, mode: 'iss', id: iss.noradId || 25544, location };
+    }
   }
 
   if (
     layerId === 'rocket-launches' &&
     typeof module?.focusNearest === 'function'
   ) {
-    const id = module.focusNearest({
-      lat: location.lat,
-      lon: location.lon,
-    });
-    if (id) return { ok: true, mode: 'launch', id, location };
+    const dest = layerLiveDestination(layerId) || location;
+    const id = dest
+      ? module.focusNearest({ lat: dest.lat, lon: dest.lon })
+      : module.focusNearest();
+    if (id) return { ok: true, mode: 'launch', id, location: dest };
   }
 
   if (
     layerId === 'ais-live-vessels' &&
     typeof module?.focusNearest === 'function'
   ) {
-    const id = module.focusNearest({
-      lat: location.lat,
-      lon: location.lon,
-    });
-    const selected = module.getSelectedInfo?.();
-    if (
-      id &&
-      selected &&
-      isFiniteLatLon(selected.latitude, selected.longitude)
-    ) {
-      flyToLatLon(
-        viewer,
-        selected.latitude,
-        selected.longitude,
-        layerFocusHeightM(layerId),
-        1.8,
-        layerFocusPitchDeg(layerId),
-      );
-      return { ok: true, mode: 'vessel', id, location };
+    const venue = layerVenueFallback(layerId);
+    const anchor = pickVesselFocusAnchor(location, venue) || venue;
+    if (anchor) {
+      const currentId = module.getSelectedInfo?.()?.mmsi;
+      const id = module.focusNearest({
+        lat: anchor.lat,
+        lon: anchor.lon,
+        excludeId: currentId,
+      });
+      const selected = module.getSelectedInfo?.();
+      if (
+        selected &&
+        isFiniteLatLon(selected.latitude, selected.longitude)
+      ) {
+        flyToLatLon(
+          viewer,
+          selected.latitude,
+          selected.longitude,
+          layerFocusHeightM(layerId),
+          1.8,
+          layerFocusPitchDeg(layerId),
+        );
+        return { ok: true, mode: 'vessel', id: selected.mmsi || id, location };
+      }
     }
-    if (id) return { ok: true, mode: 'vessel', id, location };
   }
 
   if (plan.mode === 'object') {
@@ -322,13 +388,32 @@ export async function focusEnabledLayer({
     }
   }
 
-  flyToLatLon(
-    viewer,
-    location.lat,
-    location.lon,
-    plan.heightM || layerFocusHeightM(layerId),
-    1.8,
-    layerFocusPitchDeg(layerId),
-  );
-  return { ok: true, mode: 'operator', location };
+  if (plan.mode === 'venue' || plan.mode === 'operator') {
+    if (layerId === 'cctv') {
+      return focusCctvLiveDestination(viewer, module);
+    }
+    flyToLatLon(
+      viewer,
+      plan.lat ?? location?.lat,
+      plan.lon ?? location?.lon,
+      plan.heightM || layerFocusHeightM(layerId),
+      1.8,
+      plan.pitchDeg || layerFocusPitchDeg(layerId),
+    );
+    return { ok: true, mode: plan.mode, location: plan };
+  }
+
+  const dest = layerLiveDestination(layerId);
+  if (dest) {
+    flyToLatLon(
+      viewer,
+      dest.lat,
+      dest.lon,
+      dest.heightM,
+      1.8,
+      dest.pitchDeg || layerFocusPitchDeg(layerId),
+    );
+    return { ok: true, mode: 'venue', location: dest };
+  }
+  return { ok: false, reason: 'no-location' };
 }
