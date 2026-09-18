@@ -1,4 +1,5 @@
 /** Cesium-free planner for operator-centric Data Layer focus. */
+import { isDefaultSpawnLocation } from '../data/operatorLocation.js';
 
 export const LAYER_FOCUS_HEIGHT_M = Object.freeze({
   flights: 80_000,
@@ -104,7 +105,11 @@ export function pickImmediateOperatorFocus({
       source: cached.source || 'cache',
     };
   }
-  if (isUsableOperatorCameraHeight(cameraHeightM) && hasLatLon(camera)) {
+  if (
+    isUsableOperatorCameraHeight(cameraHeightM) &&
+    hasLatLon(camera) &&
+    !isDefaultSpawnLocation(camera)
+  ) {
     return {
       lat: camera.lat,
       lon: camera.lon,

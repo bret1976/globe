@@ -103,12 +103,20 @@ test('immediate operator focus prefers GPS cache and rejects space leftovers', (
     }),
     null,
   );
+  assert.equal(
+    pickImmediateOperatorFocus({
+      camera: { lat: 30.2672, lon: -97.7431, source: 'viewer' },
+      cameraHeightM: 800,
+    }),
+    null,
+    'Austin boot spawn is not the operator',
+  );
   assert.deepEqual(
     pickImmediateOperatorFocus({
-      camera: { lat: 30.27, lon: -97.74, source: 'viewer' },
+      camera: { lat: 36.1699, lon: -115.1398, source: 'viewer' },
       cameraHeightM: 600,
     }),
-    { lat: 30.27, lon: -97.74, source: 'viewer' },
+    { lat: 36.1699, lon: -115.1398, source: 'viewer' },
   );
 });
 

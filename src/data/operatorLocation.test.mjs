@@ -5,6 +5,7 @@ import {
   haversineKm,
   isFiniteLatLon,
   nearestByHaversine,
+  isDefaultSpawnLocation,
   peekOperatorLocation,
   readCachedOperatorLocation,
   rememberOperatorLocation,
@@ -169,5 +170,10 @@ test('fast operator resolve uses cache and does not wait on GPS', async () => {
   });
   assert.equal(raced.source, 'viewer');
   assert.ok(geoCalls >= 1);
+  assert.equal(
+    peekOperatorLocation({ lat: 30.2672, lon: -97.7431, source: 'viewer' }),
+    null,
+  );
+  assert.equal(isDefaultSpawnLocation({ lat: 30.2672, lon: -97.7431 }), true);
   clearCachedOperatorLocation();
 });

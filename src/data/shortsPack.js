@@ -199,7 +199,7 @@ async function enableLayers(dataManager, ids = []) {
   if (!dataManager?.setEnabled) return;
   for (const id of ids) {
     try {
-      await dataManager.setEnabled(id, true, { origin: 'user' });
+      await dataManager.setEnabled(id, true, { origin: 'programmatic' });
     } catch {
       /* layer may be key-gated or absent */
     }

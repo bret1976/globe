@@ -103,8 +103,8 @@ test('traffic pack enables traffic + CCTV and hops Austin → London → SF', as
     });
     assert.equal(pack, 'traffic');
     assert.deepEqual(enabled, [
-      { id: 'traffic', on: true, origin: 'user' },
-      { id: 'cctv', on: true, origin: 'user' },
+      { id: 'traffic', on: true, origin: 'programmatic' },
+      { id: 'cctv', on: true, origin: 'programmatic' },
     ]);
     assert.equal(hops.length, 3);
     const [austin, london, sf] = hops.map((hop) =>

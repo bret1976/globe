@@ -4,6 +4,9 @@ export const OPERATOR_GEO_TIMEOUT_MS = 25_000;
 export const OPERATOR_GEO_MAX_AGE_MS = 60_000;
 export const OPERATOR_CACHE_MAX_AGE_MS = 5 * 60_000;
 export const OPERATOR_STORAGE_KEY = 'gev.operatorLocation';
+/** App boot camera in camera.js — not the operator. */
+export const DEFAULT_SPAWN = Object.freeze({ lat: 30.2672, lon: -97.7431 });
+export const DEFAULT_SPAWN_MAX_KM = 8;
 
 let cachedOperatorLocation = null;
 let inFlightOperatorLocation = null;
@@ -127,8 +130,23 @@ export function clearCachedOperatorLocation() {
   }
 }
 
+export function isDefaultSpawnLocation(location, maxKm = DEFAULT_SPAWN_MAX_KM) {
+  if (!isFiniteLatLon(location?.lat, location?.lon)) return false;
+  return (
+    haversineKm(
+      location.lat,
+      location.lon,
+      DEFAULT_SPAWN.lat,
+      DEFAULT_SPAWN.lon,
+    ) <= maxKm
+  );
+}
+
 export function peekOperatorLocation(fallback = null) {
-  return readCachedOperatorLocation() || normalizeFallback(fallback);
+  const cached = readCachedOperatorLocation();
+  if (cached) return cached;
+  const next = normalizeFallback(fallback);
+  return next && !isDefaultSpawnLocation(next) ? next : null;
 }
 
 /** Share one GPS prompt across Nearest + Data Layer clicks. */
@@ -143,6 +161,7 @@ export function primeOperatorLocation(options = {}) {
 
 /** Layer clicks must not wait on the permission dialog. CCTV Nearest still does. */
 export const OPERATOR_FAST_WAIT_MS = 400;
+export const OPERATOR_SPAWN_WAIT_MS = 2_400;
 
 export async function resolveOperatorLocationFast({
   fallback = null,
@@ -156,11 +175,14 @@ export async function resolveOperatorLocationFast({
   }
   const peeked = peekOperatorLocation(fallback);
   const pending = primeOperatorLocation({ fallback, ...options });
-  if (!peeked || waitMs <= 0) return peeked || pending;
+  const budget = peeked
+    ? waitMs
+    : Math.max(waitMs, OPERATOR_SPAWN_WAIT_MS);
+  if (budget <= 0) return peeked || pending;
   return Promise.race([
     pending,
     new Promise((resolve) => {
-      setTimeout(() => resolve(peeked), waitMs);
+      setTimeout(() => resolve(peeked), budget);
     }),
   ]);
 }
