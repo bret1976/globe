@@ -409,6 +409,34 @@ export function createQueries({
     },
 
     /**
+     * Select the nearest loaded vessel to a lat/lon, including ships whose
+     * billboards are currently hidden (inland operators still reach the Gulf).
+     * @param {{lat?: number, lon?: number}} [options]
+     * @returns {string|null} Selected MMSI, or null when no usable vessel exists.
+     */
+    focusNearest({ lat, lon } = {}) {
+      const records = state.records.all;
+      if (!Array.isArray(records) || !records.length) return null;
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+      let nearest = null;
+      let best = Number.POSITIVE_INFINITY;
+      for (const record of records) {
+        if (!Number.isFinite(record?.lat) || !Number.isFinite(record?.lon))
+          continue;
+        const dLat = record.lat - lat;
+        const dLon = record.lon - lon;
+        const dist = dLat * dLat + dLon * dLon;
+        if (dist < best) {
+          best = dist;
+          nearest = record;
+        }
+      }
+      if (!nearest) return null;
+      components.selection.selectVessel(nearest);
+      return nearest.mmsi;
+    },
+
+    /**
      * Clear the current vessel selection and reset the HUD readout.
      * @returns {boolean} Always true.
      */

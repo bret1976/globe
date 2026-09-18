@@ -8,18 +8,22 @@ import {
 } from '../data/operatorLocation.js';
 import {
   layerFocusHeightM,
+  layerFocusPitchDeg,
   planEnabledLayerFocus,
   pickImmediateOperatorFocus,
+  collectLayerFocusObjects,
 } from './layerFocusPlan.js';
 
 export {
   LAYER_FOCUS_HEIGHT_M,
   SPACE_VIEW_HEIGHT_M,
   layerFocusHeightM,
+  layerFocusPitchDeg,
   isUsableOperatorCameraHeight,
   pickImmediateOperatorFocus,
   shouldFocusUserEnabledLayer,
   planEnabledLayerFocus,
+  collectLayerFocusObjects,
 } from './layerFocusPlan.js';
 
 function cartographicLatLon(cartesian) {
@@ -53,13 +57,20 @@ function objectLatLon(object) {
   return null;
 }
 
-function flyToLatLon(viewer, lat, lon, heightM, durationSec = 1.8) {
+function flyToLatLon(
+  viewer,
+  lat,
+  lon,
+  heightM,
+  durationSec = 1.8,
+  pitchDeg = -42,
+) {
   if (!viewer?.camera || !isFiniteLatLon(lat, lon)) return false;
   viewer.camera.flyTo({
     destination: Cesium.Cartesian3.fromDegrees(lon, lat, heightM),
     orientation: {
       heading: 0,
-      pitch: Cesium.Math.toRadians(-42),
+      pitch: Cesium.Math.toRadians(pitchDeg),
       roll: 0,
     },
     duration: Math.max(0.2, durationSec),
@@ -96,17 +107,45 @@ function releaseStaleTracking(viewer) {
   if (viewer?.trackedEntity) viewer.trackedEntity = undefined;
 }
 
-export function snapViewerToLayerFocus(viewer, lat, lon, heightM) {
+export function snapViewerToLayerFocus(
+  viewer,
+  lat,
+  lon,
+  heightM,
+  pitchDeg = -42,
+) {
   if (!viewer?.camera || !isFiniteLatLon(lat, lon)) return false;
   viewer.camera.setView({
     destination: Cesium.Cartesian3.fromDegrees(lon, lat, heightM),
     orientation: {
       heading: 0,
-      pitch: Cesium.Math.toRadians(-42),
+      pitch: Cesium.Math.toRadians(pitchDeg),
       roll: 0,
     },
   });
   return true;
+}
+
+function collectFocusObjects(module) {
+  let detectable = [];
+  try {
+    detectable =
+      typeof module?.getDetectableObjects === 'function'
+        ? module.getDetectableObjects({ maxCount: 2500 }) || []
+        : [];
+  } catch {
+    detectable = [];
+  }
+  let positions = [];
+  try {
+    positions =
+      typeof module?.getAllPositions === 'function'
+        ? module.getAllPositions(12_000) || []
+        : [];
+  } catch {
+    positions = [];
+  }
+  return collectLayerFocusObjects({ detectable, positions });
 }
 
 /**
@@ -128,6 +167,7 @@ export async function prepareEnabledLayerFocus({
   releaseStaleTracking(viewer);
 
   const heightM = layerFocusHeightM(layerId);
+  const pitchDeg = layerFocusPitchDeg(layerId);
   const camera = resolveViewerOperatorFallback(viewer);
   const immediate = pickImmediateOperatorFocus({
     cached: readCachedOperatorLocation(),
@@ -135,12 +175,24 @@ export async function prepareEnabledLayerFocus({
     cameraHeightM: viewer.camera.positionCartographic?.height,
   });
   if (immediate) {
-    snapViewerToLayerFocus(viewer, immediate.lat, immediate.lon, heightM);
+    snapViewerToLayerFocus(
+      viewer,
+      immediate.lat,
+      immediate.lon,
+      heightM,
+      pitchDeg,
+    );
   }
 
   const location = await resolveLocation();
   if (location) {
-    snapViewerToLayerFocus(viewer, location.lat, location.lon, heightM);
+    snapViewerToLayerFocus(
+      viewer,
+      location.lat,
+      location.lon,
+      heightM,
+      pitchDeg,
+    );
     return { ok: true, location };
   }
   return immediate
@@ -179,10 +231,7 @@ export async function focusEnabledLayer({
     });
   }
 
-  const objects =
-    typeof module?.getDetectableObjects === 'function'
-      ? module.getDetectableObjects({ maxCount: 2500 })
-      : [];
+  const objects = collectFocusObjects(module);
   const nearestObject = pickNearestDetectable(
     objects,
     location.lat,
@@ -204,7 +253,14 @@ export async function focusEnabledLayer({
   }
 
   if (plan.mode === 'alpr') {
-    flyToLatLon(viewer, location.lat, location.lon, plan.heightM, 1.4);
+    flyToLatLon(
+      viewer,
+      location.lat,
+      location.lon,
+      plan.heightM,
+      1.4,
+      layerFocusPitchDeg(layerId),
+    );
     module.focusNearest();
     return { ok: true, mode: 'alpr', location };
   }
@@ -220,6 +276,33 @@ export async function focusEnabledLayer({
     if (id) return { ok: true, mode: 'launch', id, location };
   }
 
+  if (
+    layerId === 'ais-live-vessels' &&
+    typeof module?.focusNearest === 'function'
+  ) {
+    const id = module.focusNearest({
+      lat: location.lat,
+      lon: location.lon,
+    });
+    const selected = module.getSelectedInfo?.();
+    if (
+      id &&
+      selected &&
+      isFiniteLatLon(selected.latitude, selected.longitude)
+    ) {
+      flyToLatLon(
+        viewer,
+        selected.latitude,
+        selected.longitude,
+        layerFocusHeightM(layerId),
+        1.8,
+        layerFocusPitchDeg(layerId),
+      );
+      return { ok: true, mode: 'vessel', id, location };
+    }
+    if (id) return { ok: true, mode: 'vessel', id, location };
+  }
+
   if (plan.mode === 'object') {
     if (nearestObject?.position) {
       flyToCartesian(viewer, nearestObject.position, plan.heightM);
@@ -227,7 +310,14 @@ export async function focusEnabledLayer({
     }
     const coords = objectLatLon(nearestObject);
     if (coords) {
-      flyToLatLon(viewer, coords.lat, coords.lon, plan.heightM);
+      flyToLatLon(
+        viewer,
+        coords.lat,
+        coords.lon,
+        plan.heightM,
+        1.8,
+        layerFocusPitchDeg(layerId),
+      );
       return { ok: true, mode: 'object', id: plan.id, location };
     }
   }
@@ -237,6 +327,8 @@ export async function focusEnabledLayer({
     location.lat,
     location.lon,
     plan.heightM || layerFocusHeightM(layerId),
+    1.8,
+    layerFocusPitchDeg(layerId),
   );
   return { ok: true, mode: 'operator', location };
 }
