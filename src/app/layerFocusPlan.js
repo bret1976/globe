@@ -48,6 +48,68 @@ export function isNearbyOperatorFocus(distKm, maxKm = MAX_CCTV_NEAREST_KM) {
 
 export const SPACE_VIEW_HEIGHT_M = 500_000;
 
+/** Viewport feeds must sit over the operator so the first query is local. */
+export const LOCAL_VIEWPORT_LAYER_IDS = Object.freeze([
+  'traffic',
+  'transit',
+  'bikeshare',
+  'cctv',
+  'alpr-cameras',
+  'military-installations',
+  'directions',
+  'radio',
+  'flights',
+  'military',
+]);
+
+const LOCAL_VIEWPORT_LAYER_SET = new Set(LOCAL_VIEWPORT_LAYER_IDS);
+
+/** Global / water / orbit layers must not park on empty inland terrain. */
+export const LAYER_VENUE_FALLBACK = Object.freeze({
+  'ais-live-vessels': Object.freeze({
+    lat: 33.754,
+    lon: -118.216,
+    heightM: 40_000,
+  }),
+  satellites: Object.freeze({ lat: 0, lon: -30, heightM: 8_000_000 }),
+  'telegeography-submarine-cables': Object.freeze({
+    lat: 32,
+    lon: -32,
+    heightM: 4_000_000,
+  }),
+  'rocket-launches': Object.freeze({
+    lat: 28.573,
+    lon: -80.649,
+    heightM: 80_000,
+  }),
+});
+
+export function shouldSnapOperatorBeforeEnable(layerId) {
+  return LOCAL_VIEWPORT_LAYER_SET.has(layerId);
+}
+
+export function layerVenueFallback(layerId) {
+  const venue = LAYER_VENUE_FALLBACK[layerId];
+  if (!venue) return null;
+  return { mode: 'venue', ...venue };
+}
+
+export async function waitForLayerFocusObjects({
+  collect,
+  timeoutMs = 4_500,
+  intervalMs = 200,
+} = {}) {
+  const started = Date.now();
+  let objects = collect?.() || [];
+  while (!objects.length && Date.now() - started < timeoutMs) {
+    await new Promise((resolve) => {
+      setTimeout(resolve, intervalMs);
+    });
+    objects = collect?.() || [];
+  }
+  return objects;
+}
+
 export function layerFocusHeightM(layerId) {
   return LAYER_FOCUS_HEIGHT_M[layerId] ?? 50_000;
 }
@@ -156,5 +218,7 @@ export function planEnabledLayerFocus({
       heightM: layerFocusHeightM(layerId),
     };
   }
+  const venue = layerVenueFallback(layerId);
+  if (venue) return venue;
   return { mode: 'operator', heightM: layerFocusHeightM(layerId) };
 }

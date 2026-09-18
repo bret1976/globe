@@ -15,6 +15,8 @@ import {
   planEnabledLayerFocus,
   pickImmediateOperatorFocus,
   collectLayerFocusObjects,
+  shouldSnapOperatorBeforeEnable,
+  waitForLayerFocusObjects,
 } from './layerFocusPlan.js';
 
 export {
@@ -27,8 +29,11 @@ export {
   isNearbyOperatorFocus,
   pickImmediateOperatorFocus,
   shouldFocusUserEnabledLayer,
+  shouldSnapOperatorBeforeEnable,
   planEnabledLayerFocus,
   collectLayerFocusObjects,
+  layerVenueFallback,
+  waitForLayerFocusObjects,
 } from './layerFocusPlan.js';
 
 function cartographicLatLon(cartesian) {
@@ -171,15 +176,19 @@ export async function prepareEnabledLayerFocus({
   abortShortsPack();
   releaseStaleTracking(viewer);
 
+  const camera = resolveViewerOperatorFallback(viewer);
+  primeOperatorLocation({ fallback: camera });
+  if (!shouldSnapOperatorBeforeEnable(layerId)) {
+    return { ok: true, location: readCachedOperatorLocation() || camera };
+  }
+
   const heightM = layerFocusHeightM(layerId);
   const pitchDeg = layerFocusPitchDeg(layerId);
-  const camera = resolveViewerOperatorFallback(viewer);
   const immediate = pickImmediateOperatorFocus({
     cached: readCachedOperatorLocation(),
     camera,
     cameraHeightM: viewer.camera.positionCartographic?.height,
   });
-  primeOperatorLocation({ fallback: camera });
   const location = immediate || camera;
   if (location) {
     snapViewerToLayerFocus(
@@ -238,7 +247,10 @@ export async function focusEnabledLayer({
     }
   }
 
-  const objects = collectFocusObjects(module);
+  const objects = await waitForLayerFocusObjects({
+    collect: () => collectFocusObjects(module),
+    timeoutMs: shouldSnapOperatorBeforeEnable(layerId) ? 1_200 : 4_500,
+  });
   const nearestObject = pickNearestDetectable(
     objects,
     location.lat,
@@ -311,6 +323,14 @@ export async function focusEnabledLayer({
     if (id) return { ok: true, mode: 'vessel', id, location };
   }
 
+  if (layerId === 'satellites') {
+    const iss =
+      module.findByQuery?.('25544') || module.findByQuery?.('ISS');
+    if (iss && module.trackById?.(iss.noradId || 25544)) {
+      return { ok: true, mode: 'iss', id: iss.noradId || 25544, location };
+    }
+  }
+
   if (plan.mode === 'object') {
     if (nearestObject?.position) {
       flyToCartesian(viewer, nearestObject.position, plan.heightM);
@@ -328,6 +348,18 @@ export async function focusEnabledLayer({
       );
       return { ok: true, mode: 'object', id: plan.id, location };
     }
+  }
+
+  if (plan.mode === 'venue') {
+    flyToLatLon(
+      viewer,
+      plan.lat,
+      plan.lon,
+      plan.heightM,
+      1.8,
+      layerFocusPitchDeg(layerId),
+    );
+    return { ok: true, mode: 'venue', location };
   }
 
   flyToLatLon(

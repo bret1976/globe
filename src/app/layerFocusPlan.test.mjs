@@ -6,8 +6,11 @@ import {
   planEnabledLayerFocus,
   pickImmediateOperatorFocus,
   shouldFocusUserEnabledLayer,
+  shouldSnapOperatorBeforeEnable,
   collectLayerFocusObjects,
   isNearbyOperatorFocus,
+  layerVenueFallback,
+  waitForLayerFocusObjects,
   SPACE_VIEW_HEIGHT_M,
 } from './layerFocusPlan.js';
 
@@ -79,9 +82,33 @@ test('layer focus plans CCTV, objects, then the operator area', () => {
     mode: 'operator',
     heightM: 4_000,
   });
+  assert.deepEqual(planEnabledLayerFocus({ layerId: 'ais-live-vessels', location }), {
+    mode: 'venue',
+    lat: 33.754,
+    lon: -118.216,
+    heightM: 40_000,
+  });
+  assert.equal(layerVenueFallback('satellites').heightM, 8_000_000);
+  assert.equal(shouldSnapOperatorBeforeEnable('traffic'), true);
+  assert.equal(shouldSnapOperatorBeforeEnable('ais-live-vessels'), false);
+  assert.equal(shouldSnapOperatorBeforeEnable('satellites'), false);
   assert.deepEqual(planEnabledLayerFocus({ layerId: 'cctv' }), {
     mode: 'skip',
   });
+});
+
+test('waitForLayerFocusObjects returns once data appears', async () => {
+  let calls = 0;
+  const objects = await waitForLayerFocusObjects({
+    timeoutMs: 400,
+    intervalMs: 20,
+    collect() {
+      calls += 1;
+      return calls < 3 ? [] : [{ id: 'GULF STAR', lat: 29.3, lon: -94.8 }];
+    },
+  });
+  assert.equal(objects[0].id, 'GULF STAR');
+  assert.ok(calls >= 3);
 });
 
 test('immediate operator focus prefers GPS cache and rejects space leftovers', () => {
