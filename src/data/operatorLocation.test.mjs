@@ -83,6 +83,22 @@ test('resolveOperatorLocation prefers GPS, then cache, then viewer fallback', as
   assert.equal(fromCache.lat, 40.758);
   assert.equal(fromCache.source, 'geolocation');
 
+  let lateCalls = 0;
+  const hanging = {
+    getCurrentPosition() {
+      lateCalls += 1;
+    },
+  };
+  const started = Date.now();
+  const cachedFirst = await resolveOperatorLocation({
+    geolocation: hanging,
+    fallback: { lat: 30.2672, lon: -97.7431, source: 'viewer' },
+    timeoutMs: 5_000,
+  });
+  assert.ok(Date.now() - started < 50);
+  assert.equal(cachedFirst.lat, 40.758);
+  assert.equal(lateCalls, 0);
+
   clearCachedOperatorLocation();
   const fromViewer = await resolveOperatorLocation({
     geolocation: denied,

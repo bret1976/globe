@@ -152,7 +152,10 @@ export function peekOperatorLocation(fallback = null) {
 /** Share one GPS prompt across Nearest + Data Layer clicks. */
 export function primeOperatorLocation(options = {}) {
   if (!inFlightOperatorLocation) {
-    inFlightOperatorLocation = resolveOperatorLocation(options).finally(() => {
+    inFlightOperatorLocation = resolveOperatorLocation({
+      ...options,
+      allowCacheFirst: false,
+    }).finally(() => {
       inFlightOperatorLocation = null;
     });
   }
@@ -254,7 +257,12 @@ export async function resolveOperatorLocation({
   maximumAgeMs = OPERATOR_GEO_MAX_AGE_MS,
   fallback = null,
   now = Date.now,
+  allowCacheFirst = true,
 } = {}) {
+  if (allowCacheFirst) {
+    const cached = readCachedOperatorLocation(OPERATOR_CACHE_MAX_AGE_MS, now);
+    if (cached) return cached;
+  }
   const geo = await readGeolocation(geolocation, timeoutMs, maximumAgeMs);
   if (geo) return rememberOperatorLocation(geo, now);
   const cached = readCachedOperatorLocation(OPERATOR_CACHE_MAX_AGE_MS, now);
