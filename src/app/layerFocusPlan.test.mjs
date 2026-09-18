@@ -10,6 +10,7 @@ import {
   collectLayerFocusObjects,
   isNearbyOperatorFocus,
   layerVenueFallback,
+  pickVesselFocusAnchor,
   waitForLayerFocusObjects,
   SPACE_VIEW_HEIGHT_M,
 } from './layerFocusPlan.js';
@@ -92,6 +93,11 @@ test('layer focus plans CCTV, objects, then the operator area', () => {
   assert.equal(shouldSnapOperatorBeforeEnable('traffic'), true);
   assert.equal(shouldSnapOperatorBeforeEnable('ais-live-vessels'), false);
   assert.equal(shouldSnapOperatorBeforeEnable('satellites'), false);
+  const vegasAnchor = pickVesselFocusAnchor({ lat: 36.1699, lon: -115.1398 });
+  assert.equal(vegasAnchor.lat, 33.754);
+  assert.equal(vegasAnchor.lon, -118.216);
+  const coastal = { lat: 33.75, lon: -118.22 };
+  assert.equal(pickVesselFocusAnchor(coastal).lat, coastal.lat);
   assert.deepEqual(planEnabledLayerFocus({ layerId: 'cctv' }), {
     mode: 'skip',
   });

@@ -17,6 +17,8 @@ import {
   collectLayerFocusObjects,
   shouldSnapOperatorBeforeEnable,
   waitForLayerFocusObjects,
+  layerVenueFallback,
+  pickVesselFocusAnchor,
 } from './layerFocusPlan.js';
 
 export {
@@ -33,6 +35,7 @@ export {
   planEnabledLayerFocus,
   collectLayerFocusObjects,
   layerVenueFallback,
+  pickVesselFocusAnchor,
   waitForLayerFocusObjects,
 } from './layerFocusPlan.js';
 
@@ -300,13 +303,16 @@ export async function focusEnabledLayer({
     layerId === 'ais-live-vessels' &&
     typeof module?.focusNearest === 'function'
   ) {
+    const venue = layerVenueFallback(layerId);
+    const anchor = pickVesselFocusAnchor(location, venue);
+    const currentId = module.getSelectedInfo?.()?.mmsi;
     const id = module.focusNearest({
-      lat: location.lat,
-      lon: location.lon,
+      lat: anchor.lat,
+      lon: anchor.lon,
+      excludeId: currentId,
     });
     const selected = module.getSelectedInfo?.();
     if (
-      id &&
       selected &&
       isFiniteLatLon(selected.latitude, selected.longitude)
     ) {
@@ -318,9 +324,19 @@ export async function focusEnabledLayer({
         1.8,
         layerFocusPitchDeg(layerId),
       );
-      return { ok: true, mode: 'vessel', id, location };
+      return { ok: true, mode: 'vessel', id: selected.mmsi || id, location };
     }
-    if (id) return { ok: true, mode: 'vessel', id, location };
+    if (venue) {
+      flyToLatLon(
+        viewer,
+        venue.lat,
+        venue.lon,
+        venue.heightM,
+        1.8,
+        layerFocusPitchDeg(layerId),
+      );
+      return { ok: true, mode: 'venue', location };
+    }
   }
 
   if (layerId === 'satellites') {

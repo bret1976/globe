@@ -1,5 +1,8 @@
 /** Cesium-free planner for operator-centric Data Layer focus. */
-import { isDefaultSpawnLocation } from '../data/operatorLocation.js';
+import {
+  haversineKm,
+  isDefaultSpawnLocation,
+} from '../data/operatorLocation.js';
 
 export const LAYER_FOCUS_HEIGHT_M = Object.freeze({
   flights: 80_000,
@@ -92,6 +95,24 @@ export function layerVenueFallback(layerId) {
   const venue = LAYER_VENUE_FALLBACK[layerId];
   if (!venue) return null;
   return { mode: 'venue', ...venue };
+}
+
+/** Inland operators must search from the coast, not the desert. */
+export const INLAND_VESSEL_ANCHOR_KM = 150;
+
+export function pickVesselFocusAnchor(location, venue = LAYER_VENUE_FALLBACK['ais-live-vessels']) {
+  if (!venue) return location || null;
+  if (
+    !location ||
+    !Number.isFinite(location.lat) ||
+    !Number.isFinite(location.lon)
+  ) {
+    return venue;
+  }
+  return haversineKm(location.lat, location.lon, venue.lat, venue.lon) >
+    INLAND_VESSEL_ANCHOR_KM
+    ? venue
+    : location;
 }
 
 export async function waitForLayerFocusObjects({
