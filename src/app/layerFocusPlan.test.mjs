@@ -10,6 +10,8 @@ import {
   collectLayerFocusObjects,
   isNearbyOperatorFocus,
   layerVenueFallback,
+  layerLiveDestination,
+  pickLayerFocusAnchor,
   pickVesselFocusAnchor,
   waitForLayerFocusObjects,
   SPACE_VIEW_HEIGHT_M,
@@ -60,15 +62,16 @@ test('layer focus plans CCTV, objects, then the operator area', () => {
     }),
     { mode: 'cctv', id: 'cam-austin' },
   );
-  assert.deepEqual(
-    planEnabledLayerFocus({
-      layerId: 'cctv',
-      location: { lat: 36.1699, lon: -115.1398, source: 'geolocation' },
-      nearestCameraId: 'cam-sf',
-      nearestCameraDistKm: 670,
-    }),
-    { mode: 'operator', heightM: layerFocusHeightM('cctv') },
-  );
+  const vegasCctv = planEnabledLayerFocus({
+    layerId: 'cctv',
+    location: { lat: 36.1699, lon: -115.1398, source: 'geolocation' },
+    nearestCameraId: 'cam-sf',
+    nearestCameraDistKm: 670,
+  });
+  assert.equal(vegasCctv.mode, 'venue');
+  assert.equal(vegasCctv.lat, 51.5055);
+  assert.equal(vegasCctv.lon, -0.0754);
+  assert.equal(vegasCctv.label, 'London');
   assert.equal(isNearbyOperatorFocus(670), false);
   assert.equal(isNearbyOperatorFocus(8), true);
   assert.deepEqual(
@@ -79,28 +82,53 @@ test('layer focus plans CCTV, objects, then the operator area', () => {
     }),
     { mode: 'object', id: 'N123', heightM: 80_000 },
   );
-  assert.deepEqual(planEnabledLayerFocus({ layerId: 'bikeshare', location }), {
-    mode: 'operator',
-    heightM: 4_000,
+  const bikes = planEnabledLayerFocus({ layerId: 'bikeshare', location });
+  assert.equal(bikes.mode, 'operator');
+  assert.equal(bikes.lat, location.lat);
+  assert.equal(bikes.lon, location.lon);
+  assert.equal(bikes.heightM, 4_000);
+  const vessels = planEnabledLayerFocus({
+    layerId: 'ais-live-vessels',
+    location,
   });
-  assert.deepEqual(planEnabledLayerFocus({ layerId: 'ais-live-vessels', location }), {
-    mode: 'venue',
-    lat: 33.754,
-    lon: -118.216,
-    heightM: 40_000,
-  });
+  assert.equal(vessels.mode, 'venue');
+  assert.equal(vessels.lat, 33.754);
+  assert.equal(vessels.lon, -118.216);
   assert.equal(layerVenueFallback('satellites').heightM, 8_000_000);
   assert.equal(shouldSnapOperatorBeforeEnable('traffic'), true);
-  assert.equal(shouldSnapOperatorBeforeEnable('ais-live-vessels'), false);
-  assert.equal(shouldSnapOperatorBeforeEnable('satellites'), false);
+  assert.equal(shouldSnapOperatorBeforeEnable('ais-live-vessels'), true);
+  assert.equal(shouldSnapOperatorBeforeEnable('satellites'), true);
   const vegasAnchor = pickVesselFocusAnchor({ lat: 36.1699, lon: -115.1398 });
   assert.equal(vegasAnchor.lat, 33.754);
   assert.equal(vegasAnchor.lon, -118.216);
   const coastal = { lat: 33.75, lon: -118.22 };
   assert.equal(pickVesselFocusAnchor(coastal).lat, coastal.lat);
-  assert.deepEqual(planEnabledLayerFocus({ layerId: 'cctv' }), {
-    mode: 'skip',
+  const featuredCctv = planEnabledLayerFocus({ layerId: 'cctv' });
+  assert.equal(featuredCctv.mode, 'venue');
+  assert.equal(featuredCctv.label, 'London');
+});
+
+test('Vegas GPS does not own CCTV or vessels; local layers stay over the operator', () => {
+  const vegas = { lat: 36.1699, lon: -115.1398, source: 'geolocation' };
+  const cctv = pickLayerFocusAnchor({
+    layerId: 'cctv',
+    location: vegas,
+    nearestCameraDistKm: 670,
   });
+  assert.equal(cctv.label, 'London');
+  assert.equal(cctv.lat, 51.5055);
+  const vessels = pickLayerFocusAnchor({
+    layerId: 'ais-live-vessels',
+    location: vegas,
+  });
+  assert.equal(vessels.lat, 33.754);
+  const flights = pickLayerFocusAnchor({ layerId: 'flights', location: vegas });
+  assert.equal(flights.mode, 'operator');
+  assert.equal(flights.lat, vegas.lat);
+  const noGpsFlights = pickLayerFocusAnchor({ layerId: 'flights' });
+  assert.equal(noGpsFlights.label, 'Las Vegas');
+  assert.equal(layerLiveDestination('traffic').label, 'Austin');
+  assert.equal(layerLiveDestination('rocket-launches').label, 'Kennedy');
 });
 
 test('waitForLayerFocusObjects returns once data appears', async () => {

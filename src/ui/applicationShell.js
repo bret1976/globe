@@ -30,6 +30,7 @@ import { ShellFeedback } from './shellFeedback.js';
 import { runCctvLayerEnableTransition } from '../cctvFocusPolicy.js';
 import {
   resolveOperatorLocation,
+  readCachedOperatorLocation,
   viewerCameraLatLon,
 } from '../data/operatorLocation.js';
 import { abortShortsPack } from '../data/shortsPack.js';
@@ -39,6 +40,7 @@ import {
   snapViewerToLayerFocus,
   layerFocusHeightM,
   layerFocusPitchDeg,
+  focusCctvLiveDestination,
 } from '../app/layerFocus.js';
 
 /**
@@ -949,10 +951,13 @@ export class StyleManager extends ShellFacade {
         toggleEnabled: (...args) => this._toggleCctvEnabled(...args),
         runExplicitFocus: (...args) => this._runExplicitCctvFocus(...args),
         resolveOperatorLocation: () => this._resolveOperatorLocation(),
+        peekOperatorLocation: () => readCachedOperatorLocation(),
         abortCinematics: () => this._abortShortsPack(),
         isNearbyCamera: (distKm) => isNearbyOperatorFocus(distKm, MAX_CCTV_NEAREST_KM),
         focusOperatorLocation: (location) =>
           this._focusOperatorLocation(location),
+        focusCctvLiveDestination: () =>
+          focusCctvLiveDestination(this.viewer, cctvLayer),
         setPanelCollapsed: (...args) => this.setPanelCollapsed(...args),
         showToast: (message) => this._showToast(message),
         syncViewport: () => this._syncCctvPanelViewport(),
@@ -990,7 +995,7 @@ export class StyleManager extends ShellFacade {
         this._dataManager.isEnabled('cctv') &&
         !this._cctvControls?.getState()?.activeCameraId,
       activate: async () => {
-        const location = await this._resolveOperatorLocation();
+        const location = readCachedOperatorLocation();
         const nearest =
           Number.isFinite(location?.lat) && Number.isFinite(location?.lon)
             ? cctvLayer.nearestCameraToLatLon?.(location.lat, location.lon)
@@ -1002,7 +1007,7 @@ export class StyleManager extends ShellFacade {
             lon: location.lon,
           });
         }
-        this._focusOperatorLocation(location);
+        focusCctvLiveDestination(this.viewer, cctvLayer);
         return null;
       },
       fly: (cameraId) =>

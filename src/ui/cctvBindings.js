@@ -18,8 +18,8 @@ export function _initCctvPanel() {
       (activeId && activeId !== this._cctvState?.activeCameraId)
     )
       return;
-    const location = this.actions.resolveOperatorLocation
-      ? await this.actions.resolveOperatorLocation()
+    const location = this.actions.peekOperatorLocation
+      ? this.actions.peekOperatorLocation()
       : null;
     const nearest =
       Number.isFinite(location?.lat) && Number.isFinite(location?.lon)
@@ -37,9 +37,11 @@ export function _initCctvPanel() {
       );
       return;
     }
-    this.actions.focusOperatorLocation?.(location);
+    const dest = this.actions.focusCctvLiveDestination?.() || null;
     this.actions.showToast?.(
-      'No live cameras near you — staying over your location',
+      dest?.destination?.label
+        ? `No cameras near you — showing ${dest.destination.label} live cameras`
+        : 'No cameras near you — showing London live cameras',
     );
   });
 
