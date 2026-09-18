@@ -20,7 +20,7 @@ application
         console.warn('[shorts-pack] failed', error);
       });
     }
-    console.info(`[shorts-pack ${SHORTS_PACK_VERSION}] ready (add #shorts=bay|nervous|cockpit|area51|nepal)`);
+    console.info(`[shorts-pack ${SHORTS_PACK_VERSION}] ready (add #shorts=bay|nervous|cockpit|area51|nepal|traffic)`);
   })
   .catch((error) => {
     console.error("God's Eye View initialization failed:", error);
