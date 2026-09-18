@@ -202,13 +202,27 @@ function removeStored(kind, injected, key) {
  * @param {{search?: string}|null} [input.location]
  * @returns {boolean}
  */
+/** Shared `#shorts=` / `?shorts=` links already chose the experience. */
+export function locationHasShortsPack(location = globalThis.location) {
+  try {
+    const hash = String(location?.hash || '').replace(/^#/, '');
+    const search = String(location?.search || '').replace(/^\?/, '');
+    return Boolean(
+      new URLSearchParams(hash).get('shorts') ||
+        new URLSearchParams(search).get('shorts'),
+    );
+  } catch {
+    return false;
+  }
+}
+
 export function shouldShowFirstRun({
   hasShareState = false,
   storage,
   sessionStorageRef,
   location = globalThis.location,
 } = {}) {
-  if (hasShareState) return false;
+  if (hasShareState || locationHasShortsPack(location)) return false;
   const params = new URLSearchParams(location?.search || '');
   if (params.get('welcome') === '0') return false;
   // The demo/support escape hatch outranks both suppressions on purpose.

@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 import {
+  initShortsPack,
   parseShortsPackFromLocation,
   runShortsPack,
   SHORTS_ALIASES,
@@ -115,6 +116,42 @@ test('traffic pack enables traffic + CCTV and hops Austin → London → SF', as
     assert.ok(Math.abs(Cesium.Math.toDegrees(sf.longitude) - -122.4028) < 0.001);
     assert.match(dom.toast.textContent, /Traffic & CCTV/);
     assert.match(dom.badge.textContent, /2026-09-18-traffic-cctv/);
+  } finally {
+    dom.restore();
+  }
+});
+
+test('hashchange after boot still launches the traffic cinematic', async () => {
+  const dom = mockDom();
+  const enabled = [];
+  const { viewer, hops } = mockViewer();
+  const listeners = [];
+  const windowRef = {
+    location: { hash: '', search: '' },
+    addEventListener(type, handler) {
+      listeners.push({ type, handler });
+    },
+  };
+  try {
+    const { pack } = initShortsPack({
+      viewer,
+      windowRef,
+      location: windowRef.location,
+      dataManager: {
+        async setEnabled(id) {
+          enabled.push(id);
+          return true;
+        },
+      },
+    });
+    assert.equal(pack, null);
+    assert.equal(hops.length, 0);
+    const hashListener = listeners.find((entry) => entry.type === 'hashchange');
+    assert.ok(hashListener);
+    windowRef.location.hash = '#shorts=traffic';
+    await hashListener.handler();
+    assert.deepEqual(enabled, ['traffic', 'cctv']);
+    assert.equal(hops.length, 3);
   } finally {
     dom.restore();
   }

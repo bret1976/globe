@@ -290,11 +290,30 @@ export async function runShortsPack(input = {}) {
 
 /**
  * Boot hook — call after viewer + dataManager exist.
+ * Re-runs when the operator (or a shared link) changes `#shorts=`.
  */
 export function initShortsPack(input = {}) {
-  ensureBadge();
-  const pack = parseShortsPackFromLocation();
+  const location = input.location;
+  const pack = parseShortsPackFromLocation(location);
+  let generation = 0;
+
+  const launch = (nextPack) => {
+    if (!nextPack || !input.viewer) return Promise.resolve(null);
+    const token = ++generation;
+    ensureBadge();
+    return runShortsPack({ ...input, pack: nextPack }).then((result) =>
+      token === generation ? result : nextPack,
+    );
+  };
+
+  const target = input.windowRef || (typeof window !== 'undefined' ? window : null);
+  if (target?.addEventListener) {
+    target.addEventListener('hashchange', () => {
+      const next = parseShortsPackFromLocation(target.location || location);
+      return next ? launch(next) : Promise.resolve(null);
+    });
+  }
+
   if (!pack) return { pack: null, promise: Promise.resolve(null) };
-  const promise = runShortsPack({ ...input, pack });
-  return { pack, promise };
+  return { pack, promise: launch(pack) };
 }

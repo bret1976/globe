@@ -110,6 +110,17 @@ test('a share link never sees the launcher — its author already chose the view
   assert.equal(shouldShowFirstRun({ hasShareState: true, ...fresh() }), false);
 });
 
+test('a shorts pack hash is a share link and suppresses the first-run launcher', () => {
+  assert.equal(
+    shouldShowFirstRun({ ...fresh(), location: { hash: '#shorts=traffic', search: '' } }),
+    false,
+  );
+  assert.equal(
+    shouldShowFirstRun({ ...fresh(), location: { hash: '', search: '?shorts=cctv' } }),
+    false,
+  );
+});
+
 test('privacy-restricted storage fails open and every write stays best-effort', () => {
   const blocked = {
     getItem: () => { throw new Error('blocked'); },
