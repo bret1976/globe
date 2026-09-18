@@ -87,7 +87,6 @@ export function createLifecycle({
       layerState._updateDirty = false;
       if (layerState._dataSource) layerState._dataSource.show = true;
       parts.orbitRendering.syncMissionOrbitPrimitiveVisibility();
-      parts.selection.focusFullGlobe(layerState._viewer);
       document.getElementById('cockpit-context')?.setAttribute('hidden', '');
       if (layerState._selectedLaunchId)
         parts.selection.setSelectedMission(

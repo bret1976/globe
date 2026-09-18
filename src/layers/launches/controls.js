@@ -17,6 +17,29 @@ export function createControls({ state: layerState, services, parts, source }) {
       parts.selection.stopMissionZoomAnchor();
     },
 
+    focusNearest({ lat, lon } = {}) {
+      const launches = (layerState._launches || []).filter(
+        (launch) => Number.isFinite(launch?.lat) && Number.isFinite(launch?.lon),
+      );
+      if (!launches.length) return null;
+      let nearest = launches[0];
+      if (Number.isFinite(lat) && Number.isFinite(lon)) {
+        let best = Number.POSITIVE_INFINITY;
+        for (const launch of launches) {
+          const dLat = launch.lat - lat;
+          const dLon = launch.lon - lon;
+          const dist = dLat * dLat + dLon * dLon;
+          if (dist < best) {
+            best = dist;
+            nearest = launch;
+          }
+        }
+      }
+      parts.selection.setSelectedMission(nearest.id, true);
+      parts.selection.focusLaunchSite(nearest);
+      return nearest.id;
+    },
+
     getDetectableObjects(options = {}) {
       const maxCount = Number.isFinite(options.maxCount)
         ? Math.max(1, Math.floor(options.maxCount))

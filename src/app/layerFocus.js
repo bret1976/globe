@@ -92,6 +92,10 @@ export function createOperatorLocationResolver(viewer) {
     });
 }
 
+function releaseStaleTracking(viewer) {
+  if (viewer?.trackedEntity) viewer.trackedEntity = undefined;
+}
+
 export function snapViewerToLayerFocus(viewer, lat, lon, heightM) {
   if (!viewer?.camera || !isFiniteLatLon(lat, lon)) return false;
   viewer.camera.setView({
@@ -121,7 +125,7 @@ export async function prepareEnabledLayerFocus({
   ) {
     return { ok: false, reason: 'cockpit' };
   }
-  if (viewer.trackedEntity) return { ok: false, reason: 'tracking' };
+  releaseStaleTracking(viewer);
 
   const heightM = layerFocusHeightM(layerId);
   const camera = resolveViewerOperatorFallback(viewer);
@@ -161,7 +165,7 @@ export async function focusEnabledLayer({
   ) {
     return { ok: false, reason: 'cockpit' };
   }
-  if (viewer.trackedEntity) return { ok: false, reason: 'tracking' };
+  releaseStaleTracking(viewer);
 
   const location = await resolveLocation();
   if (!location) return { ok: false, reason: 'no-location' };
@@ -203,6 +207,17 @@ export async function focusEnabledLayer({
     flyToLatLon(viewer, location.lat, location.lon, plan.heightM, 1.4);
     module.focusNearest();
     return { ok: true, mode: 'alpr', location };
+  }
+
+  if (
+    layerId === 'rocket-launches' &&
+    typeof module?.focusNearest === 'function'
+  ) {
+    const id = module.focusNearest({
+      lat: location.lat,
+      lon: location.lon,
+    });
+    if (id) return { ok: true, mode: 'launch', id, location };
   }
 
   if (plan.mode === 'object') {

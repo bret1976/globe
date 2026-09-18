@@ -230,18 +230,22 @@ export function createEarthquakesLayer({ source, overlayHost } = {}) {
       const result = [];
       for (const entity of _dataSource.entities.values) {
         if (result.length >= maxCount) break;
-        const cartesian = entity.position?.getValue(now);
-        const carto = cartesian
-          ? Cesium.Cartographic.fromCartesian(cartesian)
-          : null;
-        if (!carto) continue;
-        result.push({
-          id: entity.id,
-          sourceId: entity.id,
-          position: cartesian,
-          lat: Cesium.Math.toDegrees(carto.latitude),
-          lon: Cesium.Math.toDegrees(carto.longitude),
-        });
+        try {
+          const cartesian = entity.position?.getValue(now);
+          const carto = cartesian
+            ? Cesium.Cartographic.fromCartesian(cartesian)
+            : null;
+          if (!carto) continue;
+          result.push({
+            id: entity.id,
+            sourceId: entity.id,
+            position: cartesian,
+            lat: Cesium.Math.toDegrees(carto.latitude),
+            lon: Cesium.Math.toDegrees(carto.longitude),
+          });
+        } catch {
+          /* skip a bad entity rather than failing the whole focus pass */
+        }
       }
       return result;
     },
