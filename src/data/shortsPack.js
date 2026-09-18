@@ -14,8 +14,15 @@
  */
 import * as Cesium from 'cesium';
 
-export const SHORTS_PACK_VERSION = '2026-09-18-traffic-cctv';
+export const SHORTS_PACK_VERSION = '2026-09-18-miami-landing';
 export const SHORTS_PARAM = 'shorts';
+
+let shortsAbortGeneration = 0;
+
+/** Stop an in-flight shorts hop so a user Data Layer / CCTV click owns the camera. */
+export function abortShortsPack() {
+  shortsAbortGeneration += 1;
+}
 
 /** Hash/query values → pack id */
 export const SHORTS_ALIASES = Object.freeze({
@@ -28,6 +35,9 @@ export const SHORTS_ALIASES = Object.freeze({
   cockpit: 'cockpit',
   delta: 'cockpit',
   voice: 'cockpit',
+  miami: 'miami-landing',
+  landing: 'miami-landing',
+  ils30: 'miami-landing',
   a51: 'area51',
   area51: 'area51',
   'area-51': 'area51',
@@ -36,7 +46,6 @@ export const SHORTS_ALIASES = Object.freeze({
   flood: 'nepal',
   'bhote-koshi': 'nepal',
   traffic: 'traffic',
-  cctv: 'traffic',
   streets: 'traffic',
   tomtom: 'traffic',
   spy: 'traffic',
@@ -96,6 +105,16 @@ const COCKPIT_SFO = Object.freeze({
   duration: 2.4,
 });
 
+/** Miami ILS 30 final — Bilawal short -eDFtymlwUg. */
+const COCKPIT_MIA = Object.freeze({
+  lon: -80.287,
+  lat: 25.795,
+  height: 3_600,
+  heading: 300,
+  pitch: -11,
+  duration: 2.6,
+});
+
 /** Austin Capitol — city-scale God's Eye (locations.js austin capitol). */
 const TRAFFIC_AUSTIN = Object.freeze({
   lon: -97.7403,
@@ -126,8 +145,9 @@ const TRAFFIC_SF = Object.freeze({
   duration: 2.6,
 });
 
-function flyTo(viewer, shot) {
+function flyTo(viewer, shot, token = shortsAbortGeneration) {
   if (!viewer?.camera || !Cesium) return Promise.resolve();
+  if (token !== shortsAbortGeneration) return Promise.resolve();
   const reduced =
     typeof matchMedia === 'function' &&
     matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -147,7 +167,7 @@ function flyTo(viewer, shot) {
       complete: resolve,
       cancel: resolve,
     });
-  });
+  }).then(() => token === shortsAbortGeneration);
 }
 
 function toast(message) {
@@ -214,8 +234,10 @@ export async function runShortsPack(input = {}) {
   const { viewer, dataManager } = input;
   const pack = input.pack || parseShortsPackFromLocation();
   if (!pack || !viewer) return null;
+  const token = ++shortsAbortGeneration;
 
   ensureBadge();
+  const hop = (shot) => flyTo(viewer, shot, token);
 
   if (pack === 'bay-area') {
     toast('SHORTS · Bay Area air + marine (OpenSky / AIS)');
@@ -224,7 +246,7 @@ export async function runShortsPack(input = {}) {
       'ais-live-vessels',
       'military',
     ]);
-    await flyTo(viewer, BAY_VIEW);
+    await hop(BAY_VIEW);
     return pack;
   }
 
@@ -235,15 +257,15 @@ export async function runShortsPack(input = {}) {
       'local-datacenters',
       'local-dams',
     ]);
-    await flyTo(viewer, NERVOUS_VIEW);
-    await flyTo(viewer, NERVOUS_FRANCE);
+    if (!(await hop(NERVOUS_VIEW))) return pack;
+    await hop(NERVOUS_FRANCE);
     return pack;
   }
 
   if (pack === 'cockpit') {
     toast('SHORTS · Cockpit / voice approach (SFO)');
     await enableLayers(dataManager, ['flights', 'ais-live-vessels']);
-    await flyTo(viewer, COCKPIT_SFO);
+    await hop(COCKPIT_SFO);
     document.getElementById('enter-cockpit')?.click?.();
     document.querySelector('[data-view="cockpit"]')?.click?.();
     document.querySelector('[data-mode="cockpit"]')?.click?.();
@@ -258,7 +280,7 @@ export async function runShortsPack(input = {}) {
       'military-installations',
       'military-awareness',
     ]);
-    await flyTo(viewer, AREA51_VIEW);
+    await hop(AREA51_VIEW);
     document.querySelector('[data-easter="tr3b"]')?.click?.();
     document.getElementById('tr3b-toggle')?.click?.();
     return pack;
@@ -272,16 +294,27 @@ export async function runShortsPack(input = {}) {
       'earthquakes',
       'local-dams',
     ]);
-    await flyTo(viewer, NEPAL_VIEW);
+    await hop(NEPAL_VIEW);
+    return pack;
+  }
+
+  if (pack === 'miami-landing') {
+    toast('SHORTS · Miami ILS 30 landing (Cargo South)');
+    await enableLayers(dataManager, ['flights', 'military']);
+    await hop(COCKPIT_MIA);
+    if (token !== shortsAbortGeneration) return pack;
+    document.getElementById('enter-cockpit')?.click?.();
+    document.querySelector('[data-view="cockpit"]')?.click?.();
+    document.querySelector('[data-mode="cockpit"]')?.click?.();
     return pack;
   }
 
   if (pack === 'traffic') {
     toast('SHORTS · Traffic & CCTV · God\'s Eye (Austin → London → SF)');
     await enableLayers(dataManager, ['traffic', 'cctv']);
-    await flyTo(viewer, TRAFFIC_AUSTIN);
-    await flyTo(viewer, TRAFFIC_LONDON);
-    await flyTo(viewer, TRAFFIC_SF);
+    if (!(await hop(TRAFFIC_AUSTIN))) return pack;
+    if (!(await hop(TRAFFIC_LONDON))) return pack;
+    await hop(TRAFFIC_SF);
     return pack;
   }
 

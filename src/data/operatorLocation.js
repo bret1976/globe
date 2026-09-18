@@ -1,10 +1,47 @@
 /** Browser geolocation for operator-centric layer focus. Cesium-free. */
 
-export const OPERATOR_GEO_TIMEOUT_MS = 4_000;
+export const OPERATOR_GEO_TIMEOUT_MS = 25_000;
 export const OPERATOR_GEO_MAX_AGE_MS = 60_000;
 export const OPERATOR_CACHE_MAX_AGE_MS = 5 * 60_000;
+export const OPERATOR_STORAGE_KEY = 'gev.operatorLocation';
 
 let cachedOperatorLocation = null;
+let inFlightOperatorLocation = null;
+
+function readPersistentOperatorLocation(maxAgeMs, now) {
+  try {
+    const raw = globalThis.localStorage?.getItem(OPERATOR_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (
+      !isFiniteLatLon(parsed?.lat, parsed?.lon) ||
+      !Number.isFinite(parsed?.cachedAt) ||
+      now() - parsed.cachedAt > maxAgeMs
+    ) {
+      return null;
+    }
+    return {
+      lat: parsed.lat,
+      lon: parsed.lon,
+      source: parsed.source || 'cache',
+      accuracyM: parsed.accuracyM ?? null,
+      cachedAt: parsed.cachedAt,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function writePersistentOperatorLocation(location) {
+  try {
+    globalThis.localStorage?.setItem(
+      OPERATOR_STORAGE_KEY,
+      JSON.stringify(location),
+    );
+  } catch {
+    /* private mode / missing storage */
+  }
+}
 
 export function isFiniteLatLon(lat, lon) {
   return (
@@ -58,6 +95,7 @@ export function rememberOperatorLocation(location, now = Date.now) {
     accuracyM: location.accuracyM ?? null,
     cachedAt: now(),
   };
+  writePersistentOperatorLocation(cachedOperatorLocation);
   return cachedOperatorLocation;
 }
 
@@ -65,13 +103,66 @@ export function readCachedOperatorLocation(
   maxAgeMs = OPERATOR_CACHE_MAX_AGE_MS,
   now = Date.now,
 ) {
-  if (!cachedOperatorLocation) return null;
-  if (now() - cachedOperatorLocation.cachedAt > maxAgeMs) return null;
-  return { ...cachedOperatorLocation };
+  if (
+    cachedOperatorLocation &&
+    now() - cachedOperatorLocation.cachedAt <= maxAgeMs
+  ) {
+    return { ...cachedOperatorLocation };
+  }
+  const persistent = readPersistentOperatorLocation(maxAgeMs, now);
+  if (persistent) {
+    cachedOperatorLocation = persistent;
+    return { ...persistent };
+  }
+  return null;
 }
 
 export function clearCachedOperatorLocation() {
   cachedOperatorLocation = null;
+  inFlightOperatorLocation = null;
+  try {
+    globalThis.localStorage?.removeItem(OPERATOR_STORAGE_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
+export function peekOperatorLocation(fallback = null) {
+  return readCachedOperatorLocation() || normalizeFallback(fallback);
+}
+
+/** Share one GPS prompt across Nearest + Data Layer clicks. */
+export function primeOperatorLocation(options = {}) {
+  if (!inFlightOperatorLocation) {
+    inFlightOperatorLocation = resolveOperatorLocation(options).finally(() => {
+      inFlightOperatorLocation = null;
+    });
+  }
+  return inFlightOperatorLocation;
+}
+
+/** Layer clicks must not wait on the permission dialog. CCTV Nearest still does. */
+export const OPERATOR_FAST_WAIT_MS = 400;
+
+export async function resolveOperatorLocationFast({
+  fallback = null,
+  waitMs = OPERATOR_FAST_WAIT_MS,
+  ...options
+} = {}) {
+  const cached = readCachedOperatorLocation();
+  if (cached) {
+    primeOperatorLocation({ fallback, ...options });
+    return cached;
+  }
+  const peeked = peekOperatorLocation(fallback);
+  const pending = primeOperatorLocation({ fallback, ...options });
+  if (!peeked || waitMs <= 0) return peeked || pending;
+  return Promise.race([
+    pending,
+    new Promise((resolve) => {
+      setTimeout(() => resolve(peeked), waitMs);
+    }),
+  ]);
 }
 
 function normalizeFallback(fallback) {

@@ -7,6 +7,7 @@ import {
   pickImmediateOperatorFocus,
   shouldFocusUserEnabledLayer,
   collectLayerFocusObjects,
+  isNearbyOperatorFocus,
   SPACE_VIEW_HEIGHT_M,
 } from './layerFocusPlan.js';
 
@@ -51,9 +52,21 @@ test('layer focus plans CCTV, objects, then the operator area', () => {
       layerId: 'cctv',
       location,
       nearestCameraId: 'cam-austin',
+      nearestCameraDistKm: 1.2,
     }),
     { mode: 'cctv', id: 'cam-austin' },
   );
+  assert.deepEqual(
+    planEnabledLayerFocus({
+      layerId: 'cctv',
+      location: { lat: 36.1699, lon: -115.1398, source: 'geolocation' },
+      nearestCameraId: 'cam-sf',
+      nearestCameraDistKm: 670,
+    }),
+    { mode: 'operator', heightM: layerFocusHeightM('cctv') },
+  );
+  assert.equal(isNearbyOperatorFocus(670), false);
+  assert.equal(isNearbyOperatorFocus(8), true);
   assert.deepEqual(
     planEnabledLayerFocus({
       layerId: 'flights',

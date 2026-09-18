@@ -1,11 +1,14 @@
 import * as Cesium from 'cesium';
 import {
   resolveOperatorLocation,
+  resolveOperatorLocationFast,
+  primeOperatorLocation,
   viewerCameraLatLon,
   nearestByHaversine,
   isFiniteLatLon,
   readCachedOperatorLocation,
 } from '../data/operatorLocation.js';
+import { abortShortsPack } from '../data/shortsPack.js';
 import {
   layerFocusHeightM,
   layerFocusPitchDeg,
@@ -17,9 +20,11 @@ import {
 export {
   LAYER_FOCUS_HEIGHT_M,
   SPACE_VIEW_HEIGHT_M,
+  MAX_CCTV_NEAREST_KM,
   layerFocusHeightM,
   layerFocusPitchDeg,
   isUsableOperatorCameraHeight,
+  isNearbyOperatorFocus,
   pickImmediateOperatorFocus,
   shouldFocusUserEnabledLayer,
   planEnabledLayerFocus,
@@ -155,7 +160,6 @@ function collectFocusObjects(module) {
 export async function prepareEnabledLayerFocus({
   viewer,
   layerId,
-  resolveLocation = createOperatorLocationResolver(viewer),
 } = {}) {
   if (!viewer?.camera) return { ok: false, reason: 'no-viewer' };
   if (
@@ -164,6 +168,7 @@ export async function prepareEnabledLayerFocus({
   ) {
     return { ok: false, reason: 'cockpit' };
   }
+  abortShortsPack();
   releaseStaleTracking(viewer);
 
   const heightM = layerFocusHeightM(layerId);
@@ -174,17 +179,8 @@ export async function prepareEnabledLayerFocus({
     camera,
     cameraHeightM: viewer.camera.positionCartographic?.height,
   });
-  if (immediate) {
-    snapViewerToLayerFocus(
-      viewer,
-      immediate.lat,
-      immediate.lon,
-      heightM,
-      pitchDeg,
-    );
-  }
-
-  const location = await resolveLocation();
+  primeOperatorLocation({ fallback: camera });
+  const location = immediate || camera;
   if (location) {
     snapViewerToLayerFocus(
       viewer,
@@ -195,9 +191,7 @@ export async function prepareEnabledLayerFocus({
     );
     return { ok: true, location };
   }
-  return immediate
-    ? { ok: true, location: immediate }
-    : { ok: false, reason: 'no-location' };
+  return { ok: false, reason: 'no-location' };
 }
 
 /**
@@ -217,18 +211,31 @@ export async function focusEnabledLayer({
   ) {
     return { ok: false, reason: 'cockpit' };
   }
+  abortShortsPack();
   releaseStaleTracking(viewer);
 
-  const location = await resolveLocation();
+  const location =
+    (await resolveOperatorLocationFast({
+      fallback: resolveViewerOperatorFallback(viewer),
+    })) || (await resolveLocation());
   if (!location) return { ok: false, reason: 'no-location' };
 
   let nearestCameraId = null;
-  if (layerId === 'cctv' && typeof module?.focusNearest === 'function') {
-    nearestCameraId = module.focusNearest({
-      focus: false,
-      lat: location.lat,
-      lon: location.lon,
-    });
+  let nearestCameraDistKm = null;
+  if (layerId === 'cctv') {
+    const nearest =
+      typeof module?.nearestCameraToLatLon === 'function'
+        ? module.nearestCameraToLatLon(location.lat, location.lon)
+        : null;
+    nearestCameraId = nearest?.id || null;
+    nearestCameraDistKm = nearest?.distKm ?? null;
+    if (!nearestCameraId && typeof module?.focusNearest === 'function') {
+      nearestCameraId = module.focusNearest({
+        focus: false,
+        lat: location.lat,
+        lon: location.lon,
+      });
+    }
   }
 
   const objects = collectFocusObjects(module);
@@ -242,6 +249,7 @@ export async function focusEnabledLayer({
     layerId,
     location,
     nearestCameraId,
+    nearestCameraDistKm,
     hasAlprFocus:
       layerId === 'alpr-cameras' && typeof module?.focusNearest === 'function',
     nearestObject,

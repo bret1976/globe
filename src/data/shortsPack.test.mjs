@@ -71,15 +71,17 @@ function mockViewer() {
 }
 
 test('traffic aliases resolve from hash or search', () => {
-  assert.equal(SHORTS_PACK_VERSION, '2026-09-18-traffic-cctv');
+  assert.equal(SHORTS_PACK_VERSION, '2026-09-18-miami-landing');
   assert.equal(SHORTS_ALIASES.traffic, 'traffic');
-  assert.equal(SHORTS_ALIASES.cctv, 'traffic');
+  assert.equal(SHORTS_ALIASES.cctv, undefined);
   assert.equal(SHORTS_ALIASES.streets, 'traffic');
   assert.equal(SHORTS_ALIASES.tomtom, 'traffic');
   assert.equal(SHORTS_ALIASES.spy, 'traffic');
+  assert.equal(SHORTS_ALIASES.miami, 'miami-landing');
   assert.equal(parseShortsPackFromLocation(loc({ hash: '#shorts=traffic' })), 'traffic');
-  assert.equal(parseShortsPackFromLocation(loc({ hash: '#shorts=cctv' })), 'traffic');
+  assert.equal(parseShortsPackFromLocation(loc({ hash: '#shorts=cctv' })), null);
   assert.equal(parseShortsPackFromLocation(loc({ search: '?shorts=spy' })), 'traffic');
+  assert.equal(parseShortsPackFromLocation(loc({ hash: '#shorts=miami' })), 'miami-landing');
   assert.equal(parseShortsPackFromLocation(loc({ hash: '#shorts=bay' })), 'bay-area');
   assert.equal(parseShortsPackFromLocation(loc()), null);
 });
@@ -116,7 +118,84 @@ test('traffic pack enables traffic + CCTV and hops Austin → London → SF', as
     assert.ok(Math.abs(Cesium.Math.toDegrees(sf.latitude) - 37.7952) < 0.001);
     assert.ok(Math.abs(Cesium.Math.toDegrees(sf.longitude) - -122.4028) < 0.001);
     assert.match(dom.toast.textContent, /Traffic & CCTV/);
-    assert.match(dom.badge.textContent, /2026-09-18-traffic-cctv/);
+    assert.match(dom.badge.textContent, /2026-09-18-miami-landing/);
+  } finally {
+    dom.restore();
+  }
+});
+
+test('miami landing pack flies ILS 30 and can be aborted mid-hop', async () => {
+  const dom = mockDom();
+  const enabled = [];
+  const hops = [];
+  const pending = [];
+  const viewer = {
+    camera: {
+      flyTo(options) {
+        hops.push(options);
+        pending.push(options);
+      },
+    },
+  };
+  try {
+    const { abortShortsPack, runShortsPack } = await import('./shortsPack.js');
+    const running = runShortsPack({
+      pack: 'miami-landing',
+      viewer,
+      dataManager: {
+        async setEnabled(id, on, options) {
+          enabled.push({ id, on, origin: options?.origin });
+          return true;
+        },
+      },
+    });
+    for (let i = 0; i < 20 && hops.length === 0; i += 1) {
+      await Promise.resolve();
+    }
+    assert.equal(enabled.length, 2);
+    assert.equal(hops.length, 1);
+    const mia = Cesium.Cartographic.fromCartesian(hops[0].destination);
+    assert.ok(Math.abs(Cesium.Math.toDegrees(mia.latitude) - 25.795) < 0.001);
+    assert.ok(Math.abs(Cesium.Math.toDegrees(mia.longitude) - -80.287) < 0.001);
+    abortShortsPack();
+    pending[0].complete?.();
+    assert.equal(await running, 'miami-landing');
+  } finally {
+    dom.restore();
+  }
+});
+
+test('aborting a shorts hop stops the traffic cinematic', async () => {
+  const dom = mockDom();
+  const hops = [];
+  const pending = [];
+  const viewer = {
+    camera: {
+      flyTo(options) {
+        hops.push(options);
+        pending.push(options);
+      },
+    },
+  };
+  try {
+    const { abortShortsPack, runShortsPack } = await import('./shortsPack.js');
+    const running = runShortsPack({
+      pack: 'traffic',
+      viewer,
+      dataManager: {
+        async setEnabled() {
+          return true;
+        },
+      },
+    });
+    for (let i = 0; i < 20 && hops.length === 0; i += 1) {
+      await Promise.resolve();
+    }
+    assert.equal(hops.length, 1);
+    abortShortsPack();
+    pending[0].complete?.();
+    await running;
+    assert.equal(hops.length, 1, 'later Austin→London→SF hops must not run');
   } finally {
     dom.restore();
   }

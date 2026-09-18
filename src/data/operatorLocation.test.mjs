@@ -5,10 +5,13 @@ import {
   haversineKm,
   isFiniteLatLon,
   nearestByHaversine,
+  peekOperatorLocation,
   readCachedOperatorLocation,
   rememberOperatorLocation,
   resolveOperatorLocation,
+  resolveOperatorLocationFast,
   viewerCameraLatLon,
+  OPERATOR_STORAGE_KEY,
 } from './operatorLocation.js';
 
 test('haversine and nearest pick the closest catalog item', () => {
@@ -100,4 +103,71 @@ test('operator cache expires and remember is a no-op for invalid coords', () => 
     readCachedOperatorLocation(60_000, () => 100_000),
     null,
   );
+});
+
+test('operator GPS persists to localStorage', () => {
+  const store = new Map();
+  globalThis.localStorage = {
+    getItem: (key) => (store.has(key) ? store.get(key) : null),
+    setItem: (key, value) => store.set(key, String(value)),
+    removeItem: (key) => store.delete(key),
+  };
+  clearCachedOperatorLocation();
+  rememberOperatorLocation(
+    { lat: 36.1699, lon: -115.1398, source: 'geolocation' },
+    () => 5_000,
+  );
+  const persisted = JSON.parse(store.get(OPERATOR_STORAGE_KEY));
+  assert.equal(persisted.lat, 36.1699);
+  assert.equal(persisted.lon, -115.1398);
+  clearCachedOperatorLocation();
+  assert.equal(store.has(OPERATOR_STORAGE_KEY), false);
+  delete globalThis.localStorage;
+});
+
+test('fast operator resolve uses cache and does not wait on GPS', async () => {
+  clearCachedOperatorLocation();
+  rememberOperatorLocation(
+    { lat: 36.1699, lon: -115.1398, source: 'geolocation' },
+    () => Date.now(),
+  );
+  let geoCalls = 0;
+  const hanging = {
+    getCurrentPosition() {
+      geoCalls += 1;
+    },
+  };
+  const started = Date.now();
+  const fast = await resolveOperatorLocationFast({
+    geolocation: hanging,
+    fallback: { lat: 37.7952, lon: -122.4028, source: 'viewer' },
+    timeoutMs: 40,
+    waitMs: 5_000,
+  });
+  assert.ok(Date.now() - started < 200);
+  assert.equal(fast.lat, 36.1699);
+  assert.equal(fast.source, 'geolocation');
+  assert.deepEqual(peekOperatorLocation({ lat: 0, lon: 0 }), {
+    lat: 36.1699,
+    lon: -115.1398,
+    source: 'geolocation',
+    accuracyM: null,
+    cachedAt: fast.cachedAt,
+  });
+  clearCachedOperatorLocation();
+  const peeked = peekOperatorLocation({
+    lat: 36.1699,
+    lon: -115.1398,
+    source: 'viewer',
+  });
+  assert.equal(peeked.source, 'viewer');
+  const raced = await resolveOperatorLocationFast({
+    geolocation: hanging,
+    fallback: { lat: 36.1699, lon: -115.1398, source: 'viewer' },
+    timeoutMs: 40,
+    waitMs: 20,
+  });
+  assert.equal(raced.source, 'viewer');
+  assert.ok(geoCalls >= 1);
+  clearCachedOperatorLocation();
 });

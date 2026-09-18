@@ -38,6 +38,13 @@ export const LAYER_FOCUS_PITCH_DEG = Object.freeze({
 
 export const DEFAULT_LAYER_FOCUS_PITCH_DEG = -42;
 
+/** Do not teleport CCTV Nearest to another metro when the operator is elsewhere. */
+export const MAX_CCTV_NEAREST_KM = 120;
+
+export function isNearbyOperatorFocus(distKm, maxKm = MAX_CCTV_NEAREST_KM) {
+  return Number.isFinite(distKm) && distKm <= maxKm;
+}
+
 export const SPACE_VIEW_HEIGHT_M = 500_000;
 
 export function layerFocusHeightM(layerId) {
@@ -122,11 +129,16 @@ export function planEnabledLayerFocus({
   layerId,
   location,
   nearestCameraId = null,
+  nearestCameraDistKm = null,
   hasAlprFocus = false,
   nearestObject = null,
 } = {}) {
   if (!location) return { mode: 'skip' };
-  if (layerId === 'cctv' && nearestCameraId) {
+  if (
+    layerId === 'cctv' &&
+    nearestCameraId &&
+    isNearbyOperatorFocus(nearestCameraDistKm)
+  ) {
     return { mode: 'cctv', id: nearestCameraId };
   }
   if (layerId === 'alpr-cameras' && hasAlprFocus) {
