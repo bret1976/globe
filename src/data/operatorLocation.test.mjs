@@ -1,0 +1,103 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {
+  clearCachedOperatorLocation,
+  haversineKm,
+  isFiniteLatLon,
+  nearestByHaversine,
+  readCachedOperatorLocation,
+  rememberOperatorLocation,
+  resolveOperatorLocation,
+  viewerCameraLatLon,
+} from './operatorLocation.js';
+
+test('haversine and nearest pick the closest catalog item', () => {
+  assert.ok(isFiniteLatLon(30.27, -97.74));
+  assert.equal(isFiniteLatLon(91, 0), false);
+  const austinToHouston = haversineKm(30.2672, -97.7431, 29.7604, -95.3698);
+  assert.ok(austinToHouston > 220 && austinToHouston < 260);
+  const cameras = [
+    { id: 'sf', lat: 37.7952, lon: -122.4028 },
+    { id: 'austin', lat: 30.2747, lon: -97.7403 },
+    { id: 'london', lat: 51.5055, lon: -0.0754 },
+  ];
+  const nearest = nearestByHaversine(
+    cameras,
+    30.2672,
+    -97.7431,
+    (camera) => camera,
+  );
+  assert.equal(nearest.item.id, 'austin');
+  assert.ok(nearest.distKm < 5);
+});
+
+test('viewer fallback reads cartographic radians through the supplied converter', () => {
+  const toDegrees = (radians) => (radians * 180) / Math.PI;
+  const location = viewerCameraLatLon(
+    {
+      camera: {
+        positionCartographic: {
+          latitude: (30.2672 * Math.PI) / 180,
+          longitude: (-97.7431 * Math.PI) / 180,
+        },
+      },
+    },
+    toDegrees,
+  );
+  assert.equal(location.source, 'viewer');
+  assert.ok(Math.abs(location.lat - 30.2672) < 1e-6);
+  assert.ok(Math.abs(location.lon + 97.7431) < 1e-6);
+});
+
+test('resolveOperatorLocation prefers GPS, then cache, then viewer fallback', async () => {
+  clearCachedOperatorLocation();
+  const geo = {
+    getCurrentPosition(success) {
+      success({
+        coords: { latitude: 40.758, longitude: -73.9855, accuracy: 12 },
+      });
+    },
+  };
+  const fromGeo = await resolveOperatorLocation({
+    geolocation: geo,
+    fallback: { lat: 30.2672, lon: -97.7431, source: 'viewer' },
+  });
+  assert.deepEqual(
+    { lat: fromGeo.lat, lon: fromGeo.lon, source: fromGeo.source },
+    { lat: 40.758, lon: -73.9855, source: 'geolocation' },
+  );
+
+  const denied = {
+    getCurrentPosition(_success, error) {
+      error(new Error('denied'));
+    },
+  };
+  const fromCache = await resolveOperatorLocation({
+    geolocation: denied,
+    fallback: { lat: 0, lon: 0, source: 'viewer' },
+  });
+  assert.equal(fromCache.lat, 40.758);
+  assert.equal(fromCache.source, 'geolocation');
+
+  clearCachedOperatorLocation();
+  const fromViewer = await resolveOperatorLocation({
+    geolocation: denied,
+    fallback: { lat: 30.2672, lon: -97.7431, source: 'viewer' },
+  });
+  assert.equal(fromViewer.source, 'viewer');
+  assert.equal(fromViewer.lat, 30.2672);
+});
+
+test('operator cache expires and remember is a no-op for invalid coords', () => {
+  clearCachedOperatorLocation();
+  assert.equal(rememberOperatorLocation({ lat: 99, lon: 0 }), null);
+  rememberOperatorLocation(
+    { lat: 51.5, lon: -0.1, source: 'geolocation' },
+    () => 1_000,
+  );
+  assert.equal(readCachedOperatorLocation(60_000, () => 10_000).lat, 51.5);
+  assert.equal(
+    readCachedOperatorLocation(60_000, () => 100_000),
+    null,
+  );
+});

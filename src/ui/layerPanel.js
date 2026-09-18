@@ -198,8 +198,10 @@ export class LayerPanel {
         toggle.setAttribute('aria-disabled', 'true');
         toggle.setAttribute('aria-busy', 'true');
         try {
-          await this.setEnabled(layer.id, !this.isEnabled(layer.id), {
+          const nextEnabled = !this.isEnabled(layer.id);
+          await this.setEnabled(layer.id, nextEnabled, {
             origin: 'user',
+            focus: nextEnabled,
           });
         } catch (error) {
           console.warn(`[Data] ${layer.id} toggle error:`, error);

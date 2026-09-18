@@ -17,8 +17,16 @@ export function _initCctvPanel() {
       (activeId && activeId !== this._cctvState?.activeCameraId)
     )
       return;
-    this.actions.runExplicitFocus(
-      () => this.cctv.focusNearest({ focus: false }),
+    const location = this.actions.resolveOperatorLocation
+      ? await this.actions.resolveOperatorLocation()
+      : null;
+    await this.actions.runExplicitFocus(
+      () =>
+        this.cctv.focusNearest({
+          focus: false,
+          lat: location?.lat,
+          lon: location?.lon,
+        }),
       (cameraId) => this.cctv.focusCamera(cameraId, 1.8),
     );
   });

@@ -8,15 +8,18 @@ export function createNavigation({
   source,
 }) {
   /**
-   * Finds the camera closest to the Cesium viewer's current position.
+   * Finds the camera closest to an explicit lat/lon (operator GPS).
+   * @param {number} lat Latitude in degrees.
+   * @param {number} lon Longitude in degrees.
    * @returns {string|null} Camera ID of the nearest camera, or null.
    */
-
-  function nearestCameraIdToViewer() {
-    const carto = layerState._viewer?.camera?.positionCartographic;
-    if (!carto || !layerState._records.length) return null;
-    const lat = Cesium.Math.toDegrees(carto.latitude);
-    const lon = Cesium.Math.toDegrees(carto.longitude);
+  function nearestCameraIdToLatLon(lat, lon) {
+    if (
+      !Number.isFinite(lat) ||
+      !Number.isFinite(lon) ||
+      !layerState._records.length
+    )
+      return null;
 
     let best = null;
     for (const record of layerState._records) {
@@ -31,6 +34,19 @@ export function createNavigation({
       }
     }
     return best?.id || null;
+  }
+
+  /**
+   * Finds the camera closest to the Cesium viewer's current position.
+   * @returns {string|null} Camera ID of the nearest camera, or null.
+   */
+  function nearestCameraIdToViewer() {
+    const carto = layerState._viewer?.camera?.positionCartographic;
+    if (!carto) return null;
+    return nearestCameraIdToLatLon(
+      Cesium.Math.toDegrees(carto.latitude),
+      Cesium.Math.toDegrees(carto.longitude),
+    );
   }
 
   /**
@@ -148,6 +164,7 @@ export function createNavigation({
     return (((Math.floor(currentIdx) + delta) % total) + total) % total;
   }
   return {
+    nearestCameraIdToLatLon,
     nearestCameraIdToViewer,
     focusCctvRecord,
     focusCamera,

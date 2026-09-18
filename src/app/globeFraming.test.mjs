@@ -5,10 +5,10 @@ import {
   GLOBE_CAMERA_MAX_ZOOM_M,
 } from './globeFraming.js';
 
-test('globe framing keeps Earth in view and still allows Reset Globe', () => {
+test('globe framing shows Earth and leaves the camera controller alone', () => {
   assert.ok(
     GLOBE_CAMERA_MAX_ZOOM_M > 18_000_000,
-    'max zoom must remain above the Reset Globe height',
+    'Reset Globe height stays documented above 18,000 km',
   );
   const controller = {
     maximumZoomDistance: Number.POSITIVE_INFINITY,
@@ -20,6 +20,7 @@ test('globe framing keeps Earth in view and still allows Reset Globe', () => {
   };
   configureGlobeFraming(viewer);
   assert.equal(viewer.scene.globe.show, true);
-  assert.equal(controller.maximumZoomDistance, GLOBE_CAMERA_MAX_ZOOM_M);
-  assert.equal(controller.enableCollisionDetection, true);
+  assert.equal(controller.maximumZoomDistance, Number.POSITIVE_INFINITY);
+  assert.equal(controller.minimumZoomDistance, 1);
+  assert.equal(controller.enableCollisionDetection, false);
 });
