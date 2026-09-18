@@ -17,6 +17,26 @@ export function createControls({ state: layerState, services, parts, source }) {
       parts.selection.stopMissionZoomAnchor();
     },
 
+    getDetectableObjects(options = {}) {
+      const maxCount = Number.isFinite(options.maxCount)
+        ? Math.max(1, Math.floor(options.maxCount))
+        : 2500;
+      const out = [];
+      for (const launch of layerState._launches || []) {
+        if (!Number.isFinite(launch?.lat) || !Number.isFinite(launch?.lon))
+          continue;
+        out.push({
+          id: launch.id,
+          sourceId: launch.id,
+          lat: launch.lat,
+          lon: launch.lon,
+          label: launch.name,
+        });
+        if (out.length >= maxCount) break;
+      }
+      return out;
+    },
+
     getStats() {
       return {
         count: layerState._count,

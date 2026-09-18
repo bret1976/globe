@@ -13,6 +13,8 @@ test('Data Layer toggles request operator focus only when enabling', () => {
     source,
     /await this\.setEnabled\(layer\.id, nextEnabled, \{\s*origin: 'user',\s*focus: nextEnabled,/,
   );
+  assert.match(source, /this\._bind\(left, 'click'/);
+  assert.match(source, /await this\.focusLayer\?\.\(layer\.id\)/);
 });
 
 test('panel presentation places Transit between Street Traffic and Bike Share in Movement', () => {

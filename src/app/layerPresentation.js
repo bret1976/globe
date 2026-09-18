@@ -10,12 +10,14 @@ export class LayerPresentation {
     {
       requestRender = governorRequestRender,
       invalidateDetection = markDetectionSourcesChanged,
+      onUserLayerEnablePrepare = null,
       onUserLayerEnabled = null,
     } = {},
   ) {
     this.manager = manager;
     this._panel = null;
     this.pendingVisible = false;
+    this._onUserLayerEnablePrepare = onUserLayerEnablePrepare;
     this._onUserLayerEnabled = onUserLayerEnabled;
     this._unsubscribe = manager.subscribeActivity((change) => {
       if (change.type === 'status') this.refresh();
@@ -41,6 +43,13 @@ export class LayerPresentation {
         getLayers: () => this.manager.getAll(),
         isEnabled: (id) => this.manager.isEnabled(id),
         setEnabled: async (id, enabled, options) => {
+          if (shouldFocusUserEnabledLayer(enabled, options)) {
+            try {
+              await this._onUserLayerEnablePrepare?.(id);
+            } catch (error) {
+              console.warn(`[Data] ${id} operator prepare error:`, error);
+            }
+          }
           const result = await this.manager.setEnabled(id, enabled, options);
           if (
             shouldFocusUserEnabledLayer(enabled, options) &&
@@ -53,6 +62,13 @@ export class LayerPresentation {
             }
           }
           return result;
+        },
+        focusLayer: async (id) => {
+          try {
+            await this._onUserLayerEnabled?.(id);
+          } catch (error) {
+            console.warn(`[Data] ${id} operator focus error:`, error);
+          }
         },
         setLayerParams: (id, params, options) =>
           this.manager.setLayerParams(id, params, options),

@@ -4,12 +4,20 @@ import {
   viewerCameraLatLon,
   nearestByHaversine,
   isFiniteLatLon,
+  readCachedOperatorLocation,
 } from '../data/operatorLocation.js';
-import { layerFocusHeightM, planEnabledLayerFocus } from './layerFocusPlan.js';
+import {
+  layerFocusHeightM,
+  planEnabledLayerFocus,
+  pickImmediateOperatorFocus,
+} from './layerFocusPlan.js';
 
 export {
   LAYER_FOCUS_HEIGHT_M,
+  SPACE_VIEW_HEIGHT_M,
   layerFocusHeightM,
+  isUsableOperatorCameraHeight,
+  pickImmediateOperatorFocus,
   shouldFocusUserEnabledLayer,
   planEnabledLayerFocus,
 } from './layerFocusPlan.js';
@@ -33,6 +41,16 @@ export function pickNearestDetectable(objects, lat, lon) {
     }
     return cartographicLatLon(object?.position);
   })?.item;
+}
+
+function objectLatLon(object) {
+  if (isFiniteLatLon(object?.lat, object?.lon)) {
+    return { lat: object.lat, lon: object.lon };
+  }
+  if (isFiniteLatLon(object?.latitude, object?.longitude)) {
+    return { lat: object.latitude, lon: object.longitude };
+  }
+  return null;
 }
 
 function flyToLatLon(viewer, lat, lon, heightM, durationSec = 1.8) {
@@ -74,6 +92,58 @@ export function createOperatorLocationResolver(viewer) {
     });
 }
 
+export function snapViewerToLayerFocus(viewer, lat, lon, heightM) {
+  if (!viewer?.camera || !isFiniteLatLon(lat, lon)) return false;
+  viewer.camera.setView({
+    destination: Cesium.Cartesian3.fromDegrees(lon, lat, heightM),
+    orientation: {
+      heading: 0,
+      pitch: Cesium.Math.toRadians(-42),
+      roll: 0,
+    },
+  });
+  return true;
+}
+
+/**
+ * Move the camera to the operator at the layer's working height BEFORE enable
+ * so viewport feeds (flights, traffic, CCTV, ALPR) query the right place.
+ */
+export async function prepareEnabledLayerFocus({
+  viewer,
+  layerId,
+  resolveLocation = createOperatorLocationResolver(viewer),
+} = {}) {
+  if (!viewer?.camera) return { ok: false, reason: 'no-viewer' };
+  if (
+    typeof document !== 'undefined' &&
+    document.body?.classList.contains('cockpit-mode')
+  ) {
+    return { ok: false, reason: 'cockpit' };
+  }
+  if (viewer.trackedEntity) return { ok: false, reason: 'tracking' };
+
+  const heightM = layerFocusHeightM(layerId);
+  const camera = resolveViewerOperatorFallback(viewer);
+  const immediate = pickImmediateOperatorFocus({
+    cached: readCachedOperatorLocation(),
+    camera,
+    cameraHeightM: viewer.camera.positionCartographic?.height,
+  });
+  if (immediate) {
+    snapViewerToLayerFocus(viewer, immediate.lat, immediate.lon, heightM);
+  }
+
+  const location = await resolveLocation();
+  if (location) {
+    snapViewerToLayerFocus(viewer, location.lat, location.lon, heightM);
+    return { ok: true, location };
+  }
+  return immediate
+    ? { ok: true, location: immediate }
+    : { ok: false, reason: 'no-location' };
+}
+
 /**
  * After a Data Layers row enable, go to the operator and then to that
  * layer's nearest data so flights / bikeshare / CCTV populate around them.
@@ -107,7 +177,7 @@ export async function focusEnabledLayer({
 
   const objects =
     typeof module?.getDetectableObjects === 'function'
-      ? module.getDetectableObjects({ maxCount: 80 })
+      ? module.getDetectableObjects({ maxCount: 2500 })
       : [];
   const nearestObject = pickNearestDetectable(
     objects,
@@ -135,9 +205,16 @@ export async function focusEnabledLayer({
     return { ok: true, mode: 'alpr', location };
   }
 
-  if (plan.mode === 'object' && nearestObject?.position) {
-    flyToCartesian(viewer, nearestObject.position, plan.heightM);
-    return { ok: true, mode: 'object', id: plan.id, location };
+  if (plan.mode === 'object') {
+    if (nearestObject?.position) {
+      flyToCartesian(viewer, nearestObject.position, plan.heightM);
+      return { ok: true, mode: 'object', id: plan.id, location };
+    }
+    const coords = objectLatLon(nearestObject);
+    if (coords) {
+      flyToLatLon(viewer, coords.lat, coords.lon, plan.heightM);
+      return { ok: true, mode: 'object', id: plan.id, location };
+    }
   }
 
   flyToLatLon(

@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 import {
   layerFocusHeightM,
   planEnabledLayerFocus,
+  pickImmediateOperatorFocus,
   shouldFocusUserEnabledLayer,
+  SPACE_VIEW_HEIGHT_M,
 } from './layerFocusPlan.js';
 
 test('only user Data Layer enables request operator focus', () => {
@@ -53,4 +55,32 @@ test('layer focus plans CCTV, objects, then the operator area', () => {
   assert.deepEqual(planEnabledLayerFocus({ layerId: 'cctv' }), {
     mode: 'skip',
   });
+});
+
+test('immediate operator focus prefers GPS cache and rejects space leftovers', () => {
+  assert.ok(SPACE_VIEW_HEIGHT_M > 80_000);
+  const cached = pickImmediateOperatorFocus({
+    cached: { lat: 30.27, lon: -97.74, source: 'geolocation' },
+    camera: { lat: 2.2, lon: -111.1, source: 'viewer' },
+    cameraHeightM: 36_000_000,
+  });
+  assert.deepEqual(cached, {
+    lat: 30.27,
+    lon: -97.74,
+    source: 'geolocation',
+  });
+  assert.equal(
+    pickImmediateOperatorFocus({
+      camera: { lat: 2.2, lon: -111.1, source: 'viewer' },
+      cameraHeightM: 36_000_000,
+    }),
+    null,
+  );
+  assert.deepEqual(
+    pickImmediateOperatorFocus({
+      camera: { lat: 30.27, lon: -97.74, source: 'viewer' },
+      cameraHeightM: 600,
+    }),
+    { lat: 30.27, lon: -97.74, source: 'viewer' },
+  );
 });

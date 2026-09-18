@@ -98,10 +98,12 @@ export class LayerPanel {
     hasRowControls,
     subscribeRowControls,
     onHiddenRefresh = () => {},
+    focusLayer = null,
   }) {
     this.getAll = getLayers;
     this.isEnabled = isEnabled;
     this.setEnabled = setEnabled;
+    this.focusLayer = focusLayer;
     this.setLayerParams = setLayerParams;
     this._rowControlsFor = getRowControls;
     this.hasRowControls = hasRowControls;
@@ -173,6 +175,7 @@ export class LayerPanel {
       name.textContent = panelLabel(layer);
       left.appendChild(icon);
       left.appendChild(name);
+      left.title = 'Show this layer on the globe';
 
       const right = document.createElement('div');
       right.className = 'data-toggle-right';
@@ -185,6 +188,33 @@ export class LayerPanel {
       toggle.type = 'button';
       toggle.className = `data-toggle-btn${layer.enabled ? ' active' : ''}`;
       this._syncToggleButton(toggle, layer);
+      this._bind(left, 'click', async (event) => {
+        event.preventDefault();
+        if (
+          this._destroyed ||
+          this._generation !== generation ||
+          toggle.getAttribute('aria-disabled') === 'true'
+        )
+          return;
+        toggle.setAttribute('aria-disabled', 'true');
+        toggle.setAttribute('aria-busy', 'true');
+        try {
+          if (this.isEnabled(layer.id)) {
+            await this.focusLayer?.(layer.id);
+            return;
+          }
+          await this.setEnabled(layer.id, true, {
+            origin: 'user',
+            focus: true,
+          });
+        } catch (error) {
+          console.warn(`[Data] ${layer.id} focus error:`, error);
+        } finally {
+          const current = this.getAll().find(({ id }) => id === layer.id);
+          if (!this._destroyed && current && this._generation === generation)
+            this._syncToggleButton(toggle, current);
+        }
+      });
       this._bind(toggle, 'click', async () => {
         // Native `disabled` immediately evicts keyboard focus in Chromium. Keep
         // the lifecycle control focusable while it is busy, and enforce the
