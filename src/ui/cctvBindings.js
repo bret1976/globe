@@ -9,6 +9,7 @@ export function _initCctvPanel() {
   this.listen(this._cctvNearestBtn, 'click', async () => {
     const generation = ++this._actionGeneration;
     const activeId = this._cctvState?.activeCameraId;
+    this.actions.abortCinematics?.();
     if (!(await this.actions.toggleEnabled(true))) return;
     if (
       this.destroyed ||
@@ -20,14 +21,25 @@ export function _initCctvPanel() {
     const location = this.actions.resolveOperatorLocation
       ? await this.actions.resolveOperatorLocation()
       : null;
-    await this.actions.runExplicitFocus(
-      () =>
-        this.cctv.focusNearest({
-          focus: false,
-          lat: location?.lat,
-          lon: location?.lon,
-        }),
-      (cameraId) => this.cctv.focusCamera(cameraId, 1.8),
+    const nearest =
+      Number.isFinite(location?.lat) && Number.isFinite(location?.lon)
+        ? this.cctv.nearestCameraToLatLon?.(location.lat, location.lon)
+        : null;
+    if (nearest?.id && this.actions.isNearbyCamera?.(nearest.distKm)) {
+      await this.actions.runExplicitFocus(
+        () =>
+          this.cctv.focusNearest({
+            focus: false,
+            lat: location.lat,
+            lon: location.lon,
+          }),
+        (cameraId) => this.cctv.focusCamera(cameraId, 1.8),
+      );
+      return;
+    }
+    this.actions.focusOperatorLocation?.(location);
+    this.actions.showToast?.(
+      'No live cameras near you — staying over your location',
     );
   });
 

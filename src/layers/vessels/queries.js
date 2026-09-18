@@ -414,15 +414,17 @@ export function createQueries({
      * @param {{lat?: number, lon?: number}} [options]
      * @returns {string|null} Selected MMSI, or null when no usable vessel exists.
      */
-    focusNearest({ lat, lon } = {}) {
+    focusNearest({ lat, lon, excludeId } = {}) {
       const records = state.records.all;
       if (!Array.isArray(records) || !records.length) return null;
       if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+      const skip = excludeId != null ? String(excludeId) : '';
       let nearest = null;
       let best = Number.POSITIVE_INFINITY;
       for (const record of records) {
         if (!Number.isFinite(record?.lat) || !Number.isFinite(record?.lon))
           continue;
+        if (skip && String(record.mmsi) === skip) continue;
         const dLat = record.lat - lat;
         const dLon = record.lon - lon;
         const dist = dLat * dLat + dLon * dLon;

@@ -1,6 +1,7 @@
 import { createStandaloneApplication } from './standalone/application.js';
 import { describeError } from './standalone/errors.js';
 import { initShortsPack, SHORTS_PACK_VERSION } from './data/shortsPack.js';
+import { primeOperatorLocation } from './data/operatorLocation.js';
 
 const application = createStandaloneApplication({
   googleApiKey: import.meta.env.GOOGLE_MAPS_API_KEY,
@@ -13,6 +14,7 @@ application
   .then((components) => {
     const viewer = components?.scene?.viewer;
     const dataManager = components?.data?.dataManager;
+    primeOperatorLocation();
     const { pack, promise } = initShortsPack({ viewer, dataManager });
     if (pack) {
       console.info(`[shorts-pack ${SHORTS_PACK_VERSION}] launching`, pack);
@@ -20,7 +22,7 @@ application
         console.warn('[shorts-pack] failed', error);
       });
     }
-    console.info(`[shorts-pack ${SHORTS_PACK_VERSION}] ready (add #shorts=bay|nervous|cockpit|area51|nepal|traffic)`);
+    console.info(`[shorts-pack ${SHORTS_PACK_VERSION}] ready (add #shorts=bay|nervous|cockpit|miami|area51|nepal|traffic)`);
   })
   .catch((error) => {
     console.error("God's Eye View initialization failed:", error);

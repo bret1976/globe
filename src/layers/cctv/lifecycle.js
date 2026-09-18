@@ -8,6 +8,7 @@ import {
   IDLE_CAMERA_COLOR,
   CALIBRATION_RANGE_FLOOR_M,
 } from './policy.js';
+import { MAX_CCTV_NEAREST_KM } from '../../app/layerFocusPlan.js';
 
 export function createLifecycle({
   state: layerState,
@@ -360,10 +361,10 @@ export function createLifecycle({
       // bare `_activeCameraId = records[0]` assignment left SOURCE · UNKNOWN
       // and a black player until the operator clicked a camera.
       if (!layerState._activeCameraId && layerState._records.length) {
-        const nearest =
-          parts.navigation.nearestCameraIdToViewer?.() ||
-          layerState._records[0].camera.id;
-        parts.selection.setActiveCamera(nearest);
+        const nearest = parts.navigation.nearestNearbyCameraIdToViewer?.(
+          MAX_CCTV_NEAREST_KM,
+        );
+        if (nearest) parts.selection.setActiveCamera(nearest);
       } else if (
         layerState._activeCameraId &&
         !parts.selection.getActiveRecord()?.activationDone

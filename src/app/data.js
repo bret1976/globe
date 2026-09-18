@@ -22,6 +22,8 @@ export function createApplicationData({
   });
   const presentation = new LayerPresentation(dataManager, {
     onUserLayerEnablePrepare: async (layerId) => {
+      const { abortShortsPack } = await import('../data/shortsPack.js');
+      abortShortsPack();
       const { prepareEnabledLayerFocus } = await import('./layerFocus.js');
       return prepareEnabledLayerFocus({
         viewer,

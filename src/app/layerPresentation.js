@@ -65,6 +65,7 @@ export class LayerPresentation {
         },
         focusLayer: async (id) => {
           try {
+            await this._onUserLayerEnablePrepare?.(id);
             await this._onUserLayerEnabled?.(id);
           } catch (error) {
             console.warn(`[Data] ${id} operator focus error:`, error);
