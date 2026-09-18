@@ -2,7 +2,7 @@
 
 Live: https://globe-production-e799.up.railway.app/
 
-## Shorts pack (2026-09-17)
+## Shorts pack (2026-09-18)
 
 Share / smoke hashes (append to live URL):
 
@@ -11,6 +11,7 @@ Share / smoke hashes (append to live URL):
 - `#shorts=cockpit` — Delta/voice cockpit approach (SFO)
 - `#shorts=area51` — Area 51 / Groom Lake + TR-3B tip
 - `#shorts=nepal` — Nepal floods reconstruction
+- `#shorts=traffic` — Traffic & CCTV God's Eye (Austin → London → SF; aliases: cctv, streets, tomtom, spy)
 
 Vessel feed **PARTIAL vs STALE** comes from upstream #626 (layer panel).
 
