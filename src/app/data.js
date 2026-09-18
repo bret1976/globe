@@ -21,6 +21,13 @@ export function createApplicationData({
       );
   });
   const presentation = new LayerPresentation(dataManager, {
+    onUserLayerEnablePrepare: async (layerId) => {
+      const { prepareEnabledLayerFocus } = await import('./layerFocus.js');
+      return prepareEnabledLayerFocus({
+        viewer,
+        layerId,
+      });
+    },
     onUserLayerEnabled: async (layerId) => {
       const { focusEnabledLayer } = await import('./layerFocus.js');
       return focusEnabledLayer({

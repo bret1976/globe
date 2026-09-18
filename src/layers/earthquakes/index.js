@@ -221,6 +221,35 @@ export function createEarthquakesLayer({ source, overlayHost } = {}) {
       return result;
     },
 
+    getDetectableObjects(options = {}) {
+      if (!_enabled || !_dataSource) return [];
+      const maxCount = Number.isFinite(options.maxCount)
+        ? Math.max(1, Math.floor(options.maxCount))
+        : 2500;
+      const now = Cesium.JulianDate.now();
+      const result = [];
+      for (const entity of _dataSource.entities.values) {
+        if (result.length >= maxCount) break;
+        try {
+          const cartesian = entity.position?.getValue(now);
+          const carto = cartesian
+            ? Cesium.Cartographic.fromCartesian(cartesian)
+            : null;
+          if (!carto) continue;
+          result.push({
+            id: entity.id,
+            sourceId: entity.id,
+            position: cartesian,
+            lat: Cesium.Math.toDegrees(carto.latitude),
+            lon: Cesium.Math.toDegrees(carto.longitude),
+          });
+        } catch {
+          /* skip a bad entity rather than failing the whole focus pass */
+        }
+      }
+      return result;
+    },
+
     getStats() {
       return {
         count: _count,

@@ -34,6 +34,26 @@ export function createControls({ state: layerState, services, parts, source }) {
       parts.presentation.emitState();
     },
 
+    getDetectableObjects(options = {}) {
+      const maxCount = Number.isFinite(options.maxCount)
+        ? Math.max(1, Math.floor(options.maxCount))
+        : 2500;
+      const out = [];
+      for (const station of layerState._stations || []) {
+        if (!Number.isFinite(station?.lat) || !Number.isFinite(station?.lon))
+          continue;
+        out.push({
+          id: station.id,
+          sourceId: station.id,
+          lat: station.lat,
+          lon: station.lon,
+          label: station.name,
+        });
+        if (out.length >= maxCount) break;
+      }
+      return out;
+    },
+
     /** Layer statistics for HUD/debug surfaces. */
     getStats() {
       return {

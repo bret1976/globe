@@ -21,8 +21,48 @@ export const LAYER_FOCUS_HEIGHT_M = Object.freeze({
   radio: 80_000,
 });
 
+export const SPACE_VIEW_HEIGHT_M = 500_000;
+
 export function layerFocusHeightM(layerId) {
   return LAYER_FOCUS_HEIGHT_M[layerId] ?? 50_000;
+}
+
+export function isUsableOperatorCameraHeight(heightM) {
+  return Number.isFinite(heightM) && heightM < SPACE_VIEW_HEIGHT_M;
+}
+
+function hasLatLon(value) {
+  return (
+    Number.isFinite(value?.lat) &&
+    Number.isFinite(value?.lon) &&
+    value.lat >= -90 &&
+    value.lat <= 90 &&
+    value.lon >= -180 &&
+    value.lon <= 180
+  );
+}
+
+/** Snap immediately from GPS cache or a terrestrial camera, never a space leftover. */
+export function pickImmediateOperatorFocus({
+  cached = null,
+  camera = null,
+  cameraHeightM = null,
+} = {}) {
+  if (hasLatLon(cached)) {
+    return {
+      lat: cached.lat,
+      lon: cached.lon,
+      source: cached.source || 'cache',
+    };
+  }
+  if (isUsableOperatorCameraHeight(cameraHeightM) && hasLatLon(camera)) {
+    return {
+      lat: camera.lat,
+      lon: camera.lon,
+      source: camera.source || 'viewer',
+    };
+  }
+  return null;
 }
 
 /** Panel clicks pass origin=user and focus=true. Shorts / first-run do not. */
