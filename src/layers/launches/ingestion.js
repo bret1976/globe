@@ -203,11 +203,14 @@ export function createIngestion({
       } else {
         parts.selection.setSelectedMission(layerState._selectedLaunchId, true);
         if (layerState._focusAfterActiveLookup) {
-          parts.selection.focusMission(
-            launches.find(
-              (launch) => launch.id === layerState._selectedLaunchId,
-            ),
+          const selected = launches.find(
+            (launch) => launch.id === layerState._selectedLaunchId,
           );
+          // A Data Layer / nearest-pad focus is an explicit pad visit. The
+          // late TLE refresh must not yank the camera out to the orbit globe.
+          if (layerState._explicitSelection)
+            parts.selection.focusLaunchSite(selected);
+          else parts.selection.focusMission(selected);
         }
       }
       layerState._focusAfterActiveLookup = false;

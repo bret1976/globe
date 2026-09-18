@@ -38,8 +38,8 @@ test('layer focus plans CCTV, objects, then the operator area', () => {
     'traffic snap must sit below the 8 km activation gate',
   );
   assert.ok(
-    layerFocusHeightM('traffic') < 4_500,
-    'traffic snap must request the full OSM graph, not major-roads-only',
+    layerFocusHeightM('traffic') > 4_500,
+    'traffic snap must use the faster major-roads first pass',
   );
   assert.ok(layerFocusPitchDeg('traffic') < -42);
   assert.ok(layerFocusHeightM('military-installations') <= 12_000);

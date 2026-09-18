@@ -5,9 +5,9 @@ export const LAYER_FOCUS_HEIGHT_M = Object.freeze({
   military: 80_000,
   'ais-live-vessels': 40_000,
   // Street Traffic clears dots when camera height is > 8000 m. Cesium setView
-  // at exactly 8000 m lands a few meters above the gate, so stay well under it
-  // and under the 4500 m major-roads-only cutoff.
-  traffic: 4_000,
+  // at exactly 8000 m lands a few meters above the gate. Stay under that, but
+  // above the 4500 m cutoff so the first paint uses the faster major-roads query.
+  traffic: 5_200,
   transit: 6_000,
   bikeshare: 4_000,
   cctv: 2_500,
