@@ -342,7 +342,8 @@ test('teardown synchronously closes immediate camera entry points', () => {
   );
   ordered(cctvFocus, [
     'if (this._disposed) return false;',
-    'const cameraId = activate();',
+    'const cameraId = await activate();',
+    'if (this._disposed || !cameraId) return false;',
   ], 'disposed CCTV activation guard');
 });
 

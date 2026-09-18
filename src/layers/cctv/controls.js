@@ -337,14 +337,19 @@ export function createControls({ state: layerState, services, parts, source }) {
     },
 
     /**
-     * Selects and flies to the camera nearest the current viewer position.
+     * Selects and flies to the camera nearest the operator or viewer.
      * @param {Object} [options={}]
+     * @param {number} [options.lat] Operator latitude. Preferred over the viewer.
+     * @param {number} [options.lon] Operator longitude. Preferred over the viewer.
      * @param {boolean} [options.focus=true] Whether to fly after selection.
      * @param {number} [options.durationSec] - Fly-to duration in seconds.
      * @returns {string|null} The nearest camera ID, or null if none found.
      */
     focusNearest(options = {}) {
-      const nearest = parts.navigation.nearestCameraIdToViewer();
+      const nearest =
+        Number.isFinite(options.lat) && Number.isFinite(options.lon)
+          ? parts.navigation.nearestCameraIdToLatLon(options.lat, options.lon)
+          : parts.navigation.nearestCameraIdToViewer();
       if (!nearest) return null;
       parts.selection.setActiveCamera(nearest);
       if (options.focus !== false) {

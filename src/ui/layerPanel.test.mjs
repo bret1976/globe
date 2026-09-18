@@ -3,6 +3,18 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
 
+test('Data Layer toggles request operator focus only when enabling', () => {
+  const source = readFileSync(
+    new URL('./layerPanel.js', import.meta.url),
+    'utf8',
+  );
+  assert.match(source, /const nextEnabled = !this\.isEnabled\(layer\.id\);/);
+  assert.match(
+    source,
+    /await this\.setEnabled\(layer\.id, nextEnabled, \{\s*origin: 'user',\s*focus: nextEnabled,/,
+  );
+});
+
 test('panel presentation places Transit between Street Traffic and Bike Share in Movement', () => {
   const source = readFileSync(
     new URL('./layerPanel.js', import.meta.url),

@@ -20,7 +20,16 @@ export function createApplicationData({
         `Data layers could not be destroyed: ${[...dataManager.layers.keys()].join(', ')}`,
       );
   });
-  const presentation = new LayerPresentation(dataManager);
+  const presentation = new LayerPresentation(dataManager, {
+    onUserLayerEnabled: async (layerId) => {
+      const { focusEnabledLayer } = await import('./layerFocus.js');
+      return focusEnabledLayer({
+        viewer,
+        layerId,
+        module: dataManager.layers.get(layerId)?.module,
+      });
+    },
+  });
   defer(() => presentation.destroy());
   onData?.(dataManager);
   if (!catalog?.layers || !catalog?.metadata)

@@ -1,6 +1,7 @@
 import { LayerPanel } from '../ui/layers.js';
 import { governorRequestRender } from '../renderGovernor.js';
 import { markDetectionSourcesChanged } from '../data/detection.js';
+import { shouldFocusUserEnabledLayer } from './layerFocusPlan.js';
 
 /** Own the layer panel and application reactions to lifecycle activity. */
 export class LayerPresentation {
@@ -9,11 +10,13 @@ export class LayerPresentation {
     {
       requestRender = governorRequestRender,
       invalidateDetection = markDetectionSourcesChanged,
+      onUserLayerEnabled = null,
     } = {},
   ) {
     this.manager = manager;
     this._panel = null;
     this.pendingVisible = false;
+    this._onUserLayerEnabled = onUserLayerEnabled;
     this._unsubscribe = manager.subscribeActivity((change) => {
       if (change.type === 'status') this.refresh();
       else if (change.type === 'destroy-all') this.destroy();
@@ -37,8 +40,20 @@ export class LayerPresentation {
       this._panel = new LayerPanel({
         getLayers: () => this.manager.getAll(),
         isEnabled: (id) => this.manager.isEnabled(id),
-        setEnabled: (id, enabled, options) =>
-          this.manager.setEnabled(id, enabled, options),
+        setEnabled: async (id, enabled, options) => {
+          const result = await this.manager.setEnabled(id, enabled, options);
+          if (
+            shouldFocusUserEnabledLayer(enabled, options) &&
+            this.manager.isEnabled(id)
+          ) {
+            try {
+              await this._onUserLayerEnabled?.(id);
+            } catch (error) {
+              console.warn(`[Data] ${id} operator focus error:`, error);
+            }
+          }
+          return result;
+        },
         setLayerParams: (id, params, options) =>
           this.manager.setLayerParams(id, params, options),
         getRowControls: (id) => {

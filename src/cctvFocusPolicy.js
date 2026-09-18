@@ -8,13 +8,13 @@
  * @param {(cameraId: string) => *} options.fly Optional camera flight.
  * @returns {*} Activated camera ID for a held view, or the flight result.
  */
-export function runCctvLayerEnableFocus({
+export async function runCctvLayerEnableFocus({
   trackedEntity = null,
   cockpitActive = false,
   activate,
   fly,
 } = {}) {
-  const cameraId = activate?.();
+  const cameraId = await activate?.();
   if (!cameraId) return false;
   if (trackedEntity || cockpitActive) return cameraId;
   return fly?.(cameraId);

@@ -28,6 +28,10 @@ import { aircraftTrackingTarget } from '../cockpitTracking.js';
 import { ShellFeedback } from './shellFeedback.js';
 
 import { runCctvLayerEnableTransition } from '../cctvFocusPolicy.js';
+import {
+  resolveOperatorLocation,
+  viewerCameraLatLon,
+} from '../data/operatorLocation.js';
 
 /**
  * Central UI orchestrator for the God's Eye View application.
@@ -868,11 +872,19 @@ export class StyleManager extends ShellFacade {
    * @param {Function} focus CCTV camera flight receiving the activated ID.
    * @returns {*} Focus operation result.
    */
-  _runExplicitCctvFocus(activate, focus) {
+  async _runExplicitCctvFocus(activate, focus) {
     if (this._disposed) return false;
-    const cameraId = activate();
-    if (!cameraId) return false;
+    const cameraId = await activate();
+    if (this._disposed || !cameraId) return false;
     return this._runExplicitNavigation('camera', () => focus(cameraId));
+  }
+
+  _resolveOperatorLocation() {
+    return resolveOperatorLocation({
+      fallback: viewerCameraLatLon(this.viewer, (radians) =>
+        Cesium.Math.toDegrees(radians),
+      ),
+    });
   }
 
   /** Compose camera panel controls from the existing camera port and application actions. */
@@ -912,6 +924,7 @@ export class StyleManager extends ShellFacade {
           this._dataManager?.setLayerParams('cctv', params, options),
         toggleEnabled: (...args) => this._toggleCctvEnabled(...args),
         runExplicitFocus: (...args) => this._runExplicitCctvFocus(...args),
+        resolveOperatorLocation: () => this._resolveOperatorLocation(),
         setPanelCollapsed: (...args) => this.setPanelCollapsed(...args),
         showToast: (message) => this._showToast(message),
         syncViewport: () => this._syncCctvPanelViewport(),
@@ -948,7 +961,14 @@ export class StyleManager extends ShellFacade {
         !this._disposed &&
         this._dataManager.isEnabled('cctv') &&
         !this._cctvControls?.getState()?.activeCameraId,
-      activate: () => cctvLayer.focusNearest({ focus: false }),
+      activate: async () => {
+        const location = await this._resolveOperatorLocation();
+        return cctvLayer.focusNearest({
+          focus: false,
+          lat: location?.lat,
+          lon: location?.lon,
+        });
+      },
       fly: (cameraId) =>
         this._runExplicitCctvFocus(
           () => cameraId,
