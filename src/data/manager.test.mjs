@@ -1827,7 +1827,8 @@ test('layer feed states distinguish unavailable, fallback, stale, and degraded c
     count: 100,
     lastUpdate: 1,
   }), 'nominal', 'intentional free keyless traffic is not yellow FALLBACK');
-  assert.equal(layerFeedState({ source: 'adsb.lol', count: 10, lastUpdate: 1 }), 'fallback');
+  assert.equal(layerFeedState({ source: 'adsb.lol', count: 10, lastUpdate: 1 }), 'nominal',
+    'adsb.lol is the intentional free ADS-B path, not yellow FALLBACK');
   assert.equal(layerFeedState({
     source: 'adsb.lol',
     fallback: false,
@@ -1837,17 +1838,26 @@ test('layer feed states distinguish unavailable, fallback, stale, and degraded c
   assert.equal(layerFeedState({
     source: 'adsb.lol',
     coverage: '250nm regional live',
-    fallback: false,
     count: 712,
     lastUpdate: 1,
   }), 'nominal', 'regional live adsb.lol must not read as FALLBACK');
   assert.equal(layerFeedState({
     source: 'adsb.lol',
     coverage: '250nm regional fallback',
-    fallback: false,
     count: 712,
     lastUpdate: 1,
-  }), 'nominal', 'explicit primary wins over coverage containing the word fallback');
+  }), 'nominal', 'adsb.lol stays primary even when coverage mentions fallback');
+  assert.equal(layerFeedState({
+    source: 'OpenSky Network fallback',
+    count: 10,
+    lastUpdate: 1,
+  }), 'fallback', 'non-adsb sources that name fallback still read FALLBACK');
+  assert.equal(layerFeedState({
+    source: 'adsb.lol',
+    loading: true,
+    count: 0,
+    lastUpdate: null,
+  }), 'loading', 'an in-flight adsb.lol poll is LOADING, not FALLBACK');
   assert.equal(layerFeedState({ stale: true, count: 0, lastUpdate: 1 }), 'stale');
   assert.equal(layerFeedState({ error: 'partial group failure', count: 50, lastUpdate: 1 }), 'degraded');
   assert.equal(layerFeedState({ loading: true }), 'loading');

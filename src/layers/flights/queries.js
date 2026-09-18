@@ -928,11 +928,11 @@ export function createQueries({
         : 0;
       const source = flightState.feed._lastSource;
       const coverage = flightState.feed._lastCoverage;
-      // adsb.lol regional is the intentional free live path when OpenSky is
-      // unreachable (TLS/network). Treat it as primary, not a broken fallback.
-      const adsbPrimary =
-        /\badsb\.lol\b/i.test(String(source || '')) &&
-        !flightState.feed._lastError;
+      const fetching = flightState.feed._activeUpdateControllers.size > 0;
+      // adsb.lol regional is the intentional free live path. Keep the chip
+      // green even when a snapshot is stale — stale/error still surface as
+      // STALE/DEGRADED, never a false yellow FALLBACK.
+      const adsbPrimary = /\badsb\.lol\b/i.test(String(source || ''));
       return {
         count: flightState.feed._count,
         lastUpdate: flightState.feed._lastUpdate,
@@ -942,6 +942,10 @@ export function createQueries({
         retryInSec,
         source,
         coverage,
+        loading:
+          fetching &&
+          !flightState.feed._lastUpdate &&
+          !flightState.feed._lastError,
         fallback: adsbPrimary ? false : undefined,
       };
     },

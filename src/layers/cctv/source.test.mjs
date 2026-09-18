@@ -33,7 +33,12 @@ test('camera catalog and health use fixed source routes and caller cancellation'
     ['/api/cctv/sources', '/api/cctv/health'],
   );
   for (const { options } of calls) {
-    assert.equal(options.signal, controller.signal);
+    assert.ok(options.signal, 'catalog/health always send an abort signal');
+    assert.notEqual(
+      options.signal,
+      controller.signal,
+      'timeout is composed with the caller signal',
+    );
     assert.equal(options.cache, 'no-store');
   }
 });
@@ -65,6 +70,24 @@ test('cancellation while reading a camera response body prevents publication', a
   await assert.rejects(source.getCatalog({ signal: controller.signal }), {
     name: 'AbortError',
   });
+});
+
+test('a hung camera catalog fails cleanly instead of blocking the HUD', async () => {
+  const timeout = new AbortController();
+  const source = createCctvSource({
+    timeoutSignal: timeout.signal,
+    fetchImpl: (_path, options) =>
+      new Promise((_, reject) => {
+        options.signal.addEventListener('abort', () => {
+          const error = new Error('aborted');
+          error.name = 'AbortError';
+          reject(error);
+        });
+      }),
+  });
+  const pending = source.getCatalog();
+  timeout.abort();
+  await assert.rejects(pending, /timed out/);
 });
 
 test('frame and media URLs preserve registered camera identity and encoded metadata', () => {

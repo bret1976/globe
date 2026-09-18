@@ -10,7 +10,6 @@ export function layerFeedState(stats = {}) {
   const status =
     typeof state.status === 'string' ? state.status.toLowerCase() : '';
   const source = `${state.source || ''} ${state.coverage || ''}`;
-  const hasExplicitFallback = typeof state.fallback === 'boolean';
   const hasPriorData = Number(state.count) > 0 || Boolean(state.lastUpdate);
   const presentedError =
     state.error || state.lastError || state.managerRefreshError;
@@ -34,7 +33,7 @@ export function layerFeedState(stats = {}) {
     return state.stale ? 'stale' : 'nominal';
   }
   // Explicit fallback:false marks an intentional primary feed (military
-  // adsb.lol, or civilian regional live when OpenSky is unreachable). That
+  // adsb.lol, civilian regional live, or keyless OSM street traffic). That
   // must beat source/coverage string heuristics — otherwise a coverage label
   // containing the word "fallback" falsely paints a healthy live chip yellow.
   // mode:'sim' is the historical keyless traffic marker. An explicit
@@ -47,10 +46,13 @@ export function layerFeedState(stats = {}) {
   ) {
     return 'fallback';
   }
+  // adsb.lol is the intentional free ADS-B path. Only fallback:true (above)
+  // paints it yellow — the old "source mentions adsb.lol" heuristic marked
+  // healthy regional live as FALLBACK while the first poll was still loading.
   if (
     state.fallback !== false &&
-    (/\bfallback\b/i.test(source) ||
-      (!hasExplicitFallback && /\badsb\.lol\b/i.test(source)))
+    /\bfallback\b/i.test(source) &&
+    !/\badsb\.lol\b/i.test(source)
   ) {
     return 'fallback';
   }
