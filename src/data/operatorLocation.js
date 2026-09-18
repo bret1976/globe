@@ -262,6 +262,10 @@ export async function resolveOperatorLocation({
   if (allowCacheFirst) {
     const cached = readCachedOperatorLocation(OPERATOR_CACHE_MAX_AGE_MS, now);
     if (cached) return cached;
+    if (inFlightOperatorLocation) {
+      const primed = await inFlightOperatorLocation;
+      if (primed) return primed;
+    }
   }
   const geo = await readGeolocation(geolocation, timeoutMs, maximumAgeMs);
   if (geo) return rememberOperatorLocation(geo, now);

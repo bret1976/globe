@@ -7,6 +7,7 @@ import {
   nearestByHaversine,
   isDefaultSpawnLocation,
   peekOperatorLocation,
+  primeOperatorLocation,
   readCachedOperatorLocation,
   rememberOperatorLocation,
   resolveOperatorLocation,
@@ -191,5 +192,29 @@ test('fast operator resolve uses cache and does not wait on GPS', async () => {
     null,
   );
   assert.equal(isDefaultSpawnLocation({ lat: 30.2672, lon: -97.7431 }), true);
+  clearCachedOperatorLocation();
+});
+
+test('Nearest joins the in-flight GPS prompt instead of starting another', async () => {
+  clearCachedOperatorLocation();
+  let calls = 0;
+  const geo = {
+    getCurrentPosition(success) {
+      calls += 1;
+      setTimeout(() => {
+        success({
+          coords: { latitude: 36.1699, longitude: -115.1398, accuracy: 18 },
+        });
+      }, 40);
+    },
+  };
+  primeOperatorLocation({ geolocation: geo, timeoutMs: 1_000 });
+  const nearest = await resolveOperatorLocation({
+    geolocation: geo,
+    timeoutMs: 1_000,
+  });
+  assert.equal(calls, 1);
+  assert.equal(nearest.lat, 36.1699);
+  assert.equal(nearest.source, 'geolocation');
   clearCachedOperatorLocation();
 });
