@@ -1,5 +1,5 @@
 /**
- * GodsEye Shorts pack (2026-09-10 → 2026-09-15) — Bret Railway globe.
+ * GodsEye Shorts pack (2026-09-10 → 2026-09-18) — Bret Railway globe.
  *
  * Reimplements ideas from Bilawal Sidhu's free/public Shorts on HIS hosted globe:
  *  1) Bay Area air + marine traffic
@@ -7,13 +7,14 @@
  *  3) Delta / voice cockpit (uses existing cockpit HUD; this pack flies a Delta-style approach)
  *  4) Area 51 TR-3B easter egg (fly Groom Lake + surface TR-3B toggle tip)
  *  5) Nepal floods reconstruction (enables upstream Bhote Koshi scene layers)
+ *  6) Traffic & CCTV God's Eye (Austin → London → SF; TomTom / camera layers)
  *
  * Cable geometry: same bilawalsidhu/gods-eye-view bundled TeleGeography public map
  * GeoJSON (CC BY-NC-SA 3.0). Not scraped from submarinecablemap.com in this change.
  */
 import * as Cesium from 'cesium';
 
-export const SHORTS_PACK_VERSION = '2026-09-17-nervous-tg';
+export const SHORTS_PACK_VERSION = '2026-09-18-traffic-cctv';
 export const SHORTS_PARAM = 'shorts';
 
 /** Hash/query values → pack id */
@@ -34,6 +35,11 @@ export const SHORTS_ALIASES = Object.freeze({
   nepal: 'nepal',
   flood: 'nepal',
   'bhote-koshi': 'nepal',
+  traffic: 'traffic',
+  cctv: 'traffic',
+  streets: 'traffic',
+  tomtom: 'traffic',
+  spy: 'traffic',
 });
 
 const BAY_VIEW = Object.freeze({
@@ -88,6 +94,36 @@ const COCKPIT_SFO = Object.freeze({
   heading: 350,
   pitch: -12,
   duration: 2.4,
+});
+
+/** Austin Capitol — city-scale God's Eye (locations.js austin capitol). */
+const TRAFFIC_AUSTIN = Object.freeze({
+  lon: -97.7403,
+  lat: 30.2747,
+  height: 42_000,
+  heading: 165,
+  pitch: -52,
+  duration: 2.6,
+});
+
+/** London Tower Bridge. */
+const TRAFFIC_LONDON = Object.freeze({
+  lon: -0.0754,
+  lat: 51.5055,
+  height: 38_000,
+  heading: 248,
+  pitch: -50,
+  duration: 2.8,
+});
+
+/** SF Transamerica / downtown. */
+const TRAFFIC_SF = Object.freeze({
+  lon: -122.4028,
+  lat: 37.7952,
+  height: 36_000,
+  heading: 28,
+  pitch: -48,
+  duration: 2.6,
 });
 
 function flyTo(viewer, shot) {
@@ -237,6 +273,15 @@ export async function runShortsPack(input = {}) {
       'local-dams',
     ]);
     await flyTo(viewer, NEPAL_VIEW);
+    return pack;
+  }
+
+  if (pack === 'traffic') {
+    toast('SHORTS · Traffic & CCTV · God\'s Eye (Austin → London → SF)');
+    await enableLayers(dataManager, ['traffic', 'cctv']);
+    await flyTo(viewer, TRAFFIC_AUSTIN);
+    await flyTo(viewer, TRAFFIC_LONDON);
+    await flyTo(viewer, TRAFFIC_SF);
     return pack;
   }
 
