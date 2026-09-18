@@ -222,7 +222,13 @@ export function shouldShowFirstRun({
   sessionStorageRef,
   location = globalThis.location,
 } = {}) {
-  if (hasShareState || locationHasShortsPack(location)) return false;
+  if (
+    hasShareState ||
+    locationHasShortsPack(location) ||
+    (typeof document !== 'undefined' && document.body?.dataset?.shortsPack)
+  ) {
+    return false;
+  }
   const params = new URLSearchParams(location?.search || '');
   if (params.get('welcome') === '0') return false;
   // The demo/support escape hatch outranks both suppressions on purpose.

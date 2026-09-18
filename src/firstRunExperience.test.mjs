@@ -121,6 +121,20 @@ test('a shorts pack hash is a share link and suppresses the first-run launcher',
   );
 });
 
+test('an active shorts pack still suppresses first-run after share-state rewrite', () => {
+  const originalDocument = globalThis.document;
+  globalThis.document = { body: { dataset: { shortsPack: 'traffic' } } };
+  try {
+    assert.equal(
+      shouldShowFirstRun({ ...fresh(), location: { hash: '#v=2&lat=30.27', search: '' } }),
+      false,
+    );
+  } finally {
+    if (originalDocument === undefined) delete globalThis.document;
+    else globalThis.document = originalDocument;
+  }
+});
+
 test('privacy-restricted storage fails open and every write stays best-effort', () => {
   const blocked = {
     getItem: () => { throw new Error('blocked'); },

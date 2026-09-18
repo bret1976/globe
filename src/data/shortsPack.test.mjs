@@ -35,6 +35,7 @@ function mockDom() {
       return badge;
     },
     body: {
+      dataset: {},
       appendChild(node) {
         elements[node.id] = node;
         return node;

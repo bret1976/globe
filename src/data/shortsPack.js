@@ -301,6 +301,11 @@ export function initShortsPack(input = {}) {
     if (!nextPack || !input.viewer) return Promise.resolve(null);
     const token = ++generation;
     ensureBadge();
+    // Share restoration rewrites `#shorts=` into `#v=2&lat=…`. Keep the
+    // pack visible to first-run so the welcome launcher cannot steal hops.
+    if (typeof document !== 'undefined' && document.body) {
+      document.body.dataset.shortsPack = nextPack;
+    }
     return runShortsPack({ ...input, pack: nextPack }).then((result) =>
       token === generation ? result : nextPack,
     );
