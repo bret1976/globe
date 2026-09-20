@@ -1,7 +1,7 @@
 /**
  * Deterministic understand/act planner for the self-hosted voice path.
  * Qwen3-8B can replace this when VOICE_INFERENCE_URL is set; this planner
- * always covers the Pentagon → nearest flight → cockpit flow without a key.
+ * covers navigation, data layers, nearest flight, and cockpit without a key.
  */
 
 const PLACE_ALIASES = Object.freeze({
@@ -21,8 +21,10 @@ const PLACE_ALIASES = Object.freeze({
     longitude: -77.091,
   },
   'washington dc': { locationId: 'dc', query: 'Washington DC' },
+  'washington d c': { locationId: 'dc', query: 'Washington DC' },
   'washington d.c': { locationId: 'dc', query: 'Washington DC' },
   'washington d.c.': { locationId: 'dc', query: 'Washington DC' },
+  'district of columbia': { locationId: 'dc', query: 'Washington DC' },
   'white house': {
     query: 'White House',
     latitude: 38.8977,
@@ -30,11 +32,93 @@ const PLACE_ALIASES = Object.freeze({
   },
   austin: { locationId: 'austin', query: 'Austin' },
   london: { locationId: 'london', query: 'London' },
+  'las vegas airport': {
+    query: 'Harry Reid International Airport',
+    latitude: 36.084,
+    longitude: -115.1537,
+  },
+  'harry reid': {
+    query: 'Harry Reid International Airport',
+    latitude: 36.084,
+    longitude: -115.1537,
+  },
+  mccarran: {
+    query: 'Harry Reid International Airport',
+    latitude: 36.084,
+    longitude: -115.1537,
+  },
+  summerlin: {
+    query: '89135 Las Vegas',
+    latitude: 36.1486,
+    longitude: -115.333,
+    zip: '89135',
+  },
+  89135: {
+    query: '89135 Las Vegas',
+    latitude: 36.1486,
+    longitude: -115.333,
+    zip: '89135',
+  },
   'las vegas': { query: 'Las Vegas', latitude: 36.1699, longitude: -115.1398 },
   vegas: { query: 'Las Vegas', latitude: 36.1699, longitude: -115.1398 },
+  'persian gulf': {
+    query: 'Persian Gulf',
+    latitude: 26.6,
+    longitude: 51.8,
+    rangeM: 900000,
+    region: true,
+  },
+  'arabian gulf': {
+    query: 'Persian Gulf',
+    latitude: 26.6,
+    longitude: 51.8,
+    rangeM: 900000,
+    region: true,
+  },
+  'the gulf': {
+    query: 'Persian Gulf',
+    latitude: 26.6,
+    longitude: 51.8,
+    rangeM: 900000,
+    region: true,
+  },
   'new york': { locationId: 'nyc', query: 'New York' },
   nyc: { locationId: 'nyc', query: 'New York' },
 });
+
+const LAYER_ALIASES = Object.freeze([
+  ['street traffic', 'traffic'],
+  ['road traffic', 'traffic'],
+  ['live traffic', 'traffic'],
+  ['traffic', 'traffic'],
+  ['live vessels', 'ais-live-vessels'],
+  ['live ships', 'ais-live-vessels'],
+  ['live boats', 'ais-live-vessels'],
+  ['vessels', 'ais-live-vessels'],
+  ['ships', 'ais-live-vessels'],
+  ['ais', 'ais-live-vessels'],
+  ['submarine cables', 'telegeography-submarine-cables'],
+  ['undersea cables', 'telegeography-submarine-cables'],
+  ['sea cables', 'telegeography-submarine-cables'],
+  ['cable seas', 'telegeography-submarine-cables'],
+  ['cables', 'telegeography-submarine-cables'],
+  ['live cameras', 'cctv'],
+  ['cctv', 'cctv'],
+  ['cameras', 'cctv'],
+  ['street cameras', 'cctv'],
+  ['flights', 'flights'],
+  ['military', 'military'],
+  ['fires', 'local-firms'],
+  ['earthquakes', 'earthquakes'],
+  ['satellites', 'satellites'],
+]);
+
+const LAYER_FILLER =
+  /\b(street traffic|road traffic|live traffic|traffic|live vessels|live ships|live boats|vessels|ships|ais|submarine cables|undersea cables|sea cables|cable seas|cables|live cameras|street cameras|cctv|cameras|zip code|zip|cockpit view|data layers?|layer)\b/g;
+
+const PLACE_ALIAS_KEYS = Object.keys(PLACE_ALIASES).sort(
+  (a, b) => b.length - a.length,
+);
 
 export function normalizeVoiceUtterance(text) {
   return String(text || '')
@@ -45,19 +129,62 @@ export function normalizeVoiceUtterance(text) {
     .trim();
 }
 
-function matchPlace(normalized) {
-  for (const [alias, place] of Object.entries(PLACE_ALIASES)) {
-    if (normalized.includes(alias)) return { ...place };
+function matchLayer(normalized) {
+  for (const [alias, layerId] of LAYER_ALIASES) {
+    if (normalized.includes(alias)) return layerId;
   }
+  return null;
+}
+
+function stripLayerWords(normalized) {
+  return String(normalized || '')
+    .replace(LAYER_FILLER, ' ')
+    .replace(
+      /\b(take me to|fly me to|fly to|go to|navigate to|show me|turn on|enable|open)\b/g,
+      ' ',
+    )
+    .replace(/\b(in|at|near|around|for|the|and|then|to|of)\b/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function matchZip(normalized) {
+  const zip = normalized.match(/\b(\d{5})\b/);
+  if (!zip) return null;
+  const city = /\blas vegas\b|\bvegas\b/.test(normalized)
+    ? ' Las Vegas'
+    : /\bwashington\b/.test(normalized)
+      ? ' Washington DC'
+      : '';
+  return {
+    query: `${zip[1]}${city}`.trim(),
+    zip: zip[1],
+  };
+}
+
+function matchAliasPlace(normalized) {
+  for (const alias of PLACE_ALIAS_KEYS) {
+    if (normalized.includes(alias)) return { ...PLACE_ALIASES[alias] };
+  }
+  if (
+    /\bwashington\b/.test(normalized) &&
+    /\b(dc|d c|district)\b/.test(normalized)
+  )
+    return { ...PLACE_ALIASES['washington dc'] };
+  return null;
+}
+
+function matchPlace(normalized) {
+  const zip = matchZip(normalized);
+  if (zip) return zip;
+  const alias = matchAliasPlace(normalized);
+  if (alias) return alias;
   const takeMe = normalized.match(
-    /(?:take me to|fly to|go to|navigate to|show me)\s+(.+)$/,
+    /(?:take me to|fly me to|fly to|go to|navigate to|show me)\s+(.+)$/,
   );
   if (takeMe?.[1]) {
-    const rest = takeMe[1]
-      .replace(/\b(and|then|find|enter|the nearest.*)$/i, '')
-      .trim();
-    const cleaned = rest.replace(/\bthe\b/g, '').trim();
-    if (cleaned) return { query: cleaned };
+    const rest = stripLayerWords(takeMe[1]);
+    if (rest) return { query: rest };
   }
   return null;
 }
@@ -86,7 +213,23 @@ function nearestLayerId(normalized) {
 }
 
 function locationQueryOf(place) {
-  return place?.query || place?.locationId || null;
+  return place?.query || place?.locationId || place?.zip || null;
+}
+
+function flyArguments(place, layerId) {
+  const args = { waitForArrival: true };
+  if (place.locationId) args.locationId = place.locationId;
+  if (place.query) args.query = place.query;
+  if (Number.isFinite(place.latitude) && Number.isFinite(place.longitude)) {
+    args.latitude = place.latitude;
+    args.longitude = place.longitude;
+  }
+  if (Number.isFinite(place.rangeM)) args.rangeM = place.rangeM;
+  else if (place.region || layerId === 'ais-live-vessels')
+    args.viewMode = 'overview';
+  else if (place.zip || layerId === 'traffic' || layerId === 'cctv')
+    args.viewMode = 'close';
+  return args;
 }
 
 /**
@@ -97,20 +240,34 @@ function locationQueryOf(place) {
 export function planSelfHostedVoiceTurn(text, context = {}) {
   const normalized = normalizeVoiceUtterance(text);
   const calls = [];
-  const place = matchPlace(normalized) || context.lastPlace || null;
+  const spokenPlace = matchPlace(normalized);
+  const place = spokenPlace || context.lastPlace || null;
   const locationQuery =
-    locationQueryOf(place) || context.lastLocationQuery || null;
+    locationQueryOf(spokenPlace) ||
+    locationQueryOf(place) ||
+    context.lastLocationQuery ||
+    null;
   const viewport = context.viewport || {};
+  const layerId = matchLayer(normalized);
 
-  if (matchPlace(normalized)) {
-    const args = { waitForArrival: true };
-    if (place.locationId) args.locationId = place.locationId;
-    if (place.query) args.query = place.query;
-    if (Number.isFinite(place.latitude) && Number.isFinite(place.longitude)) {
-      args.latitude = place.latitude;
-      args.longitude = place.longitude;
+  if (spokenPlace) {
+    calls.push({
+      name: 'fly_to_location',
+      arguments: flyArguments(spokenPlace, layerId),
+    });
+  }
+
+  if (layerId) {
+    calls.push({
+      name: 'set_layer_visibility',
+      arguments: { layerId, enabled: true },
+    });
+    if (layerId === 'cctv') {
+      calls.push({
+        name: 'control_cctv',
+        arguments: { action: 'nearest' },
+      });
     }
-    calls.push({ name: 'fly_to_location', arguments: args });
   }
 
   if (wantsNearestAircraft(normalized)) {
@@ -152,14 +309,14 @@ export function planSelfHostedVoiceTurn(text, context = {}) {
   return {
     calls,
     locationQuery,
-    place,
+    place: spokenPlace || place,
     speech: composeSelfHostedSpeech(calls, text),
   };
 }
 
 export function composeSelfHostedSpeech(calls, originalText) {
   if (!calls?.length) {
-    return `I heard “${String(originalText || '').trim() || 'that'}” but I need a place, a nearest flight, or a cockpit command.`;
+    return `I heard “${String(originalText || '').trim() || 'that'}” — give me a place, zip code, traffic, vessels, cables, CCTV, a nearest flight, or a cockpit command.`;
   }
   const parts = [];
   for (const call of calls) {
@@ -167,6 +324,23 @@ export function composeSelfHostedSpeech(calls, originalText) {
       parts.push(
         `Flying to ${call.arguments.query || call.arguments.locationId}.`,
       );
+    } else if (call.name === 'set_layer_visibility') {
+      const labels = {
+        traffic: 'street traffic',
+        'ais-live-vessels': 'live vessels',
+        'telegeography-submarine-cables': 'submarine cables',
+        cctv: 'CCTV',
+        flights: 'flights',
+        military: 'military flights',
+        'local-firms': 'fires',
+        earthquakes: 'earthquakes',
+        satellites: 'satellites',
+      };
+      parts.push(
+        `Turning on ${labels[call.arguments.layerId] || call.arguments.layerId}.`,
+      );
+    } else if (call.name === 'control_cctv') {
+      parts.push('Opening the nearest camera.');
     } else if (call.name === 'select_nearest_aircraft') {
       parts.push('Finding the nearest airborne flight.');
     } else if (call.name === 'control_cockpit') {
@@ -186,7 +360,8 @@ export function qwenToolDefinitions() {
       type: 'function',
       function: {
         name: 'fly_to_location',
-        description: 'Fly the globe camera to a named place.',
+        description:
+          'Fly the globe camera to a named place, zip code, or region.',
         parameters: {
           type: 'object',
           properties: {
@@ -194,8 +369,53 @@ export function qwenToolDefinitions() {
             locationId: { type: 'string' },
             latitude: { type: 'number' },
             longitude: { type: 'number' },
+            viewMode: { type: 'string', enum: ['close', 'overview'] },
+            rangeM: { type: 'number' },
             waitForArrival: { type: 'boolean' },
           },
+        },
+      },
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'set_layer_visibility',
+        description:
+          'Turn a data layer on. Use traffic, ais-live-vessels, telegeography-submarine-cables, or cctv when asked.',
+        parameters: {
+          type: 'object',
+          properties: {
+            layerId: {
+              type: 'string',
+              enum: [
+                'flights',
+                'military',
+                'traffic',
+                'cctv',
+                'ais-live-vessels',
+                'telegeography-submarine-cables',
+                'local-firms',
+                'earthquakes',
+                'satellites',
+              ],
+            },
+            enabled: { type: 'boolean' },
+          },
+          required: ['layerId', 'enabled'],
+        },
+      },
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'control_cctv',
+        description: 'Select the nearest CCTV camera after the layer is on.',
+        parameters: {
+          type: 'object',
+          properties: {
+            action: { type: 'string', enum: ['nearest', 'enable'] },
+          },
+          required: ['action'],
         },
       },
     },
@@ -261,7 +481,12 @@ export function qwenActMessages(text, context = {}) {
       role: 'system',
       content: [
         "You are God's Eye View voice control.",
-        'Call tools to fly the globe, select the nearest airborne aircraft, and enter or leave the cockpit.',
+        'Call tools to fly the globe, turn on data layers, select the nearest airborne aircraft, and enter or leave the cockpit.',
+        'For a zip code or named place use fly_to_location.',
+        'For street traffic use set_layer_visibility layerId traffic.',
+        'For live vessels or ships use set_layer_visibility layerId ais-live-vessels.',
+        'For cables or cable seas use set_layer_visibility layerId telegeography-submarine-cables.',
+        'For CCTV or cameras use set_layer_visibility layerId cctv and control_cctv nearest.',
         'For “Take me to the Pentagon” use fly_to_location with query Pentagon and the Pentagon coordinates.',
         'For “Find the nearest flight” use select_nearest_aircraft on flights with the last place or current view.',
         'For “Enter cockpit” use control_cockpit action enter.',

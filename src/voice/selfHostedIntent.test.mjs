@@ -59,6 +59,72 @@ test('unknown utterance asks for a place, flight, or cockpit command', () => {
   assert.match(plan.speech, /place/);
 });
 
+test('89135 Las Vegas street traffic flies to the zip and turns traffic on', () => {
+  const plan = planSelfHostedVoiceTurn(
+    'Take me to 89135 zip code, Las Vegas for street traffic',
+  );
+  assert.equal(plan.calls[0].name, 'fly_to_location');
+  assert.equal(plan.calls[0].arguments.query, '89135 Las Vegas');
+  assert.equal(plan.calls[0].arguments.viewMode, 'close');
+  assert.deepEqual(plan.calls[1], {
+    name: 'set_layer_visibility',
+    arguments: { layerId: 'traffic', enabled: true },
+  });
+  assert.match(plan.speech, /89135/);
+  assert.match(plan.speech, /street traffic/);
+});
+
+test('live vessels in the Persian Gulf flies there and enables ships', () => {
+  const plan = planSelfHostedVoiceTurn(
+    'Take me to the live vessels in the Persian Gulf',
+  );
+  assert.equal(plan.calls[0].name, 'fly_to_location');
+  assert.equal(plan.calls[0].arguments.query, 'Persian Gulf');
+  assert.equal(plan.calls[0].arguments.latitude, 26.6);
+  assert.equal(plan.calls[1].name, 'set_layer_visibility');
+  assert.equal(plan.calls[1].arguments.layerId, 'ais-live-vessels');
+  assert.match(plan.speech, /live vessels/);
+});
+
+test('cable seas turns on submarine cables', () => {
+  const plan = planSelfHostedVoiceTurn(
+    'Take me to the cable seas for the cables',
+  );
+  assert.deepEqual(plan.calls, [
+    {
+      name: 'set_layer_visibility',
+      arguments: {
+        layerId: 'telegeography-submarine-cables',
+        enabled: true,
+      },
+    },
+  ]);
+  assert.match(plan.speech, /submarine cables/);
+});
+
+test('CCTV in Washington DC flies to DC and opens a camera', () => {
+  const plan = planSelfHostedVoiceTurn('Take me to CCTV in Washington, D.C.');
+  assert.equal(plan.calls[0].name, 'fly_to_location');
+  assert.equal(plan.calls[0].arguments.locationId, 'dc');
+  assert.equal(plan.calls[1].name, 'set_layer_visibility');
+  assert.equal(plan.calls[1].arguments.layerId, 'cctv');
+  assert.deepEqual(plan.calls[2], {
+    name: 'control_cctv',
+    arguments: { action: 'nearest' },
+  });
+  assert.match(plan.speech, /CCTV/);
+});
+
+test('Las Vegas Airport cockpit view still flies and enters cockpit', () => {
+  const plan = planSelfHostedVoiceTurn(
+    'Take me to Las Vegas Airport Cockpit View',
+  );
+  assert.equal(plan.calls[0].name, 'fly_to_location');
+  assert.match(plan.calls[0].arguments.query, /Harry Reid|Las Vegas/);
+  assert.equal(plan.calls[1].name, 'control_cockpit');
+  assert.equal(plan.calls[1].arguments.action, 'enter');
+});
+
 test('Qwen tool-call payloads flatten into planner-shaped calls', () => {
   const parsed = parseQwenToolCalls({
     choices: [
