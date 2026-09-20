@@ -1126,3 +1126,41 @@ test('nearby count and discovery control frame a real loaded camera without fetc
     h.restore();
   }
 });
+
+test('Data Layer focus can call layer.focusNearest with operator lat/lon', async () => {
+  const h = cameraHarness();
+  const flights = [];
+  h.viewer.camera.positionWC = Cesium.Cartesian3.fromDegrees(
+    -97.7431,
+    30.2672,
+    600,
+  );
+  h.viewer.camera.flyToBoundingSphere = (sphere, options) =>
+    flights.push({ sphere, options });
+  h.viewer.scene.globe.show = true;
+  h.viewer.scene.globe.getHeight = () => 200;
+  try {
+    assert.equal(typeof alprCamerasLayer.focusNearest, 'function');
+    await alprCamerasLayer.update();
+    h.setFetch(async () =>
+      cameraResponse([
+        cameraNode(42),
+        cameraNode(99, { lat: 30.28, lon: -97.74 }),
+      ]),
+    );
+    h.expire();
+    await alprCamerasLayer.update();
+    assert.equal(
+      alprCamerasLayer.focusNearest({ lat: 30.279, lon: -97.74 }),
+      true,
+    );
+    assert.equal(getSelectedEntityContext().id, 'alpr:99');
+    assert.equal(flights.length, 1);
+    assert.deepEqual(
+      alprCamerasLayer.getDetectableObjects().map((item) => item.id).sort(),
+      ['alpr:42', 'alpr:99'],
+    );
+  } finally {
+    h.restore();
+  }
+});

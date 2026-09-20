@@ -66,6 +66,25 @@ test('Overpass normalization returns camera records and preserves limited/stale 
   assert.equal('elements' in snapshot, false);
 });
 
+test('a hung Overpass fetch surfaces a timeout instead of staying aborted', async () => {
+  const source = createOverpassAlprSource({
+    timeoutMs: 30,
+    fetchImpl: (_url, { signal } = {}) =>
+      new Promise((_, reject) => {
+        signal?.addEventListener(
+          'abort',
+          () => {
+            const error = new Error('Aborted');
+            error.name = 'AbortError';
+            reject(error);
+          },
+          { once: true },
+        );
+      }),
+  });
+  await assert.rejects(source.fetch(box), /Overpass timed out/);
+});
+
 test('an unsuccessful source response releases its body before reporting an error', async () => {
   let cancelled = 0;
   const source = createOverpassAlprSource({

@@ -3,11 +3,25 @@ import {
   MAX_VIEWPORT_DEGREES,
   QUERY_SNAP_DEGREES,
   QUERY_LIMIT,
+  FETCH_TIMEOUT_MS,
 } from './policy.js';
 import { buildOverpassQuery, normalizeAlprNode } from './records.js';
+
+function composeAlprFetchSignal(signal, timeoutMs) {
+  const timeout =
+    Number.isFinite(timeoutMs) && timeoutMs > 0
+      ? AbortSignal.timeout(timeoutMs)
+      : null;
+  if (signal && timeout && typeof AbortSignal.any === 'function') {
+    return { signal: AbortSignal.any([signal, timeout]), timeout };
+  }
+  return { signal: timeout || signal || undefined, timeout };
+}
+
 /** Construct the bounded OSM request adapter without starting a request. */
 export function createOverpassAlprSource({
   fetchImpl = (...args) => globalThis.fetch(...args),
+  timeoutMs = FETCH_TIMEOUT_MS,
 } = {}) {
   async function fetchAlprNodes(box, signal) {
     signal?.throwIfAborted();
@@ -27,12 +41,20 @@ export function createOverpassAlprSource({
       throw new TypeError('ALPR requires a bounded city viewport');
     }
     const query = buildOverpassQuery(box.south, box.west, box.north, box.east);
-    const response = await fetchImpl(OVERPASS_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: `data=${encodeURIComponent(query)}`,
-      signal,
-    });
+    const composed = composeAlprFetchSignal(signal, timeoutMs);
+    let response;
+    try {
+      response = await fetchImpl(OVERPASS_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: `data=${encodeURIComponent(query)}`,
+        signal: composed.signal,
+      });
+    } catch (error) {
+      if (signal?.aborted) throw error;
+      if (composed.timeout?.aborted) throw new Error('Overpass timed out');
+      throw error;
+    }
     if (!response.ok) {
       try {
         await response.body?.cancel();

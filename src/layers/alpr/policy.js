@@ -22,6 +22,9 @@ export const OVERPASS_URL = '/api/overpass';
 
 export const REQUEST_DEBOUNCE_MS = 500;
 
+/** Client-side ceiling so a hung Overpass proxy cannot leave the layer on LOADING. */
+export const FETCH_TIMEOUT_MS = 20_000;
+
 /** Keep public Overpass queries city-scale, never globe-wide. */
 export const MAX_VIEWPORT_DEGREES = 3;
 

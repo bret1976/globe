@@ -530,6 +530,28 @@ export function createLocalGeoJsonLayer(
       computed: _lodComputed,
     }),
 
+    getAllPositions(maxCount = 2_000) {
+      const cap =
+        Number.isFinite(maxCount) && maxCount > 0 ? Math.floor(maxCount) : 2_000;
+      const result = [];
+      for (const record of _stemRecords) {
+        if (result.length >= cap) break;
+        const carto = record?.carto;
+        if (!carto) continue;
+        result.push({
+          id: record.id,
+          lat: Cesium.Math.toDegrees(carto.latitude),
+          lon: Cesium.Math.toDegrees(carto.longitude),
+          position: record.base || record.tip,
+        });
+      }
+      return result;
+    },
+
+    getDetectableObjects(options = {}) {
+      return this.getAllPositions(options.maxCount || 2_500);
+    },
+
     enable: async (viewer) => {
       if (_destroyed) return;
       _enabled = true;

@@ -1,5 +1,6 @@
 import * as Cesium from 'cesium';
 import { isPointerFree } from '../../data/inputOwnership.js';
+import { haversineKm } from '../../data/operatorLocation.js';
 import {
   LAYER_ID,
   MAX_VIEWPORT_DEGREES,
@@ -76,9 +77,13 @@ export function createAlprPresentation({ state, services, source }) {
         new Cesium.Cartesian2(width / 2, height / 2),
         viewer.scene.globe.ellipsoid,
       );
-      if (!focus) return null;
-      const location = Cesium.Cartographic.fromCartesian(focus);
-      const range = Cesium.Cartesian3.distance(camera.positionWC, focus);
+      const location = focus
+        ? Cesium.Cartographic.fromCartesian(focus)
+        : camera.positionCartographic;
+      if (!location) return null;
+      const range = focus
+        ? Cesium.Cartesian3.distance(camera.positionWC, focus)
+        : Math.max(1000, location.height || 0);
       const radius = Math.max(1000, 2 * range);
       const latitude = Cesium.Math.toDegrees(location.latitude);
       const longitude = Cesium.Math.toDegrees(location.longitude);
@@ -293,25 +298,58 @@ export function createAlprPresentation({ state, services, source }) {
     if (visible.length) presentOnMapCredit();
   }
 
-  function focusNearest() {
-    const camera = state.viewer?.camera;
-    if (!state.enabled || !camera?.positionWC || state.viewer.trackedEntity)
-      return false;
-    let nearest = null,
-      distance = Infinity;
-    for (const entity of state.dataSource.entities.values) {
-      const position = entity.position.getValue(Cesium.JulianDate.now());
-      const candidate = Cesium.Cartesian3.distanceSquared(
-        camera.positionWC,
-        position,
-      );
+  function pickNearestRecord(lat, lon) {
+    let nearest = null;
+    let distance = Infinity;
+    for (const record of state.records) {
+      if (
+        !Number.isFinite(record?.latitude) ||
+        !Number.isFinite(record?.longitude)
+      ) {
+        continue;
+      }
+      const candidate = haversineKm(lat, lon, record.latitude, record.longitude);
       if (candidate < distance) {
-        nearest = entity;
+        nearest = record;
         distance = candidate;
       }
     }
-    if (!nearest) return false;
-    const record = state.recordById.get(nearest.id);
+    return nearest;
+  }
+
+  function focusNearest(options = {}) {
+    const camera = state.viewer?.camera;
+    const lat = options?.lat;
+    const lon = options?.lon;
+    const useLatLon = Number.isFinite(lat) && Number.isFinite(lon);
+    if (
+      !state.enabled ||
+      !camera ||
+      state.viewer.trackedEntity ||
+      (!useLatLon && !camera.positionWC)
+    )
+      return false;
+    let record = null;
+    if (useLatLon) {
+      record = pickNearestRecord(lat, lon);
+    } else {
+      let nearest = null;
+      let distance = Infinity;
+      for (const entity of state.dataSource.entities.values) {
+        const position = entity.position.getValue(Cesium.JulianDate.now());
+        const candidate = Cesium.Cartesian3.distanceSquared(
+          camera.positionWC,
+          position,
+        );
+        if (candidate < distance) {
+          nearest = entity;
+          distance = candidate;
+        }
+      }
+      record = nearest ? state.recordById.get(nearest.id) : null;
+    }
+    if (!record) return false;
+    const entity = state.dataSource?.entities.getById(record.id);
     const location = Cesium.Cartographic.fromDegrees(
       record.longitude,
       record.latitude,
@@ -319,7 +357,10 @@ export function createAlprPresentation({ state, services, source }) {
     let height;
     if (state.viewer.scene.sampleHeightSupported) {
       try {
-        height = state.viewer.scene.sampleHeight(location, [nearest]);
+        height = state.viewer.scene.sampleHeight(
+          location,
+          entity ? [entity] : [],
+        );
       } catch {
         /* tiles may still be streaming */
       }
@@ -333,7 +374,7 @@ export function createAlprPresentation({ state, services, source }) {
       record.latitude,
       validAlprGroundHeight(height) ? height : 0,
     );
-    if (!selectRecord(nearest.id)) return false;
+    if (!selectRecord(record.id)) return false;
     camera.flyToBoundingSphere(new Cesium.BoundingSphere(center, 30), {
       duration: 1.2,
       offset: new Cesium.HeadingPitchRange(

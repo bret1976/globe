@@ -345,6 +345,14 @@ export function createControls({ state: layerState, services, parts, source }) {
      * @param {number} [options.durationSec] - Fly-to duration in seconds.
      * @returns {string|null} The nearest camera ID, or null if none found.
      */
+    nearestCameraToLatLon(lat, lon) {
+      return parts.navigation.nearestCameraToLatLon(lat, lon);
+    },
+
+    nearestNearbyCameraIdToViewer(maxKm) {
+      return parts.navigation.nearestNearbyCameraIdToViewer?.(maxKm) || null;
+    },
+
     focusNearest(options = {}) {
       const nearest =
         Number.isFinite(options.lat) && Number.isFinite(options.lon)

@@ -9,6 +9,7 @@ export function _initCctvPanel() {
   this.listen(this._cctvNearestBtn, 'click', async () => {
     const generation = ++this._actionGeneration;
     const activeId = this._cctvState?.activeCameraId;
+    this.actions.abortCinematics?.();
     if (!(await this.actions.toggleEnabled(true))) return;
     if (
       this.destroyed ||
@@ -17,17 +18,30 @@ export function _initCctvPanel() {
       (activeId && activeId !== this._cctvState?.activeCameraId)
     )
       return;
-    const location = this.actions.resolveOperatorLocation
-      ? await this.actions.resolveOperatorLocation()
+    const location = this.actions.peekOperatorLocation
+      ? this.actions.peekOperatorLocation()
       : null;
-    await this.actions.runExplicitFocus(
-      () =>
-        this.cctv.focusNearest({
-          focus: false,
-          lat: location?.lat,
-          lon: location?.lon,
-        }),
-      (cameraId) => this.cctv.focusCamera(cameraId, 1.8),
+    const nearest =
+      Number.isFinite(location?.lat) && Number.isFinite(location?.lon)
+        ? this.cctv.nearestCameraToLatLon?.(location.lat, location.lon)
+        : null;
+    if (nearest?.id && this.actions.isNearbyCamera?.(nearest.distKm)) {
+      await this.actions.runExplicitFocus(
+        () =>
+          this.cctv.focusNearest({
+            focus: false,
+            lat: location.lat,
+            lon: location.lon,
+          }),
+        (cameraId) => this.cctv.focusCamera(cameraId, 1.8),
+      );
+      return;
+    }
+    const dest = this.actions.focusCctvLiveDestination?.() || null;
+    this.actions.showToast?.(
+      dest?.destination?.label
+        ? `No cameras near you — showing ${dest.destination.label} live cameras`
+        : 'No cameras near you — showing London live cameras',
     );
   });
 

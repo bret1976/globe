@@ -306,6 +306,14 @@ export function createAlprCamerasLayer({ source, services } = {}) {
       state.saturated = false;
       state.viewer = null;
     },
+    focusNearest,
+    getDetectableObjects({ maxCount = 250 } = {}) {
+      return state.records.slice(0, maxCount).map((record) => ({
+        id: record.id,
+        lat: record.latitude,
+        lon: record.longitude,
+      }));
+    },
     getRowControls() {
       const count = state.dataSource?.entities.values.length || 0;
       return {
@@ -318,7 +326,7 @@ export function createAlprCamerasLayer({ source, services } = {}) {
               : 'Move to the nearest loaded camera and show its details',
             disabled:
               !state.enabled || !count || Boolean(state.viewer?.trackedEntity),
-            onClick: focusNearest,
+            onClick: () => focusNearest(),
           },
         ],
         legend: [
@@ -383,5 +391,6 @@ export {
   MAX_RENDERED,
   QUERY_SNAP_DEGREES,
   QUERY_REUSE_MS,
+  FETCH_TIMEOUT_MS,
 } from './policy.js';
 export { createOverpassAlprSource } from './source.js';
