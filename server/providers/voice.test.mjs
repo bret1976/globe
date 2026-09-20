@@ -17,7 +17,7 @@ function install(plugin) {
 }
 
 function request(handler, { method = 'GET', body = '' } = {}) {
-  const req = Readable.from([body]);
+  const req = Readable.from([Buffer.from(body)]);
   req.method = method;
   req.url = '/';
   let payload = '';
