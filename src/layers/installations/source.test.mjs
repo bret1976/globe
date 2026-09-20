@@ -28,6 +28,25 @@ test('mapped-site sources validate viewport bounds and preserve the exact retry 
   assert.equal(calls[0].searchParams.get('exact'), '1');
   assert.equal(calls[0].searchParams.get('south'), '30.10000');
 });
+test('a hung installation proxy surfaces a timeout instead of staying pending', async () => {
+  const source = createInstallationSource({
+    timeoutMs: 30,
+    fetchImpl: (_url, { signal } = {}) =>
+      new Promise((_, reject) => {
+        signal?.addEventListener(
+          'abort',
+          () => {
+            const error = new Error('Aborted');
+            error.name = 'AbortError';
+            reject(error);
+          },
+          { once: true },
+        );
+      }),
+  });
+  await assert.rejects(source.getMappedSites(box), /timed out/);
+});
+
 test('malformed installation and place snapshots are never accepted as empty success', async () => {
   const source = createInstallationSource({
     fetchImpl: async () => new Response('{}'),

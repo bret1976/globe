@@ -8,9 +8,21 @@ export function installationResponseSaturated(payload) {
   return Array.isArray(payload?.elements) && payload.elements.length >= cap;
 }
 
+function composeFetchSignal(signal, timeoutMs) {
+  const timeout =
+    Number.isFinite(timeoutMs) && timeoutMs > 0
+      ? AbortSignal.timeout(timeoutMs)
+      : null;
+  if (signal && timeout && typeof AbortSignal.any === 'function') {
+    return { signal: AbortSignal.any([signal, timeout]), timeout };
+  }
+  return { signal: timeout || signal || undefined, timeout };
+}
+
 /** Read mapped installations and explicit nearby-place searches through fixed endpoints. */
 export function createInstallationSource({
   fetchImpl = (...args) => globalThis.fetch(...args),
+  timeoutMs = 20_000,
 } = {}) {
   return {
     async getMappedSites(box, { exact = false, signal } = {}) {
@@ -35,9 +47,20 @@ export function createInstallationSource({
         ]),
       );
       if (exact) query.set('exact', '1');
-      const response = await fetchImpl(`/api/military-installations?${query}`, {
-        signal,
-      });
+      const composed = composeFetchSignal(signal, timeoutMs);
+      let response;
+      try {
+        response = await fetchImpl(`/api/military-installations?${query}`, {
+          signal: composed.signal,
+        });
+      } catch (error) {
+        if (signal?.aborted) throw error;
+        if (composed.timeout?.aborted)
+          throw Object.assign(new Error('Installation feed timed out'), {
+            failureReason: 'timeout',
+          });
+        throw error;
+      }
       const body = await response.json();
       signal?.throwIfAborted();
       if (!response.ok)
