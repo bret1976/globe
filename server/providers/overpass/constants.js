@@ -18,6 +18,11 @@ const OVERPASS_USER_AGENT =
 
 /** Ordered list of Overpass API mirrors; tried sequentially on failure/rate-limit. */
 const OVERPASS_UPSTREAMS = [
+  // FOSSGIS / OSM-FR answers ALPR and road queries when the German public
+  // mirrors 406 this host. Keep it first so a hung kumi/coffee timeout cannot
+  // burn the client 20s ceiling before a healthy interpreter is tried.
+  'https://overpass.openstreetmap.fr/api/interpreter',
+  'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
   'https://overpass-api.de/api/interpreter',
   'https://overpass.kumi.systems/api/interpreter',
   'https://lz4.overpass-api.de/api/interpreter',
