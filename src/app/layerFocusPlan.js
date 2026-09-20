@@ -1,4 +1,8 @@
 /** Cesium-free planner for operator-centric Data Layer focus. */
+import {
+  haversineKm,
+  isDefaultSpawnLocation,
+} from '../data/operatorLocation.js';
 
 export const LAYER_FOCUS_HEIGHT_M = Object.freeze({
   flights: 80_000,
@@ -38,7 +42,94 @@ export const LAYER_FOCUS_PITCH_DEG = Object.freeze({
 
 export const DEFAULT_LAYER_FOCUS_PITCH_DEG = -42;
 
+/** Do not teleport CCTV Nearest to another metro when the operator is elsewhere. */
+export const MAX_CCTV_NEAREST_KM = 120;
+
+export function isNearbyOperatorFocus(distKm, maxKm = MAX_CCTV_NEAREST_KM) {
+  return Number.isFinite(distKm) && distKm <= maxKm;
+}
+
 export const SPACE_VIEW_HEIGHT_M = 500_000;
+
+/** Viewport feeds must sit over the operator so the first query is local. */
+export const LOCAL_VIEWPORT_LAYER_IDS = Object.freeze([
+  'traffic',
+  'transit',
+  'bikeshare',
+  'cctv',
+  'alpr-cameras',
+  'military-installations',
+  'directions',
+  'radio',
+  'flights',
+  'military',
+]);
+
+const LOCAL_VIEWPORT_LAYER_SET = new Set(LOCAL_VIEWPORT_LAYER_IDS);
+
+/** Global / water / orbit layers must not park on empty inland terrain. */
+export const LAYER_VENUE_FALLBACK = Object.freeze({
+  'ais-live-vessels': Object.freeze({
+    lat: 33.754,
+    lon: -118.216,
+    heightM: 40_000,
+  }),
+  satellites: Object.freeze({ lat: 0, lon: -30, heightM: 8_000_000 }),
+  'telegeography-submarine-cables': Object.freeze({
+    lat: 32,
+    lon: -32,
+    heightM: 4_000_000,
+  }),
+  'rocket-launches': Object.freeze({
+    lat: 28.573,
+    lon: -80.649,
+    heightM: 80_000,
+  }),
+});
+
+export function shouldSnapOperatorBeforeEnable(layerId) {
+  return LOCAL_VIEWPORT_LAYER_SET.has(layerId);
+}
+
+export function layerVenueFallback(layerId) {
+  const venue = LAYER_VENUE_FALLBACK[layerId];
+  if (!venue) return null;
+  return { mode: 'venue', ...venue };
+}
+
+/** Inland operators must search from the coast, not the desert. */
+export const INLAND_VESSEL_ANCHOR_KM = 150;
+
+export function pickVesselFocusAnchor(location, venue = LAYER_VENUE_FALLBACK['ais-live-vessels']) {
+  if (!venue) return location || null;
+  if (
+    !location ||
+    !Number.isFinite(location.lat) ||
+    !Number.isFinite(location.lon)
+  ) {
+    return venue;
+  }
+  return haversineKm(location.lat, location.lon, venue.lat, venue.lon) >
+    INLAND_VESSEL_ANCHOR_KM
+    ? venue
+    : location;
+}
+
+export async function waitForLayerFocusObjects({
+  collect,
+  timeoutMs = 4_500,
+  intervalMs = 200,
+} = {}) {
+  const started = Date.now();
+  let objects = collect?.() || [];
+  while (!objects.length && Date.now() - started < timeoutMs) {
+    await new Promise((resolve) => {
+      setTimeout(resolve, intervalMs);
+    });
+    objects = collect?.() || [];
+  }
+  return objects;
+}
 
 export function layerFocusHeightM(layerId) {
   return LAYER_FOCUS_HEIGHT_M[layerId] ?? 50_000;
@@ -97,7 +188,11 @@ export function pickImmediateOperatorFocus({
       source: cached.source || 'cache',
     };
   }
-  if (isUsableOperatorCameraHeight(cameraHeightM) && hasLatLon(camera)) {
+  if (
+    isUsableOperatorCameraHeight(cameraHeightM) &&
+    hasLatLon(camera) &&
+    !isDefaultSpawnLocation(camera)
+  ) {
     return {
       lat: camera.lat,
       lon: camera.lon,
@@ -122,11 +217,16 @@ export function planEnabledLayerFocus({
   layerId,
   location,
   nearestCameraId = null,
+  nearestCameraDistKm = null,
   hasAlprFocus = false,
   nearestObject = null,
 } = {}) {
   if (!location) return { mode: 'skip' };
-  if (layerId === 'cctv' && nearestCameraId) {
+  if (
+    layerId === 'cctv' &&
+    nearestCameraId &&
+    isNearbyOperatorFocus(nearestCameraDistKm)
+  ) {
     return { mode: 'cctv', id: nearestCameraId };
   }
   if (layerId === 'alpr-cameras' && hasAlprFocus) {
@@ -139,5 +239,7 @@ export function planEnabledLayerFocus({
       heightM: layerFocusHeightM(layerId),
     };
   }
+  const venue = layerVenueFallback(layerId);
+  if (venue) return venue;
   return { mode: 'operator', heightM: layerFocusHeightM(layerId) };
 }

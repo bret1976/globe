@@ -1,29 +1,42 @@
 import * as Cesium from 'cesium';
 import {
   resolveOperatorLocation,
+  resolveOperatorLocationFast,
+  primeOperatorLocation,
   viewerCameraLatLon,
   nearestByHaversine,
   isFiniteLatLon,
   readCachedOperatorLocation,
 } from '../data/operatorLocation.js';
+import { abortShortsPack } from '../data/shortsPack.js';
 import {
   layerFocusHeightM,
   layerFocusPitchDeg,
   planEnabledLayerFocus,
   pickImmediateOperatorFocus,
   collectLayerFocusObjects,
+  shouldSnapOperatorBeforeEnable,
+  waitForLayerFocusObjects,
+  layerVenueFallback,
+  pickVesselFocusAnchor,
 } from './layerFocusPlan.js';
 
 export {
   LAYER_FOCUS_HEIGHT_M,
   SPACE_VIEW_HEIGHT_M,
+  MAX_CCTV_NEAREST_KM,
   layerFocusHeightM,
   layerFocusPitchDeg,
   isUsableOperatorCameraHeight,
+  isNearbyOperatorFocus,
   pickImmediateOperatorFocus,
   shouldFocusUserEnabledLayer,
+  shouldSnapOperatorBeforeEnable,
   planEnabledLayerFocus,
   collectLayerFocusObjects,
+  layerVenueFallback,
+  pickVesselFocusAnchor,
+  waitForLayerFocusObjects,
 } from './layerFocusPlan.js';
 
 function cartographicLatLon(cartesian) {
@@ -155,7 +168,6 @@ function collectFocusObjects(module) {
 export async function prepareEnabledLayerFocus({
   viewer,
   layerId,
-  resolveLocation = createOperatorLocationResolver(viewer),
 } = {}) {
   if (!viewer?.camera) return { ok: false, reason: 'no-viewer' };
   if (
@@ -164,27 +176,23 @@ export async function prepareEnabledLayerFocus({
   ) {
     return { ok: false, reason: 'cockpit' };
   }
+  abortShortsPack();
   releaseStaleTracking(viewer);
+
+  const camera = resolveViewerOperatorFallback(viewer);
+  primeOperatorLocation({ fallback: camera });
+  if (!shouldSnapOperatorBeforeEnable(layerId)) {
+    return { ok: true, location: readCachedOperatorLocation() || camera };
+  }
 
   const heightM = layerFocusHeightM(layerId);
   const pitchDeg = layerFocusPitchDeg(layerId);
-  const camera = resolveViewerOperatorFallback(viewer);
   const immediate = pickImmediateOperatorFocus({
     cached: readCachedOperatorLocation(),
     camera,
     cameraHeightM: viewer.camera.positionCartographic?.height,
   });
-  if (immediate) {
-    snapViewerToLayerFocus(
-      viewer,
-      immediate.lat,
-      immediate.lon,
-      heightM,
-      pitchDeg,
-    );
-  }
-
-  const location = await resolveLocation();
+  const location = immediate || camera;
   if (location) {
     snapViewerToLayerFocus(
       viewer,
@@ -195,9 +203,7 @@ export async function prepareEnabledLayerFocus({
     );
     return { ok: true, location };
   }
-  return immediate
-    ? { ok: true, location: immediate }
-    : { ok: false, reason: 'no-location' };
+  return { ok: false, reason: 'no-location' };
 }
 
 /**
@@ -217,21 +223,37 @@ export async function focusEnabledLayer({
   ) {
     return { ok: false, reason: 'cockpit' };
   }
+  abortShortsPack();
   releaseStaleTracking(viewer);
 
-  const location = await resolveLocation();
+  const location =
+    (await resolveOperatorLocationFast({
+      fallback: resolveViewerOperatorFallback(viewer),
+    })) || (await resolveLocation());
   if (!location) return { ok: false, reason: 'no-location' };
 
   let nearestCameraId = null;
-  if (layerId === 'cctv' && typeof module?.focusNearest === 'function') {
-    nearestCameraId = module.focusNearest({
-      focus: false,
-      lat: location.lat,
-      lon: location.lon,
-    });
+  let nearestCameraDistKm = null;
+  if (layerId === 'cctv') {
+    const nearest =
+      typeof module?.nearestCameraToLatLon === 'function'
+        ? module.nearestCameraToLatLon(location.lat, location.lon)
+        : null;
+    nearestCameraId = nearest?.id || null;
+    nearestCameraDistKm = nearest?.distKm ?? null;
+    if (!nearestCameraId && typeof module?.focusNearest === 'function') {
+      nearestCameraId = module.focusNearest({
+        focus: false,
+        lat: location.lat,
+        lon: location.lon,
+      });
+    }
   }
 
-  const objects = collectFocusObjects(module);
+  const objects = await waitForLayerFocusObjects({
+    collect: () => collectFocusObjects(module),
+    timeoutMs: shouldSnapOperatorBeforeEnable(layerId) ? 1_200 : 4_500,
+  });
   const nearestObject = pickNearestDetectable(
     objects,
     location.lat,
@@ -242,6 +264,7 @@ export async function focusEnabledLayer({
     layerId,
     location,
     nearestCameraId,
+    nearestCameraDistKm,
     hasAlprFocus:
       layerId === 'alpr-cameras' && typeof module?.focusNearest === 'function',
     nearestObject,
@@ -280,13 +303,16 @@ export async function focusEnabledLayer({
     layerId === 'ais-live-vessels' &&
     typeof module?.focusNearest === 'function'
   ) {
+    const venue = layerVenueFallback(layerId);
+    const anchor = pickVesselFocusAnchor(location, venue);
+    const currentId = module.getSelectedInfo?.()?.mmsi;
     const id = module.focusNearest({
-      lat: location.lat,
-      lon: location.lon,
+      lat: anchor.lat,
+      lon: anchor.lon,
+      excludeId: currentId,
     });
     const selected = module.getSelectedInfo?.();
     if (
-      id &&
       selected &&
       isFiniteLatLon(selected.latitude, selected.longitude)
     ) {
@@ -298,9 +324,27 @@ export async function focusEnabledLayer({
         1.8,
         layerFocusPitchDeg(layerId),
       );
-      return { ok: true, mode: 'vessel', id, location };
+      return { ok: true, mode: 'vessel', id: selected.mmsi || id, location };
     }
-    if (id) return { ok: true, mode: 'vessel', id, location };
+    if (venue) {
+      flyToLatLon(
+        viewer,
+        venue.lat,
+        venue.lon,
+        venue.heightM,
+        1.8,
+        layerFocusPitchDeg(layerId),
+      );
+      return { ok: true, mode: 'venue', location };
+    }
+  }
+
+  if (layerId === 'satellites') {
+    const iss =
+      module.findByQuery?.('25544') || module.findByQuery?.('ISS');
+    if (iss && module.trackById?.(iss.noradId || 25544)) {
+      return { ok: true, mode: 'iss', id: iss.noradId || 25544, location };
+    }
   }
 
   if (plan.mode === 'object') {
@@ -320,6 +364,18 @@ export async function focusEnabledLayer({
       );
       return { ok: true, mode: 'object', id: plan.id, location };
     }
+  }
+
+  if (plan.mode === 'venue') {
+    flyToLatLon(
+      viewer,
+      plan.lat,
+      plan.lon,
+      plan.heightM,
+      1.8,
+      layerFocusPitchDeg(layerId),
+    );
+    return { ok: true, mode: 'venue', location };
   }
 
   flyToLatLon(

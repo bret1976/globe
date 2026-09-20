@@ -1,5 +1,6 @@
 import * as Cesium from 'cesium';
 import { CCTV_FOCUS_RESULT } from './policy.js';
+import { isNearbyOperatorFocus } from '../../app/layerFocusPlan.js';
 
 export function createNavigation({
   state: layerState,
@@ -13,7 +14,7 @@ export function createNavigation({
    * @param {number} lon Longitude in degrees.
    * @returns {string|null} Camera ID of the nearest camera, or null.
    */
-  function nearestCameraIdToLatLon(lat, lon) {
+  function nearestCameraToLatLon(lat, lon) {
     if (
       !Number.isFinite(lat) ||
       !Number.isFinite(lon) ||
@@ -30,10 +31,19 @@ export function createNavigation({
         record.camera.lon,
       );
       if (!best || distKm < best.distKm) {
-        best = { id: record.camera.id, distKm };
+        best = {
+          id: record.camera.id,
+          distKm,
+          lat: record.camera.lat,
+          lon: record.camera.lon,
+        };
       }
     }
-    return best?.id || null;
+    return best;
+  }
+
+  function nearestCameraIdToLatLon(lat, lon) {
+    return nearestCameraToLatLon(lat, lon)?.id || null;
   }
 
   /**
@@ -47,6 +57,19 @@ export function createNavigation({
       Cesium.Math.toDegrees(carto.latitude),
       Cesium.Math.toDegrees(carto.longitude),
     );
+  }
+
+  /** Only activate a camera that is actually in the current metro. */
+  function nearestNearbyCameraIdToViewer(maxKm) {
+    const carto = layerState._viewer?.camera?.positionCartographic;
+    if (!carto) return null;
+    const nearest = nearestCameraToLatLon(
+      Cesium.Math.toDegrees(carto.latitude),
+      Cesium.Math.toDegrees(carto.longitude),
+    );
+    return nearest?.id && isNearbyOperatorFocus(nearest.distKm, maxKm)
+      ? nearest.id
+      : null;
   }
 
   /**
@@ -164,8 +187,10 @@ export function createNavigation({
     return (((Math.floor(currentIdx) + delta) % total) + total) % total;
   }
   return {
+    nearestCameraToLatLon,
     nearestCameraIdToLatLon,
     nearestCameraIdToViewer,
+    nearestNearbyCameraIdToViewer,
     focusCctvRecord,
     focusCamera,
     maybeAutoHop,
