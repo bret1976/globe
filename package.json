@@ -117,6 +117,9 @@
     "./server/providers/openai": {
       "node": "./server/providers/openai.js"
     },
+    "./server/providers/voice": {
+      "node": "./server/providers/voice.js"
+    },
     "./server/standalone/key-setup": {
       "node": "./server/standalone/key-setup.js"
     },

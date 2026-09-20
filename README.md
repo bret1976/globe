@@ -6,7 +6,7 @@
 
 ### A spy-satellite simulator in your browser — then you realize the sources are public and the data is real.
 
-Photorealistic 3D globe. Live aircraft, ships, satellites, earthquakes, traffic, and public cameras. Hands-free voice control powered by a realtime AI agent.
+Photorealistic 3D globe. Live aircraft, ships, satellites, earthquakes, traffic, and public cameras. Hands-free voice control powered by self-hosted Qwen3 + Kokoro.
 
 _No place left behind._
 
@@ -225,7 +225,7 @@ _Why cockpit mode exists: you're riding a real aircraft over real terrain — an
 
 ## 🎙️ Talk to It
 
-> Voice needs an **OpenAI key**. Without one the entire app still runs — the mic button just reports voice is unavailable. The same key drives the **AI HUD summary**: a terse, five-word intelligence-style readout of the current view that regenerates as you move.
+> Voice is **self-hosted by default** — Qwen3-ASR-0.6B listens, Qwen3-8B (or the shipped JS planner) understands, Kokoro-82M speaks. No OpenAI key. Point `VOICE_INFERENCE_URL` at the GPU box in `voice-inference/` for mic + spoken replies; without it, type a command or use browser speech. Try _“Take me to the Pentagon”_ → _“Find the nearest flight”_ → _“Enter cockpit”_. An optional OpenAI key still drives the **AI HUD summary**.
 
 Click **GEV MIC**, grant the microphone, and just talk. This is more than a voice-controlled remote:
 
@@ -233,7 +233,7 @@ Click **GEV MIC**, grant the microphone, and just talk. This is more than a voic
 - **🎯 Entity Q&A.** Click any plane, ship, or datacenter and ask _"what's this?"_ It answers using the object's live telemetry.
 - **👁️ Visual grounding.** At street level, it reads a viewport screenshot to identify legible signage and building names, and is instructed never to hallucinate labels.
 - **🎬 Cinematic framing.** _"Show me the planes overhead"_ pulls the camera back, angles it, and frames the live traffic like a director.
-- **🔒 Honest and secure.** The agent only confirms actions that succeeded. Your `OPENAI_API_KEY` never touches the browser; the client only gets a short-lived session token.
+- **🔒 Honest and secure.** The agent only confirms actions that succeeded. The default path never uses an OpenAI key. If you opt into Realtime, `OPENAI_API_KEY` stays server-side.
 
 Twenty-eight tools, four jobs — the commands below come straight from the product's voice test suite and tool playbook:
 
@@ -355,7 +355,7 @@ How the globe handles live data:
 - **Sits on the real ground.** Entity heights are aligned to work with Google 3D tiles, so aircraft park on aprons and cameras stand on street corners instead of floating.
 - **Caching and request budgets.** An OpenSky credit governor, a TomTom daily tile budget, and disk-cached TLEs reduce repeated requests. These controls do not replace provider quotas or billing controls.
 - **Server-side credentials.** Every API that touches a private key (OpenAI, AISStream, OpenSky OAuth, camera frames) is brokered through a hardened server-side proxy with SSRF protection, response caps, and sanitized errors. The only keys the browser sees are Google Maps and Cesium ion (restrict both at the provider).
-- **No framework.** Vanilla JavaScript, **CesiumJS**, and **Vite** — plus **Google Photorealistic 3D Tiles** for the planet and the **OpenAI Realtime API** for voice. Fast to read, fast to hack on.
+- **No framework.** Vanilla JavaScript, **CesiumJS**, and **Vite** — plus **Google Photorealistic 3D Tiles** for the planet and self-hosted **Qwen3 + Kokoro** for voice. Fast to read, fast to hack on.
 
 ```
 src/
@@ -364,7 +364,7 @@ src/
 ├── hud.js                  # Intelligence HUD + AI scene summary
 ├── keySetup.js             # POWER UP panel — in-app provider keys (dev server only)
 ├── mapStackController.js   # Basemap switching — Google 3D / Esri / OSM / ion stacks
-├── voice/                  # OpenAI Realtime session + 28 voice tools
+├── voice/                  # Self-hosted Qwen/Kokoro session + 28 voice tools
 ├── data/                   # One module per layer + orchestration + context store
 │   ├── iconOrientation.js  # Screen-projected headings + horizon cull
 │   └── local_data/         # Bundled datasets (per-folder provenance)

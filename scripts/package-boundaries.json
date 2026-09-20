@@ -254,6 +254,18 @@
     ],
     "external": []
   },
+  "voice-provider": {
+    "runtime": "node",
+    "exports": ["./server/providers/voice"],
+    "modules": [
+      "server/providers/voice.js",
+      "server/providers/voice/inference.js",
+      "server/providers/voice/routes.js",
+      "server/providers/common/request.js",
+      "src/voice/selfHostedIntent.js"
+    ],
+    "external": []
+  },
   "openai-provider": {
     "runtime": "node",
     "exports": ["./server/providers/openai"],
@@ -1164,6 +1176,8 @@
       "src/voice/layerSummary.js",
       "src/voice/voiceCost.js",
       "src/voice/commands.js",
+      "src/voice/selfHostedSession.js",
+      "src/voice/selfHostedBackend.js",
       "src/voice/session.js",
       "src/voice/sessionCommands.js",
       "src/voice/realtimeSession.js",
@@ -1695,6 +1709,8 @@
       "src/ui/visualPresets.js",
       "src/ui/visualSettings.js",
       "src/voice/commands.js",
+      "src/voice/selfHostedSession.js",
+      "src/voice/selfHostedBackend.js",
       "src/voice/control.js",
       "src/voice/gevActions.js",
       "src/voice/gevRealtime.js",

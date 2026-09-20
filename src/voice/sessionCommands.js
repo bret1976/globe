@@ -34,6 +34,11 @@ export function createVoiceCommands({
   const capabilities = adapter.capabilities || {};
   if (ui.tierButton) ui.tierButton.hidden = !capabilities.costControls;
   if (ui.costValue) ui.costValue.hidden = !capabilities.costControls;
+  if (!capabilities.costControls) {
+    if (ui.helpDetail)
+      ui.helpDetail.textContent =
+        'Hold Space or type a command · Qwen3 + Kokoro';
+  }
   if (!capabilities.pushToTalk) {
     ui.button.setAttribute('aria-label', 'Toggle voice control');
     if (ui.helpDetail) ui.helpDetail.textContent = 'Activate to toggle voice';

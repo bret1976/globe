@@ -823,8 +823,13 @@ export function findPoiByName(query) {
   for (const [cityId, city] of Object.entries(CITY_POIS)) {
     city.pois.forEach((poi, index) => {
       const name = poiNameTokens(poi.name);
-      if (name.size < 2) return; // single-word POI names are too ambiguous to match loosely
-      const fullyNamed = [...name].every((w) => q.has(w));
+      // Multi-word names use containment. Unique single-token landmarks
+      // (Pentagon) match only when the query is that exact token — "Tower"
+      // still cannot steal Coit Tower / UT Tower.
+      const fullyNamed =
+        name.size >= 2
+          ? [...name].every((w) => q.has(w))
+          : name.size === 1 && q.size === 1 && q.has([...name][0]);
       if (fullyNamed && (!best || name.size > best.size))
         best = { cityId, index, size: name.size };
     });

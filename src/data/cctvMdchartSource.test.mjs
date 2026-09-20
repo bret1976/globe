@@ -6,6 +6,7 @@ import {
   mdchartHlsUrl,
   mdchartCameraLabel,
   loadMdchartSourcesFromOpenData,
+  loadMdchartSnapshotRows,
   MDCHART_EXCLUDED_OP_STATUS,
 } from '../../server/providers/cctv/mdchart.js';
 import {
@@ -146,7 +147,7 @@ test('mdchart loader retries a failed download once', async (t) => {
   assert.equal(cameras[0].sourceKind, 'mdchart-open-data');
 });
 
-test('mdchart pack failure does not break other CCTV providers', async (t) => {
+test('mdchart pack failure falls back to the bundled snapshot and keeps other packs', async (t) => {
   t.mock.method(console, 'log', () => {});
   t.mock.method(console, 'warn', () => {});
   t.mock.method(globalThis, 'fetch', async (url) => {
@@ -167,13 +168,34 @@ test('mdchart pack failure does not break other CCTV providers', async (t) => {
     const getSources = createCctvCatalog({ sourceRoot: process.cwd() });
     const sources = await getSources();
     assert.ok(Array.isArray(sources));
-    assert.ok(!sources.some((s) => s.sourceKind === 'mdchart-open-data'));
+    assert.ok(
+      sources.some((s) => s.sourceKind === 'mdchart-open-data'),
+      'Railway-style CHART egress failure must still serve the bundled snapshot',
+    );
   } finally {
     if (prevForce === undefined) delete process.env.CCTV_FORCE_AUSTIN;
     else process.env.CCTV_FORCE_AUSTIN = prevForce;
     if (prevMd === undefined) delete process.env.CCTV_MDCHART_ENABLED;
     else process.env.CCTV_MDCHART_ENABLED = prevMd;
   }
+});
+
+test('bundled Maryland CHART snapshot maps to official HLS hosts', () => {
+  const rows = loadMdchartSnapshotRows();
+  assert.ok(rows.length > 100, 'snapshot must carry a statewide camera set');
+  const sample = mdchartRowToSource(rows[0]);
+  assert.ok(sample);
+  assert.equal(sample.sourceKind, 'mdchart-open-data');
+  assert.match(sample.url, /sha\.maryland\.gov\/rtplive\/.+\/playlist\.m3u8$/);
+});
+
+test('mdchart loader uses the bundled snapshot when the live catalog is empty', async (t) => {
+  t.mock.method(console, 'log', () => {});
+  t.mock.method(console, 'warn', () => {});
+  t.mock.method(globalThis, 'fetch', async () => Response.json([]));
+  const cameras = await loadMdchartSourcesFromOpenData();
+  assert.ok(cameras.length > 0);
+  assert.equal(cameras[0].sourceKind, 'mdchart-open-data');
 });
 
 test('the shipped catalog ceiling is not raised to make room for this pack', () => {

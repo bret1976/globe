@@ -29,9 +29,12 @@ export function createVoiceControl({ reset = false } = {}) {
       <div class="gev-voice-readout">
         <div id="gev-voice-detail">VOICE STANDBY</div>
       </div>
+      <form id="gev-voice-command-form" class="gev-voice-command-form">
+        <input id="gev-voice-command" type="text" autocomplete="off" spellcheck="false" placeholder="Take me to the Pentagon" aria-label="Type a voice command" />
+      </form>
       <div id="gev-voice-help" class="gev-voice-help-tray" role="tooltip">
         <span class="gev-voice-help-kicker">VOICE CONTROL</span>
-        <span class="gev-voice-help-detail">Hold Space to speak · tap Space to activate focused controls</span>
+        <span class="gev-voice-help-detail">Hold Space or type a command · no OpenAI key</span>
       </div>
       <div class="gev-voice-error-tray" role="alert" aria-live="assertive">
         <div class="gev-voice-error-header">
@@ -65,6 +68,8 @@ export function createVoiceControl({ reset = false } = {}) {
     status: root.querySelector('#gev-voice-status'),
     detail: root.querySelector('#gev-voice-detail'),
     helpDetail: root.querySelector('.gev-voice-help-detail'),
+    commandForm: root.querySelector('#gev-voice-command-form'),
+    commandInput: root.querySelector('#gev-voice-command'),
     errorDetail: root.querySelector('#gev-voice-error-detail'),
     tierButton: root.querySelector('#gev-voice-tier'),
     costValue: root.querySelector('#gev-voice-cost-value'),

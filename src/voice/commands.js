@@ -1,10 +1,10 @@
 import { createVoiceCommands as bindVoiceCommands } from './sessionCommands.js';
-import { createRealtimeSession } from './realtimeSession.js';
+import { createSelfHostedSession } from './selfHostedSession.js';
 
-/** Default composition; callers may supply another session adapter factory. */
+/** Default composition: self-hosted Qwen/Kokoro. No OpenAI key. */
 export function createVoiceCommands(options) {
   return bindVoiceCommands({
-    createSession: createRealtimeSession,
+    createSession: createSelfHostedSession,
     ...options,
   });
 }

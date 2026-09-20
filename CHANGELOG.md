@@ -1,5 +1,11 @@
 # Changelog
 
+- Default voice is self-hosted Qwen3-ASR-0.6B / Qwen3-8B / Kokoro-82M with a
+  JS planner that always runs Take me to the Pentagon → nearest flight →
+  enter cockpit. GPU inference is optional via `VOICE_INFERENCE_URL`.
+  Maryland CHART now falls back to a bundled snapshot when the live catalog
+  is unreachable so Railway cannot serve zero cameras.
+
 - Add Maryland CHART statewide CCTV (public HLS on `strmr*.sha.maryland.gov`)
   and DC DDOT GIS location-only cameras to the CCTV catalog. CHART never
   registers HTML player pages; DDOT registers coordinates only because DC GIS

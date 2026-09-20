@@ -1,3 +1,6 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   MDCHART_CAMERAS_URL,
   MDCHART_STREAM_HOST_PATTERN,
@@ -11,6 +14,11 @@ import {
   prioritizeSources,
   isPlausibleLatLon,
 } from './normalize.js';
+
+const MDCHART_SNAPSHOT_PATH = path.join(
+  path.dirname(fileURLToPath(import.meta.url)),
+  'mdchart.snapshot.json',
+);
 
 /** Operational statuses treated as out of service for live feeds. */
 export const MDCHART_EXCLUDED_OP_STATUS = new Set([
@@ -208,32 +216,60 @@ async function fetchMdchartRows() {
   throw lastError || new Error('Maryland CHART download failed');
 }
 
+export function loadMdchartSnapshotRows() {
+  try {
+    const raw = JSON.parse(fs.readFileSync(MDCHART_SNAPSHOT_PATH, 'utf8'));
+    return Array.isArray(raw) ? raw : [];
+  } catch {
+    return [];
+  }
+}
+
+function sourcesFromRows(rows) {
+  const byId = new Map();
+  for (const row of rows) {
+    const source = mdchartRowToSource(row);
+    if (!source) continue;
+    byId.set(source.id, source);
+  }
+  return [...byId.values()];
+}
+
+function capMdchartSources(cameras) {
+  const maxRaw = Number(
+    process.env.CCTV_MDCHART_MAX_SOURCES || DEFAULT_MDCHART_MAX_SOURCES,
+  );
+  const maxCount = Number.isFinite(maxRaw)
+    ? Math.max(8, Math.min(900, Math.floor(maxRaw)))
+    : DEFAULT_MDCHART_MAX_SOURCES;
+  return prioritizeSources(cameras, maxCount, MDCHART_ANCHORS);
+}
+
 export async function loadMdchartSourcesFromOpenData() {
   try {
     const rows = await fetchMdchartRows();
-    const byId = new Map();
-    for (const row of rows) {
-      const source = mdchartRowToSource(row);
-      if (!source) continue;
-      byId.set(source.id, source);
+    const cameras = sourcesFromRows(rows);
+    if (cameras.length) {
+      const prioritized = capMdchartSources(cameras);
+      console.log(
+        `[CCTV] Loaded Maryland CHART camera sources: ${cameras.length} live (using nearest ${prioritized.length})`,
+      );
+      return prioritized;
     }
-    const cameras = [...byId.values()];
-    const maxRaw = Number(
-      process.env.CCTV_MDCHART_MAX_SOURCES || DEFAULT_MDCHART_MAX_SOURCES,
-    );
-    const maxCount = Number.isFinite(maxRaw)
-      ? Math.max(8, Math.min(900, Math.floor(maxRaw)))
-      : DEFAULT_MDCHART_MAX_SOURCES;
-    const prioritized = prioritizeSources(cameras, maxCount, MDCHART_ANCHORS);
-    console.log(
-      `[CCTV] Loaded Maryland CHART camera sources: ${cameras.length} live (using nearest ${prioritized.length})`,
-    );
-    return prioritized;
+    console.warn('[CCTV] Maryland CHART live catalog was empty');
   } catch (error) {
     console.warn(
       '[CCTV] Maryland CHART download error:',
       error?.message || error,
     );
-    return [];
   }
+  const snapshot = sourcesFromRows(loadMdchartSnapshotRows());
+  if (snapshot.length) {
+    const prioritized = capMdchartSources(snapshot);
+    console.warn(
+      `[CCTV] Maryland CHART using bundled snapshot: ${snapshot.length} cameras (using nearest ${prioritized.length})`,
+    );
+    return prioritized;
+  }
+  return [];
 }
