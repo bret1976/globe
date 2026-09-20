@@ -4,8 +4,12 @@ import { initShortsPack, SHORTS_PACK_VERSION } from './data/shortsPack.js';
 import { primeOperatorLocation } from './data/operatorLocation.js';
 
 const application = createStandaloneApplication({
-  googleApiKey: import.meta.env.GOOGLE_MAPS_API_KEY,
-  cesiumToken: import.meta.env.CESIUM_ION_TOKEN,
+  googleApiKey:
+    import.meta.env.GOOGLE_MAPS_API_KEY ||
+    globalThis.__GEV_GOOGLE_MAPS_API_KEY ||
+    '',
+  cesiumToken:
+    import.meta.env.CESIUM_ION_TOKEN || globalThis.__GEV_CESIUM_ION_TOKEN || '',
   allowQaRegistration: import.meta.env.DEV,
 });
 
@@ -22,11 +26,15 @@ application
         console.warn('[shorts-pack] failed', error);
       });
     }
-    console.info(`[shorts-pack ${SHORTS_PACK_VERSION}] ready (add #shorts=bay|nervous|cockpit|miami|area51|nepal|traffic)`);
+    console.info(
+      `[shorts-pack ${SHORTS_PACK_VERSION}] ready (add #shorts=bay|nervous|cockpit|miami|area51|nepal|traffic)`,
+    );
   })
   .catch((error) => {
     console.error("God's Eye View initialization failed:", error);
-    const loaderStatus = document.querySelector('#loading-screen .loader-status');
+    const loaderStatus = document.querySelector(
+      '#loading-screen .loader-status',
+    );
     if (loaderStatus) {
       loaderStatus.textContent = `Error: ${describeError(error)}`;
       loaderStatus.style.color = '#ff4444';
