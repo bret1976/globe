@@ -311,6 +311,67 @@ test('common button and annotation bindings work with an alternate adapter and c
   }
 });
 
+test('typed command form starts an idle session then sends the utterance', async () => {
+  const previous = globalThis.window;
+  globalThis.window = {};
+  try {
+    const button = new EventTarget();
+    button.setAttribute = () => {};
+    const form = new EventTarget();
+    const input = { value: 'Take me to the Pentagon' };
+    const sent = [];
+    const ui = {
+      button,
+      root: {
+        dataset: {},
+        classList: { remove() {} },
+        remove() {},
+      },
+      status: {},
+      detail: {},
+      tierButton: {},
+      costValue: {},
+      helpDetail: {},
+      commandForm: form,
+      commandInput: input,
+    };
+    const lifetime = new AbortController();
+    let started = 0;
+    createVoiceCommands({
+      runner: async () => ({ ok: true }),
+      signal: lifetime.signal,
+      createControl: () => ui,
+      createSession({ emit }) {
+        return {
+          capabilities: { costControls: false, pushToTalk: true },
+          async start() {
+            started += 1;
+            emit({ type: 'state', state: 'listening', detail: 'Ready' });
+          },
+          stop() {
+            emit({ type: 'state', state: 'idle' });
+          },
+          async sendText(text) {
+            sent.push(text);
+            return true;
+          },
+          sendMapEvent() {},
+        };
+      },
+    });
+    assert.match(ui.helpDetail.textContent, /Click the mic and speak/);
+    const submit = new Event('submit', { cancelable: true });
+    form.dispatchEvent(submit);
+    await new Promise((done) => setTimeout(done, 0));
+    assert.equal(started, 1);
+    assert.deepEqual(sent, ['Take me to the Pentagon']);
+    assert.equal(input.value, '');
+    lifetime.abort();
+  } finally {
+    globalThis.window = previous;
+  }
+});
+
 test('late actions cannot run after stop and failed startup closes the adapter', async () => {
   let calls = 0;
   const f = fixture(async () => {

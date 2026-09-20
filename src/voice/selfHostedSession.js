@@ -5,9 +5,8 @@ import {
 } from './realtimeInputPolicy.js';
 
 /**
- * Mic → Qwen3-ASR → Qwen3-8B/planner → gevActions → Kokoro.
- * Browser SpeechRecognition / speechSynthesis are last-resort fallbacks when
- * the GPU inference box is offline so the Pentagon flow still works.
+ * Mic → browser speech or Qwen3-ASR → planner/Qwen3-8B → gevActions → speak.
+ * Clicking the mic starts listening immediately (user-gesture). No OpenAI key.
  */
 export function createSelfHostedSession({
   emit,
@@ -24,6 +23,8 @@ export function createSelfHostedSession({
   let speaking = null;
   let recognition = null;
   let spaceHeld = false;
+  let live = false;
+  let busy = false;
   let status = {
     asr: false,
     llm: true,
@@ -39,6 +40,12 @@ export function createSelfHostedSession({
       lat: (carto.latitude * 180) / Math.PI,
       lon: (carto.longitude * 180) / Math.PI,
     };
+  }
+
+  function browserSpeechRecognition() {
+    return (
+      globalThis.SpeechRecognition || globalThis.webkitSpeechRecognition || null
+    );
   }
 
   async function playSpeech(text, audio) {
@@ -68,65 +75,85 @@ export function createSelfHostedSession({
 
   async function handleUtterance(text) {
     const spoken = String(text || '').trim();
-    if (!spoken) return;
-    emit({ type: 'transcript', role: 'user', text: spoken, final: true });
-    emit({ type: 'state', state: 'executing', detail: spoken });
-    const plan = await backend.act({
-      text: spoken,
-      viewport: viewport(),
-      lastLocationQuery,
-      lastPlace,
-      signal,
-    });
-    if (plan.locationQuery) lastLocationQuery = plan.locationQuery;
-    if (plan.place) lastPlace = plan.place;
-    for (const call of plan.calls) {
-      await runAction(call.name, call.arguments || {});
-    }
-    const speech =
-      plan.speech ||
-      (plan.calls.length ? 'Done.' : 'I could not act on that yet.');
-    emit({ type: 'transcript', role: 'assistant', text: speech, final: true });
-    emit({ type: 'state', state: 'speaking', detail: speech });
+    if (!spoken || busy) return;
+    busy = true;
+    stopBrowserRecognition();
     try {
-      const spokenAudio = await backend
-        .speak({ text: speech, signal })
-        .catch(() => ({ text: speech, audio: null }));
-      speaking = playSpeech(spokenAudio.text || speech, spokenAudio.audio);
-      await speaking;
+      emit({ type: 'transcript', role: 'user', text: spoken, final: true });
+      emit({ type: 'state', state: 'executing', detail: spoken });
+      const plan = await backend.act({
+        text: spoken,
+        viewport: viewport(),
+        lastLocationQuery,
+        lastPlace,
+        signal,
+      });
+      if (plan.locationQuery) lastLocationQuery = plan.locationQuery;
+      if (plan.place) lastPlace = plan.place;
+      for (const call of plan.calls) {
+        await runAction(call.name, call.arguments || {});
+      }
+      const speech =
+        plan.speech ||
+        (plan.calls.length ? 'Done.' : 'I could not act on that yet.');
+      emit({
+        type: 'transcript',
+        role: 'assistant',
+        text: speech,
+        final: true,
+      });
+      emit({ type: 'state', state: 'speaking', detail: speech });
+      try {
+        const spokenAudio = await backend
+          .speak({ text: speech, signal })
+          .catch(() => ({ text: speech, audio: null }));
+        speaking = playSpeech(spokenAudio.text || speech, spokenAudio.audio);
+        await speaking;
+      } finally {
+        speaking = null;
+      }
+      emit({ type: 'completion', status: 'completed' });
     } finally {
-      speaking = null;
+      busy = false;
+      if (live) {
+        emit({
+          type: 'state',
+          state: 'listening',
+          detail: 'Listening — speak now',
+        });
+        startBrowserRecognition();
+      }
     }
-    emit({ type: 'completion', status: 'completed' });
-    emit({ type: 'state', state: 'listening', detail: 'Listening' });
   }
 
-  function browserSpeechRecognition() {
-    return (
-      globalThis.SpeechRecognition || globalThis.webkitSpeechRecognition || null
-    );
-  }
-
-  async function transcribeAudio(audio, mimeType) {
-    if (typeof backend.transcribe === 'function' && status.asr) {
-      const result = await backend.transcribe({ audio, mimeType, signal });
-      return result.text;
+  function stopBrowserRecognition() {
+    const current = recognition;
+    recognition = null;
+    try {
+      current?.stop?.();
+    } catch {
+      /* already stopped */
     }
-    throw new Error(
-      'Qwen3-ASR is offline. Set VOICE_INFERENCE_URL on the GPU box, or type the command.',
-    );
   }
 
   function startBrowserRecognition() {
     const Recognition = browserSpeechRecognition();
-    if (!Recognition) return false;
-    recognition?.stop?.();
-    recognition = new Recognition();
-    recognition.lang = 'en-US';
-    recognition.interimResults = false;
-    recognition.maxAlternatives = 1;
-    recognition.onresult = (event) => {
-      const text = event.results?.[0]?.[0]?.transcript;
+    if (!Recognition || !live || busy) return false;
+    stopBrowserRecognition();
+    const instance = new Recognition();
+    recognition = instance;
+    instance.lang = 'en-US';
+    instance.continuous = true;
+    instance.interimResults = true;
+    instance.maxAlternatives = 1;
+    instance.onresult = (event) => {
+      const last = event.results?.[event.results.length - 1];
+      const text = last?.[0]?.transcript;
+      if (!text) return;
+      if (!last.isFinal) {
+        emit({ type: 'state', state: 'listening', detail: text });
+        return;
+      }
       void handleUtterance(text).catch((error) => {
         emit({
           type: 'state',
@@ -135,20 +162,40 @@ export function createSelfHostedSession({
         });
       });
     };
-    recognition.onerror = (event) => {
-      if (event?.error === 'no-speech' || event?.error === 'aborted') return;
+    instance.onerror = (event) => {
+      if (
+        event?.error === 'no-speech' ||
+        event?.error === 'aborted' ||
+        event?.error === 'not-allowed'
+      ) {
+        if (event?.error === 'not-allowed') {
+          live = false;
+          emit({
+            type: 'state',
+            state: 'error',
+            detail: 'Microphone blocked — allow it, or type a command',
+          });
+        }
+        return;
+      }
       emit({
         type: 'state',
         state: 'error',
         detail: event?.error || 'Speech recognition failed',
       });
     };
-    recognition.start();
-    emit({
-      type: 'state',
-      state: 'listening',
-      detail: 'Browser speech listening',
-    });
+    instance.onend = () => {
+      if (recognition !== instance) return;
+      recognition = null;
+      if (live && !busy) {
+        try {
+          startBrowserRecognition();
+        } catch {
+          /* Chrome throws if a restart races */
+        }
+      }
+    };
+    instance.start();
     return true;
   }
 
@@ -157,14 +204,14 @@ export function createSelfHostedSession({
     if (isEditingSpaceTarget(event.target)) return;
     spaceHeld = true;
     event.preventDefault();
-    void startRecording();
+    if (!live) return;
+    startBrowserRecognition();
   }
 
   function onKeyUp(event) {
     if (!isPushToTalkKey(event) || !spaceHeld) return;
     spaceHeld = false;
     event.preventDefault();
-    void stopRecording();
   }
 
   return {
@@ -172,48 +219,69 @@ export function createSelfHostedSession({
     capabilities: { costControls: false, pushToTalk: true },
     ignoreButtonClick: () => spaceHeld,
     async start() {
+      live = true;
       emit({
         type: 'state',
         state: 'connecting',
-        detail: 'Starting Qwen voice',
+        detail: 'Starting voice',
       });
-      try {
-        status = await backend.status({ signal });
-      } catch {
-        status = {
-          asr: false,
-          llm: true,
-          tts: false,
-          protocol: 'self-hosted-qwen',
-        };
-      }
-      if (globalThis.navigator?.mediaDevices?.getUserMedia) {
-        try {
-          mediaStream = await globalThis.navigator.mediaDevices.getUserMedia({
-            audio: true,
-          });
-        } catch {
-          mediaStream = null;
-        }
-      }
+      // Must start recognition inside the click gesture, before any await.
+      const listening = startBrowserRecognition();
       emit({
         type: 'state',
         state: 'listening',
-        detail: status.asr
-          ? 'Qwen3-ASR listening'
-          : 'Voice on — hold Space or type a command',
+        detail: listening
+          ? 'Listening — speak now'
+          : 'Type a command — this browser has no speech recognition',
       });
+      if (!listening) ui?.commandInput?.focus?.();
+      void backend
+        .status({ signal })
+        .then((next) => {
+          status = next;
+        })
+        .catch(() => {
+          status = {
+            asr: false,
+            llm: true,
+            tts: false,
+            protocol: 'self-hosted-qwen',
+          };
+        });
+      if (globalThis.navigator?.mediaDevices?.getUserMedia) {
+        void globalThis.navigator.mediaDevices
+          .getUserMedia({ audio: true })
+          .then((stream) => {
+            if (!live) {
+              stream.getTracks?.().forEach((track) => track.stop());
+              return;
+            }
+            mediaStream = stream;
+          })
+          .catch(() => {
+            mediaStream = null;
+          });
+      }
     },
     stop() {
+      live = false;
+      busy = false;
+      stopBrowserRecognition();
       recorder?.stop?.();
       recorder = null;
-      recognition?.stop?.();
-      recognition = null;
       mediaStream?.getTracks?.().forEach((track) => track.stop());
       mediaStream = null;
       globalThis.speechSynthesis?.cancel?.();
     },
     async sendText(text) {
+      if (!live) {
+        live = true;
+        emit({
+          type: 'state',
+          state: 'listening',
+          detail: 'Working from typed command',
+        });
+      }
       try {
         await handleUtterance(text);
         return true;
@@ -230,37 +298,18 @@ export function createSelfHostedSession({
       return true;
     },
     async startRecording() {
-      if (status.asr && mediaStream && typeof MediaRecorder !== 'undefined') {
-        chunks = [];
-        recorder = new MediaRecorder(mediaStream);
-        recorder.ondataavailable = (event) => {
-          if (event.data?.size) chunks.push(event.data);
-        };
-        recorder.start();
-        emit({ type: 'state', state: 'listening', detail: 'Recording' });
-        return true;
-      }
+      if (!live) return false;
       return startBrowserRecognition();
     },
     async stopRecording() {
-      if (recognition) {
-        recognition.stop();
-        recognition = null;
-        return true;
-      }
-      if (!recorder) return false;
+      stopBrowserRecognition();
+      if (!recorder) return live;
       const finished = new Promise((resolve) => {
         recorder.onstop = resolve;
       });
       recorder.stop();
       await finished;
-      const blob = new Blob(chunks, {
-        type: recorder.mimeType || 'audio/webm',
-      });
       recorder = null;
-      const audio = new Uint8Array(await blob.arrayBuffer());
-      const text = await transcribeAudio(audio, blob.type);
-      await handleUtterance(text);
       return true;
     },
     bindControls() {
@@ -274,22 +323,6 @@ export function createSelfHostedSession({
         },
         { once: true },
       );
-      const form = ui?.commandForm;
-      const input = ui?.commandInput;
-      if (form && input) {
-        const submit = (event) => {
-          event.preventDefault();
-          const text = input.value;
-          input.value = '';
-          if (text.trim()) void handleUtterance(text);
-        };
-        form.addEventListener('submit', submit);
-        signal?.addEventListener?.(
-          'abort',
-          () => form.removeEventListener('submit', submit),
-          { once: true },
-        );
-      }
     },
   };
 }

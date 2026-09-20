@@ -37,8 +37,12 @@ export function createVoiceCommands({
   if (!capabilities.costControls) {
     if (ui.helpDetail)
       ui.helpDetail.textContent =
-        'Hold Space or type a command · Qwen3 + Kokoro';
+        'Click the mic and speak, or type a command · Qwen3 + Kokoro';
   }
+  ui.button?.setAttribute?.(
+    'aria-label',
+    'Voice control — click to listen and run spoken commands',
+  );
   if (!capabilities.pushToTalk) {
     ui.button.setAttribute('aria-label', 'Toggle voice control');
     if (ui.helpDetail) ui.helpDetail.textContent = 'Activate to toggle voice';
@@ -69,11 +73,23 @@ export function createVoiceCommands({
     if (session.isActive()) session.stop();
     else void session.start({ pushToTalk: false });
   };
+  const formHandler = (event) => {
+    event.preventDefault();
+    const text = String(ui.commandInput?.value || '').trim();
+    if (!text) return;
+    void (async () => {
+      if (!session.isActive()) await session.start({ pushToTalk: false });
+      const sent = await session.sendText(text);
+      if (sent && ui.commandInput) ui.commandInput.value = '';
+    })();
+  };
   ui.button.addEventListener('click', buttonHandler);
+  ui.commandForm?.addEventListener?.('submit', formHandler);
   session.signal.addEventListener(
     'abort',
     () => {
       ui.button.removeEventListener('click', buttonHandler);
+      ui.commandForm?.removeEventListener?.('submit', formHandler);
       annotationUnsubscribe?.();
       updateStatus();
       ui.root.remove();
