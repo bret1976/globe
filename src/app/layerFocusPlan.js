@@ -238,6 +238,23 @@ export function isUsableOperatorLocation(location) {
   return !isDefaultSpawnLocation(location);
 }
 
+/** Street-scale feeds must not inherit an 80 km leftover aviation view. */
+const STREET_SCALE_LAYER_SET = new Set([
+  'traffic',
+  'transit',
+  'bikeshare',
+  'cctv',
+  'alpr-cameras',
+  'military-installations',
+  'directions',
+]);
+
+export function isTrustedStreetOperator(location, layerId) {
+  if (!isUsableOperatorLocation(location)) return false;
+  if (!STREET_SCALE_LAYER_SET.has(layerId)) return true;
+  return location.source === 'geolocation' || location.source === 'cache';
+}
+
 /**
  * Pick the camera target for a Data Layer click without waiting on GPS.
  * Local viewport layers use a known operator fix; everything else uses the
@@ -251,7 +268,7 @@ export function pickLayerFocusAnchor({
   const featured = layerLiveDestination(layerId);
   if (
     layerId === 'cctv' &&
-    isUsableOperatorLocation(location) &&
+    isTrustedStreetOperator(location, layerId) &&
     isNearbyOperatorFocus(nearestCameraDistKm)
   ) {
     return {
@@ -266,7 +283,7 @@ export function pickLayerFocusAnchor({
   if (
     !FEATURED_DESTINATION_LAYER_SET.has(layerId) &&
     LOCAL_VIEWPORT_LAYER_SET.has(layerId) &&
-    isUsableOperatorLocation(location)
+    isTrustedStreetOperator(location, layerId)
   ) {
     return {
       mode: 'operator',

@@ -144,6 +144,18 @@ test('Vegas GPS does not own CCTV or vessels; local layers stay over the operato
   assert.equal(noGpsFlights.label, 'Las Vegas');
   assert.equal(layerLiveDestination('traffic').label, 'Austin');
   assert.equal(layerLiveDestination('rocket-launches').label, 'Kennedy');
+  const leftoverAlpr = pickLayerFocusAnchor({
+    layerId: 'alpr-cameras',
+    location: { lat: 33.8, lon: -116.46, source: 'viewer' },
+  });
+  assert.equal(leftoverAlpr.label, 'Austin');
+  assert.equal(leftoverAlpr.lat, 30.2672);
+  const gpsAlpr = pickLayerFocusAnchor({
+    layerId: 'alpr-cameras',
+    location: { lat: 33.8, lon: -116.46, source: 'geolocation' },
+  });
+  assert.equal(gpsAlpr.mode, 'operator');
+  assert.equal(gpsAlpr.lat, 33.8);
 });
 
 test('waitForLayerFocusObjects returns once data appears', async () => {
