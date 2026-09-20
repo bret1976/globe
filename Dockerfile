@@ -13,6 +13,13 @@ COPY package.json package-lock.json ./
 # Vite is a devDependency but the hosted process still needs it for `vite preview`.
 RUN npm ci --include=dev
 
+# Client-exposed keys are baked into the Vite bundle at build time.
+# Railway passes service variables as Docker build-args only when declared.
+ARG CESIUM_ION_TOKEN=
+ARG GOOGLE_MAPS_API_KEY=
+ENV CESIUM_ION_TOKEN=$CESIUM_ION_TOKEN \
+    GOOGLE_MAPS_API_KEY=$GOOGLE_MAPS_API_KEY
+
 COPY . .
 RUN npm run build
 
