@@ -1,5 +1,11 @@
 # Changelog
 
+- Add Maryland CHART statewide CCTV (public HLS on `strmr*.sha.maryland.gov`)
+  and DC DDOT GIS location-only cameras to the CCTV catalog. CHART never
+  registers HTML player pages; DDOT registers coordinates only because DC GIS
+  publishes no official public live media URL. Kill switches:
+  `CCTV_MDCHART_ENABLED=0`, `CCTV_DDOT_ENABLED=0`.
+
 - Distinguish PARTIAL vessel snapshots from STALE data in the layer panel, with
   accepted-record counts and unchanged retention, freshness and outage safeguards.
 
