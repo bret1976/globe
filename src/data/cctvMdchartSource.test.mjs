@@ -131,6 +131,21 @@ test('mdchart loader parses representative payload and honors cap', async (t) =>
   }
 });
 
+test('mdchart loader retries a failed download once', async (t) => {
+  t.mock.method(console, 'log', () => {});
+  t.mock.method(console, 'warn', () => {});
+  let calls = 0;
+  t.mock.method(globalThis, 'fetch', async () => {
+    calls += 1;
+    if (calls === 1) throw new Error('transient CHART timeout');
+    return Response.json([sampleRow]);
+  });
+  const cameras = await loadMdchartSourcesFromOpenData();
+  assert.equal(calls, 2);
+  assert.equal(cameras.length, 1);
+  assert.equal(cameras[0].sourceKind, 'mdchart-open-data');
+});
+
 test('mdchart pack failure does not break other CCTV providers', async (t) => {
   t.mock.method(console, 'log', () => {});
   t.mock.method(console, 'warn', () => {});

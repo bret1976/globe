@@ -180,18 +180,37 @@ export function mdchartRowToSource(row) {
  *
  * @returns {Promise<Array<object>>}
  */
+async function fetchMdchartRows() {
+  const headers = {
+    Accept: 'application/json',
+    'User-Agent':
+      'GodsEyeView/1.0 (cctv catalog; +https://github.com/bret1976/globe)',
+  };
+  let lastError = null;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const resp = await fetch(MDCHART_CAMERAS_URL, {
+        headers,
+        signal: AbortSignal.timeout(CCTV_SOURCE_FETCH_TIMEOUT_MS),
+      });
+      if (!resp.ok) {
+        lastError = new Error(`HTTP ${resp.status}`);
+        continue;
+      }
+      const payload = await resp.json();
+      if (Array.isArray(payload)) return payload;
+      if (Array.isArray(payload?.cameras)) return payload.cameras;
+      return [];
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError || new Error('Maryland CHART download failed');
+}
+
 export async function loadMdchartSourcesFromOpenData() {
   try {
-    const resp = await fetch(MDCHART_CAMERAS_URL, {
-      headers: { Accept: 'application/json' },
-      signal: AbortSignal.timeout(CCTV_SOURCE_FETCH_TIMEOUT_MS),
-    });
-    if (!resp.ok) {
-      console.warn('[CCTV] Maryland CHART download failed:', resp.status);
-      return [];
-    }
-    const payload = await resp.json();
-    const rows = Array.isArray(payload) ? payload : [];
+    const rows = await fetchMdchartRows();
     const byId = new Map();
     for (const row of rows) {
       const source = mdchartRowToSource(row);
