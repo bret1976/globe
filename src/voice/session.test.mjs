@@ -359,7 +359,10 @@ test('typed command form starts an idle session then sends the utterance', async
         };
       },
     });
-    assert.match(ui.helpDetail.textContent, /Click the mic and speak/);
+    assert.match(
+      ui.helpDetail.textContent,
+      /Click the mic, allow it, then speak/,
+    );
     const submit = new Event('submit', { cancelable: true });
     form.dispatchEvent(submit);
     await new Promise((done) => setTimeout(done, 0));

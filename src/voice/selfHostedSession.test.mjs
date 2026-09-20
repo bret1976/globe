@@ -183,3 +183,95 @@ test('typed sendText activates an idle session and runs the planner', async () =
   );
   session.stop();
 });
+
+test('interim speech is finalized after a short silence', async () => {
+  let recognition;
+  const previousRecognition = globalThis.SpeechRecognition;
+  class FakeRecognition {
+    constructor() {
+      recognition = this;
+    }
+    start() {}
+    stop() {}
+  }
+  globalThis.SpeechRecognition = FakeRecognition;
+  const actions = [];
+  const backend = backendFixture({
+    calls: [
+      {
+        name: 'fly_to_location',
+        arguments: { query: 'Pentagon', waitForArrival: true },
+      },
+    ],
+    speech: 'Flying to Pentagon.',
+    source: 'planner',
+  });
+  try {
+    const session = createVoiceSession({
+      runner: async (name, args) => {
+        actions.push([name, args]);
+        return { ok: true, name };
+      },
+      createAdapter: (hooks) =>
+        createSelfHostedSession({
+          ...hooks,
+          backend,
+          silenceMs: 20,
+        }),
+    });
+    await session.start();
+    recognition.onresult({
+      results: [
+        {
+          0: { transcript: 'Take me to the Pentagon' },
+          isFinal: false,
+        },
+      ],
+    });
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    assert.deepEqual(
+      actions.map(([name]) => name),
+      ['fly_to_location'],
+    );
+    session.stop();
+  } finally {
+    globalThis.SpeechRecognition = previousRecognition;
+  }
+});
+
+test('network speech errors keep the session listening', async () => {
+  let recognition;
+  const previousRecognition = globalThis.SpeechRecognition;
+  class FakeRecognition {
+    constructor() {
+      recognition = this;
+    }
+    start() {}
+    stop() {}
+  }
+  globalThis.SpeechRecognition = FakeRecognition;
+  try {
+    const events = [];
+    const session = createVoiceSession({
+      runner: async () => ({ ok: true }),
+      createAdapter: (hooks) =>
+        createSelfHostedSession({
+          ...hooks,
+          backend: backendFixture({
+            calls: [],
+            speech: 'Done.',
+            source: 'planner',
+          }),
+        }),
+    });
+    session.subscribe((event) => events.push(event));
+    await session.start();
+    recognition.onerror({ error: 'network' });
+    assert.equal(session.isActive(), true);
+    assert.equal(session.state, 'listening');
+    assert.ok(!events.some((event) => event.state === 'error'));
+    session.stop();
+  } finally {
+    globalThis.SpeechRecognition = previousRecognition;
+  }
+});

@@ -40,7 +40,9 @@ function request(handler, { method = 'GET', body = '' } = {}) {
 
 test('voice status reports the planner without a GPU box', async () => {
   const previous = process.env.VOICE_INFERENCE_URL;
+  const previousGemini = process.env.GEMINI_API_KEY;
   delete process.env.VOICE_INFERENCE_URL;
+  delete process.env.GEMINI_API_KEY;
   try {
     const routes = install(selfHostedVoiceProxy());
     const res = await request(routes.get('/api/voice/status'));
@@ -53,6 +55,8 @@ test('voice status reports the planner without a GPU box', async () => {
   } finally {
     if (previous === undefined) delete process.env.VOICE_INFERENCE_URL;
     else process.env.VOICE_INFERENCE_URL = previous;
+    if (previousGemini === undefined) delete process.env.GEMINI_API_KEY;
+    else process.env.GEMINI_API_KEY = previousGemini;
   }
 });
 

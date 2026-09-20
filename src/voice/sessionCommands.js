@@ -37,7 +37,7 @@ export function createVoiceCommands({
   if (!capabilities.costControls) {
     if (ui.helpDetail)
       ui.helpDetail.textContent =
-        'Click the mic and speak, or type a command · Qwen3 + Kokoro';
+        'Click the mic, allow it, then speak — or type a command';
   }
   ui.button?.setAttribute?.(
     'aria-label',

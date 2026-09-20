@@ -15,6 +15,11 @@ import {
   QWEN_LLM_MODEL,
   voiceInferenceConfigured,
 } from './inference.js';
+import {
+  hostedAsrConfigured,
+  hostedAsrModel,
+  transcribeWithHostedAsr,
+} from './hostedAsr.js';
 
 const JSON_HEADERS = {
   'Content-Type': 'application/json; charset=utf-8',
@@ -48,17 +53,23 @@ export async function handleVoiceStatus(req, res, { fetchImpl } = {}) {
     llm: false,
     tts: false,
   }));
+  const hostedAsr = hostedAsrConfigured();
   sendJson(res, 200, {
     protocol: 'self-hosted-qwen',
     planner: true,
-    asr: Boolean(health.asr),
+    asr: Boolean(health.asr) || hostedAsr,
     llm: true,
-    tts: Boolean(health.tts),
+    tts: Boolean(health.tts) || true,
     inference: Boolean(health.configured),
+    hostedAsr,
     models: {
-      asr: QWEN_ASR_MODEL,
+      asr: health.asr
+        ? QWEN_ASR_MODEL
+        : hostedAsr
+          ? hostedAsrModel()
+          : QWEN_ASR_MODEL,
       llm: QWEN_LLM_MODEL,
-      tts: KOKORO_TTS_MODEL,
+      tts: health.tts ? KOKORO_TTS_MODEL : 'speechSynthesis',
       ...(health.models || {}),
     },
   });
@@ -66,29 +77,53 @@ export async function handleVoiceStatus(req, res, { fetchImpl } = {}) {
 
 export async function handleVoiceAsr(req, res, { fetchImpl } = {}) {
   if (methodNotAllowed(req, res, ['POST'])) return;
-  if (!voiceInferenceConfigured()) {
+  let payload;
+  try {
+    payload = await readJsonBody(req, 8 * 1024 * 1024);
+  } catch (error) {
+    sendJson(res, 400, { error: error?.message || 'Invalid ASR request' });
+    return;
+  }
+  if (voiceInferenceConfigured()) {
+    try {
+      const data = await inferenceJson(
+        '/asr',
+        {
+          audio: payload.audio,
+          mimeType: payload.mimeType || 'audio/webm',
+          model: payload.model || QWEN_ASR_MODEL,
+        },
+        { fetchImpl },
+      );
+      if (typeof data.text !== 'string' || !data.text.trim()) {
+        sendJson(res, 502, { error: 'ASR returned no transcript' });
+        return;
+      }
+      sendJson(res, 200, { text: data.text.trim(), model: QWEN_ASR_MODEL });
+      return;
+    } catch (error) {
+      if (!hostedAsrConfigured()) {
+        sendJson(res, 502, { error: error?.message || 'ASR failed' });
+        return;
+      }
+    }
+  }
+  if (!hostedAsrConfigured()) {
     sendJson(res, 503, {
       error:
-        'Qwen3-ASR is offline. Set VOICE_INFERENCE_URL on the GPU box, or type the command.',
+        'Speech-to-text is offline. Allow the browser microphone, or type the command.',
     });
     return;
   }
   try {
-    const payload = await readJsonBody(req, 8 * 1024 * 1024);
-    const data = await inferenceJson(
-      '/asr',
+    const data = await transcribeWithHostedAsr(
       {
         audio: payload.audio,
         mimeType: payload.mimeType || 'audio/webm',
-        model: payload.model || QWEN_ASR_MODEL,
       },
       { fetchImpl },
     );
-    if (typeof data.text !== 'string' || !data.text.trim()) {
-      sendJson(res, 502, { error: 'ASR returned no transcript' });
-      return;
-    }
-    sendJson(res, 200, { text: data.text.trim(), model: QWEN_ASR_MODEL });
+    sendJson(res, 200, { text: data.text, model: data.model });
   } catch (error) {
     sendJson(res, 502, { error: error?.message || 'ASR failed' });
   }
