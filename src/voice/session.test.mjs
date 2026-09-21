@@ -361,12 +361,12 @@ test('typed command form starts an idle session then sends the utterance', async
     });
     assert.match(
       ui.helpDetail.textContent,
-      /Hold the mic and speak, then release/,
+      /Click the mic and speak, or type a command/,
     );
     const submit = new Event('submit', { cancelable: true });
     form.dispatchEvent(submit);
     await new Promise((done) => setTimeout(done, 0));
-    assert.equal(started, 1);
+    assert.equal(started, 0);
     assert.deepEqual(sent, ['Take me to the Pentagon']);
     assert.equal(input.value, '');
     lifetime.abort();

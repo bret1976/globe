@@ -385,7 +385,7 @@ test('holdTalk records the mic and releaseTalk transcribes it', async () => {
   }
 });
 
-test('start prefers MediaRecorder over SpeechRecognition when both exist', async () => {
+test('start uses SpeechRecognition when it exists even if MediaRecorder exists', async () => {
   const order = [];
   const previousRecognition = globalThis.SpeechRecognition;
   class FakeRecognition {
@@ -411,11 +411,64 @@ test('start prefers MediaRecorder over SpeechRecognition when both exist', async
     });
     await session.start();
     await new Promise((resolve) => setTimeout(resolve, 0));
-    assert.equal(order.includes('recognition-start'), false);
-    assert.ok(mic.recorders.length >= 1);
+    assert.equal(order[0], 'recognition-start');
+    assert.equal(mic.recorders.length, 0);
     session.stop();
   } finally {
     mic.restore();
     globalThis.SpeechRecognition = previousRecognition;
+  }
+});
+
+test('typed Pentagon still flies when getUserMedia is denied', async () => {
+  const mic = installMicRecorder();
+  Object.defineProperty(globalThis, 'navigator', {
+    configurable: true,
+    enumerable: true,
+    writable: true,
+    value: {
+      mediaDevices: {
+        async getUserMedia() {
+          throw new Error('NotAllowedError');
+        },
+      },
+    },
+  });
+  const actions = [];
+  const events = [];
+  const backend = backendFixture({
+    calls: [
+      {
+        name: 'fly_to_location',
+        arguments: { query: 'Pentagon', waitForArrival: true },
+      },
+    ],
+    speech: 'Flying to Pentagon.',
+    locationQuery: 'Pentagon',
+    place: { query: 'Pentagon' },
+    source: 'planner',
+  });
+  try {
+    const session = createVoiceSession({
+      runner: async (name, args) => {
+        actions.push([name, args]);
+        return { ok: true, name };
+      },
+      createAdapter: (hooks) =>
+        createSelfHostedSession({
+          ...hooks,
+          backend,
+        }),
+    });
+    session.subscribe((event) => events.push(event));
+    assert.equal(await session.sendText('Take me to the Pentagon'), true);
+    assert.deepEqual(
+      actions.map(([name]) => name),
+      ['fly_to_location'],
+    );
+    assert.ok(!events.some((event) => event.state === 'error'));
+    session.stop();
+  } finally {
+    mic.restore();
   }
 });

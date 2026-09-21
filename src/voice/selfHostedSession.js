@@ -474,12 +474,15 @@ export function createSelfHostedSession({
         micPromise = null;
         mediaStream = null;
         pendingStream = null;
-        emit({
-          type: 'state',
-          state: 'error',
-          detail: 'Microphone blocked — allow it, or type a command',
-        });
-        throw error;
+        // Never emit `error` here: that cancels an in-flight fly_to_location,
+        // including typed "Take me to the Pentagon".
+        if (!recognition && !busy) {
+          emit({
+            type: 'state',
+            state: 'listening',
+            detail: 'Microphone blocked — type a command',
+          });
+        }
       });
     return micPromise;
   }
@@ -542,14 +545,19 @@ export function createSelfHostedSession({
         state: 'connecting',
         detail: 'Starting voice',
       });
-      // Stay inside the click/pointer gesture: no await before mic/SR start.
-      const useRecorder = Boolean(options.pushToTalk) || canUseRecorder();
+      // Click-to-talk must start SpeechRecognition in this gesture.
+      // Do not call getUserMedia on that path — it fights Chrome SR and a
+      // denied mic was cancelling typed Pentagon flies.
       let listening = false;
-      if (useRecorder && globalThis.navigator?.mediaDevices?.getUserMedia) {
+      if (options.pushToTalk) {
         if (!consumePendingStream()) requestMic();
         listening = true;
       } else {
         listening = startBrowserRecognition();
+        if (!listening && canUseRecorder()) {
+          if (!consumePendingStream()) requestMic();
+          listening = true;
+        }
       }
       emit({
         type: 'state',

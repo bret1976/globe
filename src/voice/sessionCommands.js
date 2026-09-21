@@ -36,14 +36,13 @@ export function createVoiceCommands({
   if (ui.costValue) ui.costValue.hidden = !capabilities.costControls;
   if (!capabilities.costControls) {
     if (ui.helpDetail)
-      ui.helpDetail.textContent =
-        'Hold the mic and speak, then release — or type a command';
+      ui.helpDetail.textContent = 'Click the mic and speak, or type a command';
   }
   ui.button?.setAttribute?.(
     'aria-label',
-    'Voice control — hold and speak, then release',
+    'Voice control — click and speak, or hold to talk',
   );
-  if (ui.buttonLabel) ui.buttonLabel.textContent = 'HOLD';
+  if (ui.buttonLabel) ui.buttonLabel.textContent = 'TALK';
   if (!capabilities.pushToTalk) {
     ui.button.setAttribute('aria-label', 'Toggle voice control');
     if (ui.helpDetail) ui.helpDetail.textContent = 'Activate to toggle voice';
@@ -87,13 +86,12 @@ export function createVoiceCommands({
     } catch {
       /* capture is optional */
     }
-    // Ask for the mic in this user gesture. The hold timer is too late.
-    adapter.primeMic?.();
     clearHoldTimer();
     holdActive = false;
     holdTimer = setTimeout(() => {
       holdActive = true;
       skipClick = true;
+      adapter.primeMic?.();
       if (!session.isActive()) void session.start({ pushToTalk: true });
       adapter.holdTalk?.();
     }, HOLD_DELAY_MS);
@@ -112,15 +110,23 @@ export function createVoiceCommands({
       event.preventDefault();
       return;
     }
-    if (session.isActive()) session.stop();
-    else void session.start({ pushToTalk: false });
+    if (session.isActive()) {
+      if (typeof adapter.stopRecording === 'function') {
+        void Promise.resolve(adapter.stopRecording()).finally(() => {
+          if (session.isActive()) session.stop();
+        });
+      } else {
+        session.stop();
+      }
+      return;
+    }
+    void session.start({ pushToTalk: false });
   };
   const formHandler = (event) => {
     event.preventDefault();
     const text = String(ui.commandInput?.value || '').trim();
     if (!text) return;
     void (async () => {
-      if (!session.isActive()) await session.start({ pushToTalk: false });
       const sent = await session.sendText(text);
       if (sent && ui.commandInput) ui.commandInput.value = '';
     })();
