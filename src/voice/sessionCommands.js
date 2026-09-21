@@ -112,6 +112,12 @@ export function createVoiceCommands({
       return;
     }
     if (session.isActive()) {
+      if (capabilities.pushToTalk) {
+        // Self-hosted TALK: a later click means listen again, not hang up.
+        adapter.primeMic?.();
+        adapter.cancelHold?.();
+        return;
+      }
       if (typeof adapter.stopRecording === 'function') {
         void Promise.resolve(adapter.stopRecording()).finally(() => {
           if (session.isActive()) session.stop();

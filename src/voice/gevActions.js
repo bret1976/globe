@@ -2846,13 +2846,29 @@ async function flyToRequestedLocation(
         onCancel: () => settleArrival?.('cancelled'),
       }
     : {};
+  const arrivalWaitMs = Number(args.arrivalTimeoutMs);
+  const arrivalDeadlineMs =
+    Number.isFinite(arrivalWaitMs) && arrivalWaitMs >= 0
+      ? arrivalWaitMs
+      : 8_000;
   const afterArrival = async (result, label) => {
-    if (!arrival || result?.ok !== true) return result;
-    const status = await arrival;
+    if (!arrival || result?.ok !== true) {
+      settleArrival = null;
+      return result;
+    }
+    let timer = null;
+    const status = await Promise.race([
+      arrival,
+      new Promise((resolve) => {
+        timer = setTimeout(() => resolve('timeout'), arrivalDeadlineMs);
+      }),
+    ]);
+    if (timer) clearTimeout(timer);
     settleArrival = null;
-    return status === 'arrived'
-      ? { ...result, arrived: true }
-      : cancelled(label);
+    if (status === 'arrived') return { ...result, arrived: true };
+    // A missing Cesium complete must not pin the voice session busy forever.
+    if (status === 'timeout') return { ...result, arrived: false };
+    return cancelled(label);
   };
 
   if (locationId) {

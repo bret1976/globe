@@ -711,3 +711,159 @@ test('typed Pentagon still flies when getUserMedia is denied', async () => {
     mic.restore();
   }
 });
+
+test('a second command still runs after a blocking fly-to', async () => {
+  const actions = [];
+  const backend = backendFixture({
+    calls: [
+      {
+        name: 'fly_to_location',
+        arguments: { query: 'Pentagon', waitForArrival: true },
+      },
+    ],
+    speech: 'Flying to Pentagon.',
+    locationQuery: 'Pentagon',
+    place: { query: 'Pentagon' },
+    source: 'planner',
+  });
+  let actCount = 0;
+  const originalAct = backend.act;
+  backend.act = async (payload) => {
+    actCount += 1;
+    if (actCount === 1) return originalAct(payload);
+    return {
+      calls: [{ name: 'zoom_to_globe', arguments: {} }],
+      speech: 'Pulling back to the globe.',
+      source: 'planner',
+    };
+  };
+  const session = createVoiceSession({
+    runner: async (name, args) => {
+      actions.push([name, args]);
+      return { ok: true, name };
+    },
+    createAdapter: (hooks) =>
+      createSelfHostedSession({
+        ...hooks,
+        backend,
+      }),
+  });
+  await session.start();
+  assert.equal(await session.sendText('Take me to the Pentagon'), true);
+  assert.equal(await session.sendText('Zoom to globe'), true);
+  assert.deepEqual(
+    actions.map(([name]) => name),
+    ['fly_to_location', 'zoom_to_globe'],
+  );
+  session.stop();
+});
+
+test('a follow-up typed during the first fly is queued, not dropped', async () => {
+  const actions = [];
+  let releaseFly;
+  const flying = new Promise((resolve) => {
+    releaseFly = resolve;
+  });
+  const backend = backendFixture({
+    calls: [
+      {
+        name: 'fly_to_location',
+        arguments: { query: 'Pentagon', waitForArrival: true },
+      },
+    ],
+    speech: 'Flying to Pentagon.',
+    locationQuery: 'Pentagon',
+    place: { query: 'Pentagon' },
+    source: 'planner',
+  });
+  let actCount = 0;
+  const originalAct = backend.act;
+  backend.act = async (payload) => {
+    actCount += 1;
+    if (actCount === 1) return originalAct(payload);
+    return {
+      calls: [{ name: 'zoom_to_globe', arguments: {} }],
+      speech: 'Pulling back.',
+      source: 'planner',
+    };
+  };
+  const session = createVoiceSession({
+    runner: async (name, args) => {
+      if (name === 'fly_to_location') await flying;
+      actions.push([name, args]);
+      return { ok: true, name };
+    },
+    createAdapter: (hooks) =>
+      createSelfHostedSession({
+        ...hooks,
+        backend,
+      }),
+  });
+  await session.start();
+  const first = session.sendText('Take me to the Pentagon');
+  await Promise.resolve();
+  const second = session.sendText('Zoom to globe');
+  releaseFly();
+  assert.equal(await first, true);
+  assert.equal(await second, true);
+  assert.deepEqual(
+    actions.map(([name]) => name),
+    ['fly_to_location', 'zoom_to_globe'],
+  );
+  session.stop();
+});
+
+test('a hanging TTS reply still releases the session for the next command', async () => {
+  const actions = [];
+  const backend = backendFixture({
+    calls: [
+      {
+        name: 'fly_to_location',
+        arguments: { query: 'Pentagon', waitForArrival: true },
+      },
+    ],
+    speech: 'Flying to Pentagon.',
+    source: 'planner',
+  });
+  let speakCount = 0;
+  backend.speak = ({ text }) => {
+    speakCount += 1;
+    if (speakCount === 1) return new Promise(() => {});
+    return { text, audio: null };
+  };
+  let actCount = 0;
+  const originalAct = backend.act;
+  backend.act = async (payload) => {
+    actCount += 1;
+    if (actCount === 1) return originalAct(payload);
+    return {
+      calls: [{ name: 'zoom_to_globe', arguments: {} }],
+      speech: 'Pulling back.',
+      source: 'planner',
+    };
+  };
+  const session = createVoiceSession({
+    runner: async (name, args) => {
+      actions.push([name, args]);
+      return { ok: true, name };
+    },
+    createAdapter: (hooks) =>
+      createSelfHostedSession({
+        ...hooks,
+        backend,
+      }),
+  });
+  await session.start();
+  const started = Date.now();
+  assert.equal(await session.sendText('Take me to the Pentagon'), true);
+  assert.equal(await session.sendText('Zoom to globe'), true);
+  assert.ok(
+    Date.now() - started < 8_000,
+    'TTS must not pin the session past its speak deadline',
+  );
+  assert.deepEqual(
+    actions.map(([name]) => name),
+    ['fly_to_location', 'zoom_to_globe'],
+  );
+  session.stop();
+});

@@ -53,6 +53,7 @@ export function createSelfHostedSession({
   let recordWatchTimer = null;
   let recordStartedAt = 0;
   let flushing = false;
+  let queuedUtterance = '';
   let status = {
     asr: false,
     llm: true,
@@ -100,6 +101,18 @@ export function createSelfHostedSession({
     }
   }
 
+  function withDeadline(promise, ms) {
+    let timer = null;
+    return Promise.race([
+      Promise.resolve(promise).finally(() => {
+        if (timer) clearTimeout(timer);
+      }),
+      new Promise((resolve) => {
+        timer = setTimeout(resolve, ms);
+      }),
+    ]);
+  }
+
   async function playSpeech(text, audio) {
     if (audio && globalThis.AudioContext) {
       // Keep TTS off the mic analyser context. Sharing that context after
@@ -111,10 +124,13 @@ export function createSelfHostedSession({
         const source = playback.createBufferSource();
         source.buffer = buffer;
         source.connect(playback.destination);
-        await new Promise((resolve) => {
-          source.onended = resolve;
-          source.start();
-        });
+        await withDeadline(
+          new Promise((resolve) => {
+            source.onended = resolve;
+            source.start();
+          }),
+          8_000,
+        );
       } finally {
         void playback.close?.();
       }
@@ -122,17 +138,20 @@ export function createSelfHostedSession({
     }
     const synth = globalThis.speechSynthesis;
     if (!synth || !text) return;
-    await new Promise((resolve) => {
-      const utterance = new SpeechSynthesisUtterance(text);
-      const voice = pickHumanSpeechVoice(synth.getVoices?.() || []);
-      if (voice) utterance.voice = voice;
-      utterance.rate = 0.96;
-      utterance.pitch = 1.02;
-      utterance.onend = resolve;
-      utterance.onerror = resolve;
-      synth.cancel();
-      synth.speak(utterance);
-    });
+    await withDeadline(
+      new Promise((resolve) => {
+        const utterance = new SpeechSynthesisUtterance(text);
+        const voice = pickHumanSpeechVoice(synth.getVoices?.() || []);
+        if (voice) utterance.voice = voice;
+        utterance.rate = 0.96;
+        utterance.pitch = 1.02;
+        utterance.onend = resolve;
+        utterance.onerror = resolve;
+        synth.cancel();
+        synth.speak(utterance);
+      }),
+      8_000,
+    );
   }
 
   function clearSilenceTimer() {
@@ -144,7 +163,11 @@ export function createSelfHostedSession({
 
   function queueTranscript(text, isFinal) {
     const spoken = String(text || '').trim();
-    if (!spoken || busy) return;
+    if (!spoken) return;
+    if (busy) {
+      if (isFinal) queuedUtterance = spoken;
+      return;
+    }
     pendingTranscript = spoken;
     emit({ type: 'state', state: 'listening', detail: spoken });
     clearSilenceTimer();
@@ -167,10 +190,21 @@ export function createSelfHostedSession({
 
   async function handleUtterance(text) {
     const spoken = String(text || '').trim();
-    if (!spoken || busy) return;
+    if (!spoken) return;
+    if (busy) {
+      queuedUtterance = spoken;
+      return;
+    }
     busy = true;
+    queuedUtterance = '';
     clearSilenceTimer();
     pendingTranscript = '';
+    try {
+      globalThis.speechSynthesis?.cancel?.();
+    } catch {
+      /* Chrome cancel is best-effort */
+    }
+    speaking = null;
     stopBrowserRecognition();
     stopRecorder();
     stopVisualizer();
@@ -199,19 +233,32 @@ export function createSelfHostedSession({
         final: true,
       });
       emit({ type: 'state', state: 'speaking', detail: speech });
-      try {
-        const spokenAudio = await backend
-          .speak({ text: speech, signal })
-          .catch(() => ({ text: speech, audio: null }));
-        speaking = playSpeech(spokenAudio.text || speech, spokenAudio.audio);
-        await speaking;
-      } finally {
-        speaking = null;
-      }
+      const spokenAudio = await withDeadline(
+        Promise.resolve(backend.speak({ text: speech, signal })).catch(() => ({
+          text: speech,
+          audio: null,
+        })),
+        5_000,
+      );
+      const reply = spokenAudio?.text || speech;
+      speaking = playSpeech(reply, spokenAudio?.audio);
       emit({ type: 'completion', status: 'completed' });
     } finally {
       busy = false;
-      if (live) resumeListening();
+      const next = queuedUtterance;
+      queuedUtterance = '';
+      if (next) {
+        speaking = null;
+        void handleUtterance(next);
+      } else if (live) {
+        void Promise.resolve(speaking)
+          .catch(() => {})
+          .finally(() => {
+            speaking = null;
+            if (live && !busy) resumeListening();
+          });
+        if (!speaking) resumeListening();
+      }
     }
   }
 
@@ -797,6 +844,7 @@ export function createSelfHostedSession({
       lastSpeechAt = 0;
       listenArmedAt = 0;
       flushing = false;
+      queuedUtterance = '';
       pendingTranscript = '';
       clearSilenceTimer();
       clearRecordWatch();

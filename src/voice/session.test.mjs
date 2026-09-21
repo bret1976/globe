@@ -538,6 +538,72 @@ test('a short mic click starts listening and the leftover click does not stop it
   }
 });
 
+test('a later mic click keeps voice on so the next command can be spoken', async () => {
+  const previous = globalThis.window;
+  globalThis.window = {};
+  try {
+    const button = new EventTarget();
+    button.setAttribute = () => {};
+    const primed = [];
+    let stopped = 0;
+    const ui = {
+      button,
+      root: { dataset: {}, classList: { remove() {} }, remove() {} },
+      status: {},
+      detail: {},
+      tierButton: {},
+      costValue: {},
+      helpDetail: {},
+    };
+    const lifetime = new AbortController();
+    createVoiceCommands({
+      runner: async () => ({ ok: true }),
+      signal: lifetime.signal,
+      createControl: () => ui,
+      createSession({ emit }) {
+        return {
+          capabilities: { costControls: false, pushToTalk: true },
+          primeMic() {
+            primed.push('prime');
+            return true;
+          },
+          cancelHold() {
+            primed.push('cancel');
+            return true;
+          },
+          ignoreButtonClick() {
+            return false;
+          },
+          async start() {
+            emit({ type: 'state', state: 'listening', detail: 'Ready' });
+          },
+          stop() {
+            stopped += 1;
+            emit({ type: 'state', state: 'idle' });
+          },
+          sendText() {},
+          sendMapEvent() {},
+        };
+      },
+    });
+    dispatchPointer(button, 'pointerdown');
+    dispatchPointer(button, 'pointerup');
+    button.dispatchEvent(
+      new Event('click', { bubbles: true, cancelable: true }),
+    );
+    await new Promise((done) => setTimeout(done, 0));
+    button.dispatchEvent(
+      new Event('click', { bubbles: true, cancelable: true }),
+    );
+    await new Promise((done) => setTimeout(done, 0));
+    assert.ok(primed.includes('prime'));
+    assert.equal(stopped, 0);
+    lifetime.abort();
+  } finally {
+    globalThis.window = previous;
+  }
+});
+
 test('late actions cannot run after stop and failed startup closes the adapter', async () => {
   let calls = 0;
   const f = fixture(async () => {
