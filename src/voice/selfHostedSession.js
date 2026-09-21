@@ -4,15 +4,11 @@ import {
   isPushToTalkKey,
 } from './realtimeInputPolicy.js';
 import { pickHumanSpeechVoice } from './speechVoices.js';
+import { OPEN_MIC_CONSTRAINTS, pickPreferredMicId } from './micDevices.js';
 
-const MIC_SPEECH_THRESHOLD = 0.018;
-
-const RECOVERABLE_RECOGNITION_ERRORS = new Set([
-  'no-speech',
-  'aborted',
-  'network',
-  'audio-capture',
-]);
+const MIC_SPEECH_THRESHOLD = 0.012;
+const OPEN_MIC_MAX_MS = 4_000;
+const MIN_RECORDING_BYTES = 250;
 
 /**
  * Mic → browser speech or hosted ASR → planner → gevActions → speak.
@@ -47,6 +43,8 @@ export function createSelfHostedSession({
   let heardSpeech = false;
   let lastSpeechAt = 0;
   let preferRecorder = false;
+  let recordWatchTimer = null;
+  let recordStartedAt = 0;
   let status = {
     asr: false,
     llm: true,
@@ -206,7 +204,7 @@ export function createSelfHostedSession({
             ? 'Listening — speak now'
             : 'Listening — speak now, or hold the mic',
         });
-        if (mediaStream) startRecorder();
+        if (mediaStream || preferRecorder) startRecorder();
         else startBrowserRecognition();
       }
     }
@@ -295,7 +293,26 @@ export function createSelfHostedSession({
     return '';
   }
 
+  function clearRecordWatch() {
+    if (recordWatchTimer) {
+      clearTimeout(recordWatchTimer);
+      recordWatchTimer = null;
+    }
+    recordStartedAt = 0;
+  }
+
+  function armRecordWatch() {
+    clearRecordWatch();
+    recordStartedAt = Date.now();
+    recordWatchTimer = setTimeout(() => {
+      recordWatchTimer = null;
+      if (!live || busy || holding || !recorder) return;
+      if (chunks.length) void flushRecording();
+    }, OPEN_MIC_MAX_MS);
+  }
+
   function stopRecorder() {
+    clearRecordWatch();
     const current = recorder;
     recorder = null;
     try {
@@ -319,7 +336,8 @@ export function createSelfHostedSession({
       instance.ondataavailable = (event) => {
         if (event?.data?.size) chunks.push(event.data);
       };
-      instance.start(250);
+      instance.start(200);
+      armRecordWatch();
       return true;
     } catch {
       recorder = null;
@@ -346,11 +364,11 @@ export function createSelfHostedSession({
     const blob = new Blob(chunks, { type: current.mimeType || 'audio/webm' });
     chunks = [];
     recorder = null;
-    if (blob.size < 400) {
+    if (blob.size < MIN_RECORDING_BYTES) {
       emit({
         type: 'state',
         state: 'listening',
-        detail: 'Hold the mic and speak, then release',
+        detail: 'Listening — speak now',
       });
       if (live && !busy) startRecorder();
       return;
@@ -367,7 +385,17 @@ export function createSelfHostedSession({
         mimeType: blob.type || 'audio/webm',
         signal,
       });
-      await handleUtterance(result.text);
+      const spoken = String(result?.text || '').trim();
+      if (!spoken) {
+        emit({
+          type: 'state',
+          state: 'listening',
+          detail: 'Still listening — say a command',
+        });
+        if (live && !busy) startRecorder();
+        return;
+      }
+      await handleUtterance(spoken);
     } catch (error) {
       emit({
         type: 'state',
@@ -387,11 +415,13 @@ export function createSelfHostedSession({
   }
 
   function startVisualizer(stream) {
+    void audioContext?.resume?.();
     if (!audioContext || !stream) return;
     try {
       const source = audioContext.createMediaStreamSource(stream);
       analyser = audioContext.createAnalyser();
-      analyser.fftSize = 256;
+      analyser.fftSize = 512;
+      analyser.smoothingTimeConstant = 0.35;
       source.connect(analyser);
     } catch {
       analyser = null;
@@ -407,9 +437,17 @@ export function createSelfHostedSession({
         peak = Math.max(peak, Math.abs(sample - 128) / 128);
       }
       if (peak > MIC_SPEECH_THRESHOLD) {
+        const firstHear = !heardSpeech;
         heardSpeech = true;
         lastSpeechAt = Date.now();
         if (ui?.root) ui.root.dataset.speaker = 'user';
+        if (firstHear && !busy && !holding) {
+          emit({
+            type: 'state',
+            state: 'listening',
+            detail: 'Hearing you — keep talking',
+          });
+        }
       } else if (
         heardSpeech &&
         !holding &&
@@ -465,6 +503,28 @@ export function createSelfHostedSession({
     return false;
   }
 
+  async function adoptPreferredMic(stream) {
+    let devices = [];
+    try {
+      devices =
+        (await globalThis.navigator?.mediaDevices?.enumerateDevices?.()) || [];
+    } catch {
+      devices = [];
+    }
+    const currentId = stream.getAudioTracks?.()[0]?.getSettings?.().deviceId || '';
+    const preferredId = pickPreferredMicId(devices, currentId);
+    if (!preferredId) return stream;
+    try {
+      const next = await globalThis.navigator.mediaDevices.getUserMedia({
+        audio: { ...OPEN_MIC_CONSTRAINTS, deviceId: { exact: preferredId } },
+      });
+      stream.getTracks?.().forEach((track) => track.stop());
+      return next;
+    } catch {
+      return stream;
+    }
+  }
+
   function requestMic() {
     if (mediaStream || pendingStream) {
       if (live) consumePendingStream({ record: holding || preferRecorder });
@@ -480,14 +540,8 @@ export function createSelfHostedSession({
       return Promise.resolve(null);
     }
     micPromise = globalThis.navigator.mediaDevices
-      .getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: false,
-          autoGainControl: true,
-          channelCount: 1,
-        },
-      })
+      .getUserMedia({ audio: { ...OPEN_MIC_CONSTRAINTS } })
+      .then((stream) => adoptPreferredMic(stream))
       .then((stream) => {
         if (live) attachMic(stream, { record: holding || preferRecorder });
         else pendingStream = stream;
@@ -531,14 +585,15 @@ export function createSelfHostedSession({
     capabilities: { costControls: false, pushToTalk: true },
     ignoreButtonClick: () => spaceHeld || holding,
     primeMic() {
-      // Unlock playback only. Grabbing getUserMedia here steals the device
-      // from Chrome speech recognition, so click-to-talk hears nothing.
       unlockPlayback();
+      preferRecorder = canUseRecorder();
+      if (preferRecorder) requestMic();
       return true;
     },
     holdTalk() {
       holding = true;
       live = true;
+      preferRecorder = canUseRecorder() || preferRecorder;
       unlockPlayback();
       if (!consumePendingStream({ record: true })) requestMic();
       emit({
@@ -550,6 +605,12 @@ export function createSelfHostedSession({
     },
     cancelHold() {
       holding = false;
+      // A short click is open-mic. Keep the real recorder; do not fall
+      // back to Chrome speech recognition, which misses desk mics.
+      if (preferRecorder || mediaStream) {
+        if (live && !busy && !recorder) startRecorder();
+        return true;
+      }
       stopRecorder();
       chunks = [];
       if (live && !busy) startBrowserRecognition();
@@ -570,17 +631,22 @@ export function createSelfHostedSession({
     async start(options = {}) {
       live = true;
       unlockPlayback();
+      preferRecorder = canUseRecorder() || Boolean(options.pushToTalk);
       emit({
         type: 'state',
         state: 'connecting',
         detail: 'Starting voice',
       });
-      // Start Chrome speech in this gesture, and also open the mic for
-      // hosted ASR. A denied mic must not emit error (that cancelled flies).
-      const listening = startBrowserRecognition();
-      if (!listening && (canUseRecorder() || options.pushToTalk)) {
-        preferRecorder = true;
-        if (!consumePendingStream({ record: true })) requestMic();
+      // Hosted Gemini ASR on the real getUserMedia stream is the open-mic
+      // path. Chrome SpeechRecognition is a fallback when the browser
+      // cannot record, because it often never sees a connected desk mic.
+      let listening = false;
+      if (preferRecorder) {
+        listening = consumePendingStream({ record: true });
+        if (!listening) requestMic();
+        listening = true;
+      } else {
+        listening = startBrowserRecognition();
       }
       emit({
         type: 'state',
@@ -612,6 +678,7 @@ export function createSelfHostedSession({
       heardSpeech = false;
       pendingTranscript = '';
       clearSilenceTimer();
+      clearRecordWatch();
       stopBrowserRecognition();
       stopRecorder();
       stopVisualizer();

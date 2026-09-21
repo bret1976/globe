@@ -87,7 +87,7 @@ export function createVoiceCommands({
     adapter.primeMic?.();
     if (!session.isActive()) void session.start({ pushToTalk: false });
     if (holdTimer) clearTimeout(holdTimer);
-    // Delay the recorder so a normal click never steals Chrome's mic.
+    // Delay hold-to-talk so a leftover click does not flush the open mic.
     holdTimer = setTimeout(() => {
       holdTimer = null;
       adapter.holdTalk?.();
