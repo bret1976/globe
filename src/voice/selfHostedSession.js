@@ -5,9 +5,14 @@ import {
 } from './realtimeInputPolicy.js';
 import { pickHumanSpeechVoice } from './speechVoices.js';
 import { OPEN_MIC_CONSTRAINTS, pickPreferredMicId } from './micDevices.js';
+import {
+  OPEN_MIC_MAX_MS,
+  nextListenArmTime,
+  shouldCommitOpenMic,
+  shouldWatchdogFlush,
+} from './openMicPolicy.js';
 
 const MIC_SPEECH_THRESHOLD = 0.012;
-const OPEN_MIC_MAX_MS = 4_000;
 const MIN_RECORDING_BYTES = 250;
 
 /**
@@ -39,12 +44,15 @@ export function createSelfHostedSession({
   let silenceTimer = null;
   let audioContext = null;
   let analyser = null;
+  let visualizerSource = null;
   let visualizerFrame = null;
   let heardSpeech = false;
   let lastSpeechAt = 0;
+  let listenArmedAt = 0;
   let preferRecorder = false;
   let recordWatchTimer = null;
   let recordStartedAt = 0;
+  let flushing = false;
   let status = {
     asr: false,
     llm: true,
@@ -94,16 +102,22 @@ export function createSelfHostedSession({
 
   async function playSpeech(text, audio) {
     if (audio && globalThis.AudioContext) {
-      const context = audioContext || new AudioContext();
-      await context.resume?.();
-      const buffer = await context.decodeAudioData(audio.slice(0));
-      const source = context.createBufferSource();
-      source.buffer = buffer;
-      source.connect(context.destination);
-      await new Promise((resolve) => {
-        source.onended = resolve;
-        source.start();
-      });
+      // Keep TTS off the mic analyser context. Sharing that context after
+      // the first reply left the open-mic meter dead.
+      const playback = new AudioContext();
+      try {
+        await playback.resume?.();
+        const buffer = await playback.decodeAudioData(audio.slice(0));
+        const source = playback.createBufferSource();
+        source.buffer = buffer;
+        source.connect(playback.destination);
+        await new Promise((resolve) => {
+          source.onended = resolve;
+          source.start();
+        });
+      } finally {
+        void playback.close?.();
+      }
       return;
     }
     const synth = globalThis.speechSynthesis;
@@ -159,6 +173,7 @@ export function createSelfHostedSession({
     pendingTranscript = '';
     stopBrowserRecognition();
     stopRecorder();
+    stopVisualizer();
     try {
       emit({ type: 'transcript', role: 'user', text: spoken, final: true });
       emit({ type: 'state', state: 'executing', detail: spoken });
@@ -196,17 +211,7 @@ export function createSelfHostedSession({
       emit({ type: 'completion', status: 'completed' });
     } finally {
       busy = false;
-      if (live) {
-        emit({
-          type: 'state',
-          state: 'listening',
-          detail: holding
-            ? 'Listening — speak now'
-            : 'Listening — speak now, or hold the mic',
-        });
-        if (mediaStream || preferRecorder) startRecorder();
-        else startBrowserRecognition();
-      }
+      if (live) resumeListening();
     }
   }
 
@@ -306,8 +311,22 @@ export function createSelfHostedSession({
     recordStartedAt = Date.now();
     recordWatchTimer = setTimeout(() => {
       recordWatchTimer = null;
-      if (!live || busy || holding || !recorder) return;
-      if (chunks.length) void flushRecording();
+      if (!live || !recorder) return;
+      if (
+        shouldWatchdogFlush({
+          heardSpeech,
+          holding,
+          busy,
+          flushing,
+          chunkCount: chunks.length,
+        })
+      ) {
+        void flushRecording();
+        return;
+      }
+      // Restart a fresh clip so a silent listen cannot grow forever,
+      // but never send that silence to ASR.
+      if (live && !busy && !holding && !flushing) startRecorder();
     }, OPEN_MIC_MAX_MS);
   }
 
@@ -322,6 +341,18 @@ export function createSelfHostedSession({
     }
   }
 
+  function bindRecorder(instance) {
+    instance.ondataavailable = (event) => {
+      if (event?.data?.size) chunks.push(event.data);
+    };
+    instance.start(200);
+    if (instance.state === 'inactive') {
+      throw new Error('MediaRecorder stayed inactive');
+    }
+    recorder = instance;
+    armRecordWatch();
+  }
+
   function startRecorder() {
     const Ctor = globalThis.MediaRecorder;
     if (!Ctor || !mediaStream || !live || busy) return false;
@@ -329,26 +360,37 @@ export function createSelfHostedSession({
     chunks = [];
     try {
       const mimeType = recorderMime();
-      const instance = mimeType
-        ? new Ctor(mediaStream, { mimeType })
-        : new Ctor(mediaStream);
-      recorder = instance;
-      instance.ondataavailable = (event) => {
-        if (event?.data?.size) chunks.push(event.data);
-      };
-      instance.start(200);
-      armRecordWatch();
+      bindRecorder(
+        mimeType ? new Ctor(mediaStream, { mimeType }) : new Ctor(mediaStream),
+      );
       return true;
     } catch {
       recorder = null;
+      // Chrome can reject an immediate restart on the same stream.
+      setTimeout(() => {
+        if (!live || busy || recorder || !mediaStream) return;
+        chunks = [];
+        try {
+          const mimeType = recorderMime();
+          bindRecorder(
+            mimeType
+              ? new Ctor(mediaStream, { mimeType })
+              : new Ctor(mediaStream),
+          );
+        } catch {
+          recorder = null;
+        }
+      }, 120);
       return false;
     }
   }
 
   async function flushRecording() {
-    if (busy || pendingTranscript) return;
+    if (busy || flushing || pendingTranscript) return;
     const current = recorder;
     if (!current || !chunks.length) return;
+    flushing = true;
+    let resumeAfter = false;
     const finished = new Promise((resolve) => {
       current.onstop = resolve;
     });
@@ -357,23 +399,23 @@ export function createSelfHostedSession({
     } catch {
       /* already stopped */
     }
-    await Promise.race([
-      finished,
-      new Promise((resolve) => setTimeout(resolve, 3_000)),
-    ]);
-    const blob = new Blob(chunks, { type: current.mimeType || 'audio/webm' });
-    chunks = [];
-    recorder = null;
-    if (blob.size < MIN_RECORDING_BYTES) {
-      emit({
-        type: 'state',
-        state: 'listening',
-        detail: 'Listening — speak now',
-      });
-      if (live && !busy) startRecorder();
-      return;
-    }
     try {
+      await Promise.race([
+        finished,
+        new Promise((resolve) => setTimeout(resolve, 3_000)),
+      ]);
+      const blob = new Blob(chunks, { type: current.mimeType || 'audio/webm' });
+      chunks = [];
+      recorder = null;
+      if (blob.size < MIN_RECORDING_BYTES) {
+        emit({
+          type: 'state',
+          state: 'listening',
+          detail: 'Listening — speak now',
+        });
+        resumeAfter = live && !busy;
+        return;
+      }
       emit({
         type: 'state',
         state: 'executing',
@@ -392,7 +434,7 @@ export function createSelfHostedSession({
           state: 'listening',
           detail: 'Still listening — say a command',
         });
-        if (live && !busy) startRecorder();
+        resumeAfter = live && !busy;
         return;
       }
       await handleUtterance(spoken);
@@ -403,27 +445,88 @@ export function createSelfHostedSession({
         detail:
           error?.message || 'Could not hear that — speak again or type it',
       });
-      if (live && !busy) startRecorder();
+      resumeAfter = live && !busy;
+    } finally {
+      flushing = false;
+      if (resumeAfter) resumeListening();
     }
+  }
+
+  function micTracksLive() {
+    if (!mediaStream) return false;
+    const tracks =
+      mediaStream.getAudioTracks?.() || mediaStream.getTracks?.() || [];
+    if (!tracks.length) return true;
+    return tracks.some((track) => track.readyState !== 'ended');
+  }
+
+  function enableMicTracks() {
+    const tracks =
+      mediaStream?.getAudioTracks?.() || mediaStream?.getTracks?.() || [];
+    for (const track of tracks) {
+      try {
+        track.enabled = true;
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+
+  function resumeListening() {
+    if (!live || busy) return;
+    heardSpeech = false;
+    lastSpeechAt = 0;
+    flushing = false;
+    listenArmedAt = nextListenArmTime(Date.now());
+    enableMicTracks();
+    void audioContext?.resume?.();
+    emit({
+      type: 'state',
+      state: 'listening',
+      detail: 'Listening — speak now',
+    });
+    if (preferRecorder || mediaStream) {
+      if (mediaStream && micTracksLive()) {
+        startVisualizer(mediaStream);
+        startRecorder();
+        return;
+      }
+      mediaStream = null;
+      if (pendingStream) attachMic(pendingStream, { record: true });
+      else {
+        micPromise = null;
+        requestMic();
+      }
+      return;
+    }
+    startBrowserRecognition();
   }
 
   function stopVisualizer() {
     if (visualizerFrame) cancelAnimationFrame(visualizerFrame);
     visualizerFrame = null;
     analyser = null;
+    try {
+      visualizerSource?.disconnect?.();
+    } catch {
+      /* already disconnected */
+    }
+    visualizerSource = null;
     if (ui?.root) ui.root.dataset.speaker = 'idle';
   }
 
   function startVisualizer(stream) {
     void audioContext?.resume?.();
     if (!audioContext || !stream) return;
+    stopVisualizer();
     try {
-      const source = audioContext.createMediaStreamSource(stream);
+      visualizerSource = audioContext.createMediaStreamSource(stream);
       analyser = audioContext.createAnalyser();
       analyser.fftSize = 512;
       analyser.smoothingTimeConstant = 0.35;
-      source.connect(analyser);
+      visualizerSource.connect(analyser);
     } catch {
+      visualizerSource = null;
       analyser = null;
       return;
     }
@@ -436,12 +539,15 @@ export function createSelfHostedSession({
       for (const sample of wave) {
         peak = Math.max(peak, Math.abs(sample - 128) / 128);
       }
-      if (peak > MIC_SPEECH_THRESHOLD) {
+      const now = Date.now();
+      const canHear =
+        !busy && !flushing && !holding && !speaking && now >= listenArmedAt;
+      if (canHear && peak > MIC_SPEECH_THRESHOLD) {
         const firstHear = !heardSpeech;
         heardSpeech = true;
-        lastSpeechAt = Date.now();
+        lastSpeechAt = now;
         if (ui?.root) ui.root.dataset.speaker = 'user';
-        if (firstHear && !busy && !holding) {
+        if (firstHear) {
           emit({
             type: 'state',
             state: 'listening',
@@ -449,15 +555,23 @@ export function createSelfHostedSession({
           });
         }
       } else if (
-        heardSpeech &&
-        !holding &&
-        Date.now() - lastSpeechAt > silenceMs
+        shouldCommitOpenMic({
+          heardSpeech,
+          holding,
+          busy,
+          flushing,
+          lastSpeechAt,
+          now,
+          silenceMs,
+          recordStartedAt,
+          listenArmedAt,
+        })
       ) {
         heardSpeech = false;
         if (ui?.root) ui.root.dataset.speaker = 'idle';
-        if (!pendingTranscript && !busy) void flushRecording();
+        if (!pendingTranscript) void flushRecording();
       }
-      if (bars?.length) {
+      if (bars?.length && canHear) {
         bars.forEach((bar, index) => {
           const level = Math.min(1, peak * (1.2 + (index % 5) * 0.15));
           bar.style.setProperty('--audio-level', String(level));
@@ -630,6 +744,10 @@ export function createSelfHostedSession({
     },
     async start(options = {}) {
       live = true;
+      heardSpeech = false;
+      lastSpeechAt = 0;
+      listenArmedAt = 0;
+      flushing = false;
       unlockPlayback();
       preferRecorder = canUseRecorder() || Boolean(options.pushToTalk);
       emit({
@@ -676,6 +794,9 @@ export function createSelfHostedSession({
       holding = false;
       preferRecorder = false;
       heardSpeech = false;
+      lastSpeechAt = 0;
+      listenArmedAt = 0;
+      flushing = false;
       pendingTranscript = '';
       clearSilenceTimer();
       clearRecordWatch();
