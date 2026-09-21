@@ -68,17 +68,10 @@ export function createVoiceCommands({
   const annotationUnsubscribe = annotations?.onOutlineEvent?.((event) => {
     session.sendMapEvent({ type: 'map_annotation_outline', ...event });
   });
-  const HOLD_DELAY_MS = 140;
-  let holdTimer = null;
-  let holdActive = false;
+  const COMMIT_HOLD_MS = 400;
+  let pressStartedAt = 0;
   let skipClick = false;
-  const clearHoldTimer = () => {
-    if (holdTimer) {
-      clearTimeout(holdTimer);
-      holdTimer = null;
-    }
-  };
-  const startHold = (event) => {
+  const startPress = (event) => {
     if (event.pointerType === 'mouse' && event.button !== 0) return;
     event.preventDefault();
     try {
@@ -86,23 +79,21 @@ export function createVoiceCommands({
     } catch {
       /* capture is optional */
     }
-    clearHoldTimer();
-    holdActive = false;
-    holdTimer = setTimeout(() => {
-      holdActive = true;
-      skipClick = true;
-      adapter.primeMic?.();
-      if (!session.isActive()) void session.start({ pushToTalk: true });
-      adapter.holdTalk?.();
-    }, HOLD_DELAY_MS);
-  };
-  const endHold = () => {
-    const wasHold = holdActive;
-    clearHoldTimer();
-    holdActive = false;
-    if (!wasHold) return;
+    pressStartedAt = Date.now();
     skipClick = true;
-    void adapter.releaseTalk?.();
+    // Start listening in the same gesture. The leftover click must not
+    // toggle the session back off — that was swallowing spoken commands.
+    adapter.primeMic?.();
+    if (!session.isActive()) void session.start({ pushToTalk: false });
+    adapter.holdTalk?.();
+  };
+  const endPress = () => {
+    if (!pressStartedAt) return;
+    const heldMs = Date.now() - pressStartedAt;
+    pressStartedAt = 0;
+    skipClick = true;
+    if (heldMs >= COMMIT_HOLD_MS) void adapter.releaseTalk?.();
+    else adapter.cancelHold?.();
   };
   const buttonHandler = (event) => {
     if (skipClick || adapter.ignoreButtonClick?.()) {
@@ -131,17 +122,17 @@ export function createVoiceCommands({
       if (sent && ui.commandInput) ui.commandInput.value = '';
     })();
   };
-  ui.button.addEventListener('pointerdown', startHold);
-  ui.button.addEventListener('pointerup', endHold);
-  ui.button.addEventListener('pointercancel', endHold);
+  ui.button.addEventListener('pointerdown', startPress);
+  ui.button.addEventListener('pointerup', endPress);
+  ui.button.addEventListener('pointercancel', endPress);
   ui.button.addEventListener('click', buttonHandler);
   ui.commandForm?.addEventListener?.('submit', formHandler);
   session.signal.addEventListener(
     'abort',
     () => {
-      ui.button.removeEventListener('pointerdown', startHold);
-      ui.button.removeEventListener('pointerup', endHold);
-      ui.button.removeEventListener('pointercancel', endHold);
+      ui.button.removeEventListener('pointerdown', startPress);
+      ui.button.removeEventListener('pointerup', endPress);
+      ui.button.removeEventListener('pointercancel', endPress);
       ui.button.removeEventListener('click', buttonHandler);
       ui.commandForm?.removeEventListener?.('submit', formHandler);
       annotationUnsubscribe?.();

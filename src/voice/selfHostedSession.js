@@ -231,13 +231,15 @@ export function createSelfHostedSession({
       queueTranscript(text, Boolean(last.isFinal));
     };
     instance.onerror = (event) => {
-      if (RECOVERABLE_RECOGNITION_ERRORS.has(event?.error)) return;
+      if (RECOVERABLE_RECOGNITION_ERRORS.has(event?.error)) {
+        if (canUseRecorder() && !mediaStream && !micPromise) requestMic();
+        return;
+      }
       if (event?.error === 'not-allowed') {
-        live = false;
         emit({
           type: 'state',
-          state: 'error',
-          detail: 'Microphone blocked — allow it, or type a command',
+          state: 'listening',
+          detail: 'Microphone blocked — type a command',
         });
         return;
       }
@@ -452,10 +454,10 @@ export function createSelfHostedSession({
     if (!globalThis.navigator?.mediaDevices?.getUserMedia) {
       emit({
         type: 'state',
-        state: 'error',
-        detail: 'This browser has no microphone access — type a command',
+        state: 'listening',
+        detail: 'Type a command — this browser has no microphone access',
       });
-      return Promise.reject(new Error('no-microphone'));
+      return Promise.resolve(null);
     }
     micPromise = globalThis.navigator.mediaDevices
       .getUserMedia({
@@ -516,13 +518,16 @@ export function createSelfHostedSession({
       holding = true;
       live = true;
       unlockPlayback();
-      stopBrowserRecognition();
       if (!consumePendingStream()) requestMic();
       emit({
         type: 'state',
         state: 'listening',
         detail: 'Listening — speak now',
       });
+      return true;
+    },
+    cancelHold() {
+      holding = false;
       return true;
     },
     async releaseTalk() {
@@ -545,19 +550,11 @@ export function createSelfHostedSession({
         state: 'connecting',
         detail: 'Starting voice',
       });
-      // Click-to-talk must start SpeechRecognition in this gesture.
-      // Do not call getUserMedia on that path — it fights Chrome SR and a
-      // denied mic was cancelling typed Pentagon flies.
-      let listening = false;
-      if (options.pushToTalk) {
+      // Start Chrome speech in this gesture, and also open the mic for
+      // hosted ASR. A denied mic must not emit error (that cancelled flies).
+      const listening = startBrowserRecognition();
+      if (canUseRecorder() || options.pushToTalk) {
         if (!consumePendingStream()) requestMic();
-        listening = true;
-      } else {
-        listening = startBrowserRecognition();
-        if (!listening && canUseRecorder()) {
-          if (!consumePendingStream()) requestMic();
-          listening = true;
-        }
       }
       emit({
         type: 'state',

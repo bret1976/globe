@@ -49,7 +49,7 @@ test('hosted ASR reads the Gemini transcript text', async () => {
     {
       env: { GEMINI_API_KEY: 'test-key' },
       fetchImpl: async (url, options) => {
-        assert.match(String(url), /gemini-2\.0-flash:generateContent/);
+        assert.match(String(url), /gemini-3\.6-flash:generateContent/);
         assert.equal(options.headers['x-goog-api-key'], 'test-key');
         const body = JSON.parse(options.body);
         assert.equal(

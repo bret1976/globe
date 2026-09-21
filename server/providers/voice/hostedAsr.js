@@ -3,7 +3,7 @@
  * Uses GEMINI_API_KEY already on Railway. Never logs the key.
  */
 
-const DEFAULT_GEMINI_ASR_MODEL = 'gemini-2.0-flash';
+const DEFAULT_GEMINI_ASR_MODEL = 'gemini-3.6-flash';
 
 export function hostedAsrConfigured(env = process.env) {
   return Boolean(String(env.GEMINI_API_KEY || '').trim());

@@ -385,7 +385,7 @@ test('holdTalk records the mic and releaseTalk transcribes it', async () => {
   }
 });
 
-test('start uses SpeechRecognition when it exists even if MediaRecorder exists', async () => {
+test('start uses SpeechRecognition and MediaRecorder together when both exist', async () => {
   const order = [];
   const previousRecognition = globalThis.SpeechRecognition;
   class FakeRecognition {
@@ -412,7 +412,7 @@ test('start uses SpeechRecognition when it exists even if MediaRecorder exists',
     await session.start();
     await new Promise((resolve) => setTimeout(resolve, 0));
     assert.equal(order[0], 'recognition-start');
-    assert.equal(mic.recorders.length, 0);
+    assert.ok(mic.recorders.length >= 1);
     session.stop();
   } finally {
     mic.restore();
