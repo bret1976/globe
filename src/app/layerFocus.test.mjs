@@ -100,3 +100,35 @@ test('flights enable waits for contacts before flying to the nearest', async () 
     clearCachedOperatorLocation();
   }
 });
+
+test('Live Vessels click flies to Long Beach before AIS rows arrive', async () => {
+  clearCachedOperatorLocation();
+  rememberOperatorLocation({
+    lat: 36.17,
+    lon: -115.14,
+    source: 'geolocation',
+  });
+  const viewer = mockViewer();
+  const result = await focusEnabledLayer({
+    viewer,
+    layerId: 'ais-live-vessels',
+    module: {
+      async update() {},
+      getDetectableObjects: () => [],
+      getAllPositions: () => [],
+      focusNearest: () => null,
+      getSelectedInfo: () => null,
+    },
+  });
+  assert.equal(result.ok, true);
+  assert.ok(viewer.flights.length >= 1, 'the click must move the camera');
+  const first = viewer.flights[0];
+  assert.equal(first.type, 'flyTo');
+  const cartesian = first.options.destination;
+  const carto = Cesium.Cartographic.fromCartesian(cartesian);
+  const lat = Cesium.Math.toDegrees(carto.latitude);
+  const lon = Cesium.Math.toDegrees(carto.longitude);
+  assert.ok(Math.abs(lat - 33.754) < 0.05, `expected Long Beach lat, got ${lat}`);
+  assert.ok(Math.abs(lon + 118.216) < 0.05, `expected Long Beach lon, got ${lon}`);
+  clearCachedOperatorLocation();
+});

@@ -233,15 +233,18 @@ export function createSelfHostedSession({
         final: true,
       });
       emit({ type: 'state', state: 'speaking', detail: speech });
-      const spokenAudio = await withDeadline(
-        Promise.resolve(backend.speak({ text: speech, signal })).catch(() => ({
-          text: speech,
-          audio: null,
-        })),
-        5_000,
-      );
-      const reply = spokenAudio?.text || speech;
-      speaking = playSpeech(reply, spokenAudio?.audio);
+      speaking = (async () => {
+        const spokenAudio = await withDeadline(
+          Promise.resolve(backend.speak({ text: speech, signal })).catch(
+            () => ({
+              text: speech,
+              audio: null,
+            }),
+          ),
+          5_000,
+        );
+        await playSpeech(spokenAudio?.text || speech, spokenAudio?.audio);
+      })().catch(() => {});
       emit({ type: 'completion', status: 'completed' });
     } finally {
       busy = false;
@@ -251,13 +254,16 @@ export function createSelfHostedSession({
         speaking = null;
         void handleUtterance(next);
       } else if (live) {
+        // Open the mic now. Waiting for TTS left LISTENING on a dead
+        // capture, so the second spoken command never reached ASR.
+        resumeListening();
         void Promise.resolve(speaking)
           .catch(() => {})
           .finally(() => {
             speaking = null;
-            if (live && !busy) resumeListening();
+            heardSpeech = false;
+            listenArmedAt = nextListenArmTime(Date.now());
           });
-        if (!speaking) resumeListening();
       }
     }
   }
@@ -535,7 +541,8 @@ export function createSelfHostedSession({
     if (preferRecorder || mediaStream) {
       if (mediaStream && micTracksLive()) {
         startVisualizer(mediaStream);
-        startRecorder();
+        if (startRecorder()) return;
+        if (startBrowserRecognition()) return;
         return;
       }
       mediaStream = null;

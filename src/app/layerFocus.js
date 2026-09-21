@@ -292,6 +292,21 @@ export async function focusEnabledLayer({
     layerId === 'flights' ||
     layerId === 'military' ||
     layerId === 'ais-live-vessels';
+  // Live Vessels has no inland data. Fly to the ships venue first so the
+  // click is never a 4–10s no-op while AIS is still downloading.
+  if (layerId === 'ais-live-vessels') {
+    const venue = layerLiveDestination(layerId);
+    if (venue) {
+      flyToLatLon(
+        viewer,
+        venue.lat,
+        venue.lon,
+        venue.heightM,
+        1.4,
+        venue.pitchDeg || layerFocusPitchDeg(layerId),
+      );
+    }
+  }
   if (needsLiveObjects) {
     try {
       await module.update?.();
@@ -300,6 +315,7 @@ export async function focusEnabledLayer({
     }
     await waitForLayerFocusObjects({
       collect: () => collectFocusObjects(module),
+      timeoutMs: layerId === 'ais-live-vessels' ? 1_200 : 4_500,
     });
   }
 

@@ -867,3 +867,44 @@ test('a hanging TTS reply still releases the session for the next command', asyn
   );
   session.stop();
 });
+
+test('open-mic is recording again before a hanging TTS reply ends', async () => {
+  const mic = installMicRecorder();
+  const backend = backendFixture({
+    calls: [
+      {
+        name: 'fly_to_location',
+        arguments: { query: 'Pentagon', waitForArrival: true },
+      },
+    ],
+    speech: 'Flying to Pentagon.',
+    source: 'planner',
+  });
+  backend.speak = () => new Promise(() => {});
+  try {
+    const session = createVoiceSession({
+      runner: async () => ({ ok: true }),
+      createAdapter: (hooks) =>
+        createSelfHostedSession({
+          ...hooks,
+          backend,
+        }),
+    });
+    session.adapter.primeMic();
+    await session.start();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const started = Date.now();
+    assert.equal(await session.sendText('Take me to the Pentagon'), true);
+    assert.ok(
+      Date.now() - started < 6_500,
+      'the first turn must not wait out a hung speak() before returning',
+    );
+    assert.ok(
+      mic.recorders.some((recorder) => recorder.state === 'recording'),
+      'the mic must be open for the next spoken command during TTS',
+    );
+    session.stop();
+  } finally {
+    mic.restore();
+  }
+});
