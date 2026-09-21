@@ -55,6 +55,7 @@
   "src/tooling/liveProviders.test.mjs",
   "src/data/adsbLolFallback.js",
   "src/data/aisStreamAdapter.js",
+  "src/data/aisStreamSentinels.test.mjs",
   "src/data/aisWatchdog.js",
   "server/providers/common/geo.js",
   "server/providers/common/rate-limit.js",

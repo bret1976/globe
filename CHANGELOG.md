@@ -1,5 +1,9 @@
 # Changelog
 
+- Port three upstream GodsEye fixes: macOS trackpad pinch-to-zoom (#284),
+  antimeridian traffic fetch bounds (#392), and AIS unavailable SOG/COG
+  sentinels treated as unknown (#649).
+
 - Default voice is self-hosted Qwen3-ASR-0.6B / Qwen3-8B / Kokoro-82M with a
   JS planner that always runs Take me to the Pentagon → nearest flight →
   enter cockpit. GPU inference is optional via `VOICE_INFERENCE_URL`.
