@@ -412,6 +412,9 @@ body:has(.data-toggle-row[data-layer-id='alpr-cameras'] .data-toggle-btn.active)
   font-size: 10px;
   letter-spacing: 0;
   cursor: pointer;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 #gev-voice-button:hover {

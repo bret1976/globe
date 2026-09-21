@@ -275,3 +275,147 @@ test('network speech errors keep the session listening', async () => {
     globalThis.SpeechRecognition = previousRecognition;
   }
 });
+
+function installMicRecorder({ chunkSize = 800 } = {}) {
+  const previous = {
+    MediaRecorder: globalThis.MediaRecorder,
+    SpeechRecognition: globalThis.SpeechRecognition,
+    webkitSpeechRecognition: globalThis.webkitSpeechRecognition,
+    navigator: Object.getOwnPropertyDescriptor(globalThis, 'navigator'),
+  };
+  const recorders = [];
+  class FakeRecorder {
+    constructor(stream, options) {
+      this.stream = stream;
+      this.mimeType = options?.mimeType || 'audio/webm';
+      this.state = 'inactive';
+      this.ondataavailable = null;
+      this.onstop = null;
+      recorders.push(this);
+    }
+    start() {
+      this.state = 'recording';
+      this.ondataavailable?.({
+        data: new Blob([new Uint8Array(chunkSize)], { type: this.mimeType }),
+      });
+    }
+    stop() {
+      this.state = 'inactive';
+      this.onstop?.();
+    }
+  }
+  FakeRecorder.isTypeSupported = () => true;
+  globalThis.MediaRecorder = FakeRecorder;
+  globalThis.SpeechRecognition = undefined;
+  globalThis.webkitSpeechRecognition = undefined;
+  Object.defineProperty(globalThis, 'navigator', {
+    configurable: true,
+    enumerable: true,
+    writable: true,
+    value: {
+      mediaDevices: {
+        async getUserMedia() {
+          return { getTracks: () => [{ stop() {} }] };
+        },
+      },
+    },
+  });
+  return {
+    recorders,
+    restore() {
+      globalThis.MediaRecorder = previous.MediaRecorder;
+      globalThis.SpeechRecognition = previous.SpeechRecognition;
+      globalThis.webkitSpeechRecognition = previous.webkitSpeechRecognition;
+      if (previous.navigator) {
+        Object.defineProperty(globalThis, 'navigator', previous.navigator);
+      } else {
+        delete globalThis.navigator;
+      }
+    },
+  };
+}
+
+test('holdTalk records the mic and releaseTalk transcribes it', async () => {
+  const mic = installMicRecorder();
+  const backend = backendFixture({
+    calls: [
+      {
+        name: 'fly_to_location',
+        arguments: { query: 'Pentagon', waitForArrival: true },
+      },
+    ],
+    speech: 'Flying to Pentagon.',
+    locationQuery: 'Pentagon',
+    place: { query: 'Pentagon' },
+    source: 'planner',
+  });
+  backend.transcribe = async () => {
+    backend.calls.push(['transcribe']);
+    return { text: 'Take me to the Pentagon' };
+  };
+  const actions = [];
+  try {
+    const session = createVoiceSession({
+      runner: async (name, args) => {
+        actions.push([name, args]);
+        return { ok: true, name };
+      },
+      createAdapter: (hooks) =>
+        createSelfHostedSession({
+          ...hooks,
+          backend,
+        }),
+    });
+    session.adapter.primeMic();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    session.adapter.holdTalk();
+    assert.equal(mic.recorders.length, 1);
+    assert.equal(mic.recorders[0].state, 'recording');
+    await session.adapter.releaseTalk();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.ok(backend.calls.some(([kind]) => kind === 'transcribe'));
+    assert.deepEqual(
+      actions.map(([name]) => name),
+      ['fly_to_location'],
+    );
+    session.stop();
+  } finally {
+    mic.restore();
+  }
+});
+
+test('start prefers MediaRecorder over SpeechRecognition when both exist', async () => {
+  const order = [];
+  const previousRecognition = globalThis.SpeechRecognition;
+  class FakeRecognition {
+    start() {
+      order.push('recognition-start');
+    }
+    stop() {}
+  }
+  const mic = installMicRecorder();
+  globalThis.SpeechRecognition = FakeRecognition;
+  try {
+    const session = createVoiceSession({
+      runner: async () => ({ ok: true }),
+      createAdapter: (hooks) =>
+        createSelfHostedSession({
+          ...hooks,
+          backend: backendFixture({
+            calls: [],
+            speech: 'Done.',
+            source: 'planner',
+          }),
+        }),
+    });
+    await session.start();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(order.includes('recognition-start'), false);
+    assert.ok(mic.recorders.length >= 1);
+    session.stop();
+  } finally {
+    mic.restore();
+    globalThis.SpeechRecognition = previousRecognition;
+  }
+});

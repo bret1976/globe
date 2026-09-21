@@ -37,12 +37,13 @@ export function createVoiceCommands({
   if (!capabilities.costControls) {
     if (ui.helpDetail)
       ui.helpDetail.textContent =
-        'Click the mic, allow it, then speak — or type a command';
+        'Hold the mic and speak, then release — or type a command';
   }
   ui.button?.setAttribute?.(
     'aria-label',
-    'Voice control — click to listen and run spoken commands',
+    'Voice control — hold and speak, then release',
   );
+  if (ui.buttonLabel) ui.buttonLabel.textContent = 'HOLD';
   if (!capabilities.pushToTalk) {
     ui.button.setAttribute('aria-label', 'Toggle voice control');
     if (ui.helpDetail) ui.helpDetail.textContent = 'Activate to toggle voice';
@@ -68,8 +69,49 @@ export function createVoiceCommands({
   const annotationUnsubscribe = annotations?.onOutlineEvent?.((event) => {
     session.sendMapEvent({ type: 'map_annotation_outline', ...event });
   });
-  const buttonHandler = () => {
-    if (adapter.ignoreButtonClick?.()) return;
+  const HOLD_DELAY_MS = 140;
+  let holdTimer = null;
+  let holdActive = false;
+  let skipClick = false;
+  const clearHoldTimer = () => {
+    if (holdTimer) {
+      clearTimeout(holdTimer);
+      holdTimer = null;
+    }
+  };
+  const startHold = (event) => {
+    if (event.pointerType === 'mouse' && event.button !== 0) return;
+    event.preventDefault();
+    try {
+      ui.button.setPointerCapture?.(event.pointerId);
+    } catch {
+      /* capture is optional */
+    }
+    // Ask for the mic in this user gesture. The hold timer is too late.
+    adapter.primeMic?.();
+    clearHoldTimer();
+    holdActive = false;
+    holdTimer = setTimeout(() => {
+      holdActive = true;
+      skipClick = true;
+      if (!session.isActive()) void session.start({ pushToTalk: true });
+      adapter.holdTalk?.();
+    }, HOLD_DELAY_MS);
+  };
+  const endHold = () => {
+    const wasHold = holdActive;
+    clearHoldTimer();
+    holdActive = false;
+    if (!wasHold) return;
+    skipClick = true;
+    void adapter.releaseTalk?.();
+  };
+  const buttonHandler = (event) => {
+    if (skipClick || adapter.ignoreButtonClick?.()) {
+      skipClick = false;
+      event.preventDefault();
+      return;
+    }
     if (session.isActive()) session.stop();
     else void session.start({ pushToTalk: false });
   };
@@ -83,11 +125,17 @@ export function createVoiceCommands({
       if (sent && ui.commandInput) ui.commandInput.value = '';
     })();
   };
+  ui.button.addEventListener('pointerdown', startHold);
+  ui.button.addEventListener('pointerup', endHold);
+  ui.button.addEventListener('pointercancel', endHold);
   ui.button.addEventListener('click', buttonHandler);
   ui.commandForm?.addEventListener?.('submit', formHandler);
   session.signal.addEventListener(
     'abort',
     () => {
+      ui.button.removeEventListener('pointerdown', startHold);
+      ui.button.removeEventListener('pointerup', endHold);
+      ui.button.removeEventListener('pointercancel', endHold);
       ui.button.removeEventListener('click', buttonHandler);
       ui.commandForm?.removeEventListener?.('submit', formHandler);
       annotationUnsubscribe?.();
