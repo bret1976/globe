@@ -100,3 +100,79 @@ test('flights enable waits for contacts before flying to the nearest', async () 
     clearCachedOperatorLocation();
   }
 });
+
+test('Live Vessels click flies to Long Beach before AIS rows arrive', async () => {
+  clearCachedOperatorLocation();
+  rememberOperatorLocation({
+    lat: 36.17,
+    lon: -115.14,
+    source: 'geolocation',
+  });
+  const viewer = mockViewer();
+  const result = await focusEnabledLayer({
+    viewer,
+    layerId: 'ais-live-vessels',
+    module: {
+      async update() {},
+      getDetectableObjects: () => [],
+      getAllPositions: () => [],
+      focusNearest: () => null,
+      getSelectedInfo: () => null,
+    },
+  });
+  assert.equal(result.ok, true);
+  assert.ok(viewer.flights.length >= 1, 'the click must move the camera');
+  const first = viewer.flights[0];
+  assert.equal(first.type, 'flyTo');
+  const cartesian = first.options.destination;
+  const carto = Cesium.Cartographic.fromCartesian(cartesian);
+  const lat = Cesium.Math.toDegrees(carto.latitude);
+  const lon = Cesium.Math.toDegrees(carto.longitude);
+  assert.ok(Math.abs(lat - 33.754) < 0.05, `expected Long Beach lat, got ${lat}`);
+  assert.ok(Math.abs(lon + 118.216) < 0.05, `expected Long Beach lon, got ${lon}`);
+  clearCachedOperatorLocation();
+});
+
+test('Live Vessels click then flies to a ship once AIS rows arrive', async () => {
+  clearCachedOperatorLocation();
+  const viewer = mockViewer();
+  let positions = [];
+  let selected = null;
+  const started = Date.now();
+  const result = await focusEnabledLayer({
+    viewer,
+    layerId: 'ais-live-vessels',
+    module: {
+      async update() {},
+      getDetectableObjects: () => [],
+      getAllPositions: () => positions,
+      focusNearest() {
+        selected = {
+          mmsi: '366999999',
+          latitude: 33.751,
+          longitude: -118.22,
+        };
+        return selected.mmsi;
+      },
+      getSelectedInfo: () => selected,
+    },
+  });
+  assert.ok(
+    Date.now() - started < 400,
+    'the click must return before AIS rows arrive',
+  );
+  assert.equal(result.ok, true);
+  assert.equal(result.mode, 'venue');
+  positions = [{ id: '366999999', latitude: 33.751, longitude: -118.22 }];
+  await new Promise((resolve) => setTimeout(resolve, 350));
+  assert.ok(selected?.mmsi, 'a live ship must be selected once rows arrive');
+  const last = viewer.flights.at(-1);
+  assert.equal(last.type, 'flyTo');
+  const carto = Cesium.Cartographic.fromCartesian(last.options.destination);
+  const lat = Cesium.Math.toDegrees(carto.latitude);
+  const lon = Cesium.Math.toDegrees(carto.longitude);
+  assert.ok(Math.abs(lat - 33.751) < 0.05, `expected ship lat, got ${lat}`);
+  assert.ok(Math.abs(lon + 118.22) < 0.05, `expected ship lon, got ${lon}`);
+  assert.ok(carto.height < 12_000, `expected ship height, got ${carto.height}`);
+  clearCachedOperatorLocation();
+});

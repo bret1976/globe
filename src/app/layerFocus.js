@@ -143,6 +143,8 @@ export function snapViewerToLayerFocus(
   return true;
 }
 
+let layerFocusEpoch = 0;
+
 function collectFocusObjects(module) {
   let detectable = [];
   try {
@@ -250,6 +252,33 @@ export function focusCctvLiveDestination(viewer, module) {
   return { ok: true, mode: 'venue', id: nearest?.id || null, destination: dest };
 }
 
+async function refineLiveVesselFocus({ viewer, module, venue, epoch }) {
+  if (!venue || !viewer?.camera) return;
+  await waitForLayerFocusObjects({
+    collect: () => collectFocusObjects(module),
+    timeoutMs: 8_000,
+  });
+  if (epoch !== layerFocusEpoch) return;
+  if (typeof module?.focusNearest !== 'function') return;
+  const id = module.focusNearest({
+    lat: venue.lat,
+    lon: venue.lon,
+  });
+  const selected = module.getSelectedInfo?.();
+  if (!selected || !isFiniteLatLon(selected.latitude, selected.longitude)) {
+    return;
+  }
+  flyToLatLon(
+    viewer,
+    selected.latitude,
+    selected.longitude,
+    8_000,
+    1.6,
+    layerFocusPitchDeg('ais-live-vessels'),
+  );
+  return id;
+}
+
 /**
  * After a Data Layers row enable, fly to that layer's live data immediately.
  * Cache-only location — never await the geolocation prompt.
@@ -259,6 +288,7 @@ export async function focusEnabledLayer({
   layerId,
   module,
 } = {}) {
+  const epoch = ++layerFocusEpoch;
   if (!viewer?.camera) return { ok: false, reason: 'no-viewer' };
   if (
     typeof document !== 'undefined' &&
@@ -288,10 +318,24 @@ export async function focusEnabledLayer({
     nearestCameraDistKm = nearest?.distKm ?? null;
   }
 
-  const needsLiveObjects =
-    layerId === 'flights' ||
-    layerId === 'military' ||
-    layerId === 'ais-live-vessels';
+  const needsLiveObjects = layerId === 'flights' || layerId === 'military';
+  // Live Vessels has no inland data. Fly to the ships venue immediately so
+  // the Data Layers click is never a 4–10s no-op while AIS downloads.
+  if (layerId === 'ais-live-vessels') {
+    const venue = layerLiveDestination(layerId);
+    if (venue) {
+      flyToLatLon(
+        viewer,
+        venue.lat,
+        venue.lon,
+        venue.heightM,
+        1.4,
+        venue.pitchDeg || layerFocusPitchDeg(layerId),
+      );
+    }
+    void refineLiveVesselFocus({ viewer, module, venue, epoch });
+    return { ok: true, mode: 'venue', location: venue };
+  }
   if (needsLiveObjects) {
     try {
       await module.update?.();
@@ -300,6 +344,7 @@ export async function focusEnabledLayer({
     }
     await waitForLayerFocusObjects({
       collect: () => collectFocusObjects(module),
+      timeoutMs: layerId === 'ais-live-vessels' ? 1_200 : 4_500,
     });
   }
 

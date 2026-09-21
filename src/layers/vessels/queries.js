@@ -354,10 +354,11 @@ export function createQueries({
         Number.isFinite(maxCount) && maxCount > 0 ? Math.floor(maxCount) : 800;
 
       for (const record of records) {
-        const visual = components.rendering.getVisual(record);
         if (result.length >= cap) break;
+        if (!Number.isFinite(record?.lat) || !Number.isFinite(record?.lon))
+          continue;
+        const visual = components.rendering.getVisual(record);
         const position = visual.billboard?.position || visual.position;
-        if (!position) continue;
         result.push({
           id: record.mmsi,
           label: record.name || record.mmsi,

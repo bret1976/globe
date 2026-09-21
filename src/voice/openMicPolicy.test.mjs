@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import {
   nextListenArmTime,
   shouldCommitOpenMic,
+  shouldHearOpenMic,
+  shouldRearmAfterReply,
   shouldWatchdogFlush,
 } from './openMicPolicy.js';
 
@@ -55,6 +57,35 @@ test('watchdog never flushes a silent restart after a reply', () => {
 
 test('next listen arm time sits after the reply so speaker echo is ignored', () => {
   assert.equal(nextListenArmTime(1000, 400), 1400);
+});
+
+test('open-mic can hear the next command while a reply is still speaking', () => {
+  assert.equal(
+    shouldHearOpenMic({
+      busy: false,
+      flushing: false,
+      holding: false,
+      now: 2000,
+      listenArmedAt: 1400,
+    }),
+    true,
+  );
+  assert.equal(
+    shouldHearOpenMic({
+      busy: false,
+      flushing: false,
+      holding: false,
+      now: 1300,
+      listenArmedAt: 1400,
+    }),
+    false,
+  );
+});
+
+test('ending TTS does not re-arm over speech the user already started', () => {
+  assert.equal(shouldRearmAfterReply({ heardSpeech: true }), false);
+  assert.equal(shouldRearmAfterReply({ heardSpeech: false }), true);
+  assert.equal(shouldRearmAfterReply({ busy: true, heardSpeech: false }), false);
 });
 
 test('busy or flushing turns never commit leftover energy', () => {

@@ -196,7 +196,12 @@ export function createLifecycle({
         state.records.byMmsi.has(pickedId),
       );
       restoreSpriteOrderOnEnable('ais', activeViewer);
-      return components.ingestion.loadLivePositions(activeViewer);
+      // Do not await the AIS snapshot. Data Layers stays aria-disabled
+      // for the whole download (up to 10s, then another update()), so
+      // Live Vessels felt like a dead click. Load in the background;
+      // focus flies to the ships venue immediately.
+      void components.ingestion.loadLivePositions(activeViewer);
+      return true;
     },
 
     disable() {
