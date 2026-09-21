@@ -115,14 +115,25 @@ test('CCTV in Washington DC flies to DC and opens a camera', () => {
   assert.match(plan.speech, /CCTV/);
 });
 
-test('Las Vegas Airport cockpit view still flies and enters cockpit', () => {
+test('Las Vegas Airport cockpit view flies there without entering cockpit', () => {
   const plan = planSelfHostedVoiceTurn(
     'Take me to Las Vegas Airport Cockpit View',
   );
   assert.equal(plan.calls[0].name, 'fly_to_location');
   assert.match(plan.calls[0].arguments.query, /Harry Reid|Las Vegas/);
-  assert.equal(plan.calls[1].name, 'control_cockpit');
-  assert.equal(plan.calls[1].arguments.action, 'enter');
+  assert.ok(
+    !plan.calls.some(
+      (call) =>
+        call.name === 'control_cockpit' && call.arguments.action === 'enter',
+    ),
+    'cockpit view is a camera framing, not Enter Cockpit',
+  );
+});
+
+test('explicit enter cockpit still enters', () => {
+  const plan = planSelfHostedVoiceTurn('Enter the cockpit');
+  assert.equal(plan.calls[0].name, 'control_cockpit');
+  assert.equal(plan.calls[0].arguments.action, 'enter');
 });
 
 test('Qwen tool-call payloads flatten into planner-shaped calls', () => {

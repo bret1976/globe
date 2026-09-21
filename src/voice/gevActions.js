@@ -35,6 +35,26 @@ import * as defaultAnnotationResolver from '../annotations/annotationResolver.js
 import { normalizeRadioCountryInput } from '../data/radioCountry.js';
 import { TR3B_CLASS } from '../data/tr3bRegistry.js';
 
+const VOICE_LAYER_FOCUS_IDS = new Set([
+  'satellites',
+  'military',
+  'ais-live-vessels',
+  'rocket-launches',
+  'earthquakes',
+  'local-firms',
+  'fire-perimeters',
+]);
+
+async function leaveCockpitForGlobeNav(styleManager) {
+  if (typeof document === 'undefined') return;
+  if (!document.body?.classList.contains('cockpit-mode')) return;
+  try {
+    await styleManager?.controlCockpit?.('exit', {});
+  } catch {
+    /* later fly/layer focus still has to run */
+  }
+}
+
 const ALLOWED_STYLES = new Set([
   'normal',
   'retro',
@@ -480,6 +500,21 @@ export function createGevActionRunner({
       }
       if (enabled) _layerEnabledAt.set(layerId, Date.now());
       const layer = dataManager.getAll().find((item) => item.id === layerId);
+      if (enabled) {
+        await leaveCockpitForGlobeNav(styleManager);
+        if (VOICE_LAYER_FOCUS_IDS.has(layerId)) {
+          try {
+            const { focusEnabledLayer } = await import('../app/layerFocus.js');
+            await focusEnabledLayer({
+              viewer,
+              layerId,
+              module: dataManager.layers.get(layerId)?.module,
+            });
+          } catch {
+            /* layer chip already owns fetch errors */
+          }
+        }
+      }
       return {
         ok: true,
         action: 'set_layer_visibility',
@@ -918,6 +953,7 @@ export function createGevActionRunner({
     }
 
     if (name === 'fly_to_location') {
+      await leaveCockpitForGlobeNav(styleManager);
       return flyToRequestedLocation(viewer, args, {
         placeSearch,
         searchNavigation,

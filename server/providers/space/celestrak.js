@@ -1,6 +1,9 @@
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { promises as fsp } from 'node:fs';
 import { celestrakTleUrl } from '../../../src/data/spaceProviderRequests.js';
+
+const SEED_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), 'seed');
 
 /**
  * Vite plugin: CelesTrak TLE proxy.
@@ -48,22 +51,43 @@ export function celestrakProxy() {
     }
   }
 
+  async function readSeed(group) {
+    try {
+      const parsed = JSON.parse(
+        await fsp.readFile(path.join(SEED_DIR, `celestrak-${group}.json`), 'utf8'),
+      );
+      if (typeof parsed?.body === 'string' && /^1 /m.test(parsed.body)) {
+        return { at: Number(parsed.at) || 0, body: parsed.body };
+      }
+    } catch {
+      /* no committed seed for this group */
+    }
+    return null;
+  }
+
   async function fetchUpstream(group) {
-    const url = celestrakTleUrl(group);
-    const res = await fetch(url.toString(), {
-      signal: AbortSignal.timeout(20000),
-      // CelesTrak 403s bulk groups (e.g. `active`) unless the request carries a
-      // descriptive User-Agent with a contact point.
-      headers: {
-        'User-Agent':
-          'gods-eye-view-celestrak-proxy/1.0 (+https://github.com/bilawalsidhu/gods-eye-view)',
-      },
-    });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const body = await res.text();
-    // An upstream error page parses to zero TLEs — treat as failure, keep cache.
-    if (!/^1 /m.test(body)) throw new Error('no TLE lines in response');
-    return { at: Date.now(), body };
+    const hosts = ['celestrak.org', 'celestrak.com'];
+    let lastError = null;
+    for (const host of hosts) {
+      try {
+        const url = celestrakTleUrl(group);
+        url.hostname = host;
+        const res = await fetch(url.toString(), {
+          signal: AbortSignal.timeout(8_000),
+          headers: {
+            'User-Agent':
+              'gods-eye-view-celestrak-proxy/1.0 (+https://github.com/bret1976/globe)',
+          },
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const body = await res.text();
+        if (!/^1 /m.test(body)) throw new Error('no TLE lines in response');
+        return { at: Date.now(), body };
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    throw lastError || new Error('celestrak unreachable');
   }
 
   const installMiddleware = (server) => {
@@ -94,34 +118,42 @@ export function celestrakProxy() {
           entry = await readDisk(group);
           if (entry) mem.set(group, entry);
         }
+        if (!entry) {
+          entry = await readSeed(group);
+          if (entry) mem.set(group, entry);
+        }
         if (entry && now - entry.at < TLE_TTL_MS) {
-          send(200, entry.body, 'HIT');
+          send(200, entry.body, entry.at ? 'HIT' : 'SEED');
           return;
         }
-        // Stale or missing → refresh, single-flight per group.
-        if (!inflight.has(group)) {
-          inflight.set(
-            group,
-            fetchUpstream(group)
-              .then(async (fresh) => {
-                mem.set(group, fresh);
-                await writeDisk(group, fresh);
-                return fresh;
-              })
-              .catch((err) => {
-                console.warn(
-                  '[celestrak-proxy] refresh failed — serving cache if any',
-                );
-                return null;
-              })
-              .finally(() => inflight.delete(group)),
-          );
+        const refresh = () => {
+          if (inflight.has(group)) return inflight.get(group);
+          const pending = fetchUpstream(group)
+            .then(async (fresh) => {
+              mem.set(group, fresh);
+              await writeDisk(group, fresh);
+              return fresh;
+            })
+            .catch(() => {
+              console.warn(
+                '[celestrak-proxy] refresh failed — serving cache if any',
+              );
+              return null;
+            })
+            .finally(() => inflight.delete(group));
+          inflight.set(group, pending);
+          return pending;
+        };
+        if (entry) {
+          // Serve the seed/stale catalog now. Railway often cannot reach
+          // CelesTrak; waiting out that timeout left Satellites UNAVAILABLE.
+          send(200, entry.body, entry.at ? 'STALE' : 'SEED');
+          void refresh();
+          return;
         }
-        const fresh = await inflight.get(group);
+        const fresh = await refresh();
         if (fresh) {
           send(200, fresh.body, 'MISS');
-        } else if (entry) {
-          send(200, entry.body, 'STALE-ERROR'); // upstream down — stale beats empty
         } else {
           send(502, 'celestrak fetch failed and no cache available', 'NONE');
         }
