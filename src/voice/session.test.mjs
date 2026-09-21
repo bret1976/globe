@@ -361,7 +361,7 @@ test('typed command form starts an idle session then sends the utterance', async
     });
     assert.match(
       ui.helpDetail.textContent,
-      /Click the mic and speak, or type a command/,
+      /Click the mic, then talk/,
     );
     const submit = new Event('submit', { cancelable: true });
     form.dispatchEvent(submit);
@@ -527,7 +527,7 @@ test('a short mic click starts listening and the leftover click does not stop it
       new Event('click', { bubbles: true, cancelable: true }),
     );
     await new Promise((done) => setTimeout(done, 0));
-    assert.deepEqual(held, ['prime', 'hold']);
+    assert.deepEqual(held, ['prime']);
     assert.deepEqual(cancelled, ['cancel']);
     assert.deepEqual(released, []);
     assert.equal(started.length, 1);

@@ -53,10 +53,12 @@
   pointer-events: none;
   color: #f4fbff;
   font-family: var(--font-mono);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: geometricPrecision;
   text-shadow:
     0 0 10px color-mix(in srgb, var(--cockpit-accent) 60%, transparent),
     0 1px 2px #000;
-  perspective: 920px;
+  perspective: 1400px;
 }
 #cockpit-hud[data-layer='military'] {
   --cockpit-accent: #ffb800;
@@ -65,7 +67,7 @@
   position: absolute;
   inset: clamp(62px, 9vh, 90px) clamp(18px, 3vw, 48px) clamp(38px, 5vh, 56px);
   transform-style: preserve-3d;
-  perspective: 880px;
+  perspective: 1400px;
 }
 .cockpit-roll-arc {
   position: absolute;
@@ -542,13 +544,13 @@ body.cockpit-mode:has(#left-panel-stack > .panel-collapsible:not(.collapsed))
 .cockpit-speed {
   justify-self: end;
   text-align: right;
-  transform: perspective(760px) rotateY(10deg) translateZ(-5px);
+  transform: perspective(1200px) rotateY(4deg) translateZ(-2px);
   transform-origin: right center;
 }
 .cockpit-altitude {
   justify-self: start;
   text-align: left;
-  transform: perspective(760px) rotateY(-10deg) translateZ(-5px);
+  transform: perspective(1200px) rotateY(-4deg) translateZ(-2px);
   transform-origin: left center;
 }
 .cockpit-readout strong {
@@ -931,7 +933,7 @@ body.cockpit-mode #view-switcher button {
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.04),
     0 0 28px rgba(0, 0, 0, 0.26);
-  transform: perspective(900px) rotateY(4deg) translateZ(18px);
+  transform: perspective(1600px) rotateY(1.5deg) translateZ(6px);
   transform-origin: left center;
   transform-style: preserve-3d;
   pointer-events: auto;
@@ -1243,7 +1245,7 @@ body.cockpit-mode #view-switcher button {
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.04),
     0 0 28px rgba(0, 0, 0, 0.26);
-  transform: perspective(900px) rotateY(-4deg) translateZ(18px);
+  transform: perspective(1600px) rotateY(-1.5deg) translateZ(6px);
   transform-origin: right center;
   pointer-events: auto;
   text-shadow: 0 0 8px

@@ -367,8 +367,8 @@ test('holdTalk records the mic and releaseTalk transcribes it', async () => {
         }),
     });
     session.adapter.primeMic();
-    await new Promise((resolve) => setTimeout(resolve, 0));
     session.adapter.holdTalk();
+    await new Promise((resolve) => setTimeout(resolve, 0));
     assert.equal(mic.recorders.length, 1);
     assert.equal(mic.recorders[0].state, 'recording');
     await session.adapter.releaseTalk();
@@ -385,14 +385,16 @@ test('holdTalk records the mic and releaseTalk transcribes it', async () => {
   }
 });
 
-test('start uses SpeechRecognition and MediaRecorder together when both exist', async () => {
+test('start prefers SpeechRecognition and does not steal the mic', async () => {
   const order = [];
   const previousRecognition = globalThis.SpeechRecognition;
   class FakeRecognition {
     start() {
       order.push('recognition-start');
     }
-    stop() {}
+    stop() {
+      order.push('recognition-stop');
+    }
   }
   const mic = installMicRecorder();
   globalThis.SpeechRecognition = FakeRecognition;
@@ -412,7 +414,48 @@ test('start uses SpeechRecognition and MediaRecorder together when both exist', 
     await session.start();
     await new Promise((resolve) => setTimeout(resolve, 0));
     assert.equal(order[0], 'recognition-start');
-    assert.ok(mic.recorders.length >= 1);
+    assert.equal(mic.recorders.length, 0);
+    assert.ok(!order.includes('recognition-stop'));
+    session.stop();
+  } finally {
+    mic.restore();
+    globalThis.SpeechRecognition = previousRecognition;
+  }
+});
+
+test('cancelHold after a short press keeps SpeechRecognition listening', async () => {
+  const order = [];
+  const previousRecognition = globalThis.SpeechRecognition;
+  class FakeRecognition {
+    start() {
+      order.push('recognition-start');
+    }
+    stop() {
+      order.push('recognition-stop');
+    }
+  }
+  const mic = installMicRecorder();
+  globalThis.SpeechRecognition = FakeRecognition;
+  try {
+    const session = createVoiceSession({
+      runner: async () => ({ ok: true }),
+      createAdapter: (hooks) =>
+        createSelfHostedSession({
+          ...hooks,
+          backend: backendFixture({
+            calls: [],
+            speech: 'Done.',
+            source: 'planner',
+          }),
+        }),
+    });
+    session.adapter.primeMic();
+    await session.start();
+    session.adapter.holdTalk();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    session.adapter.cancelHold();
+    assert.ok(order.includes('recognition-start'));
+    assert.equal(order.at(-1), 'recognition-start');
     session.stop();
   } finally {
     mic.restore();

@@ -6,13 +6,13 @@ import {
   cockpitWeatherEnabledFromStoredValue,
 } from './cockpitCloudEffects.js';
 
-test('cockpit cloud framebuffer stays low resolution on large displays', () => {
-  assert.deepEqual(cockpitCloudRenderSize(2048, 1152), { width: 520, height: 293 });
-  assert.deepEqual(cockpitCloudRenderSize(1280, 720), { width: 520, height: 293 });
+test('cockpit cloud framebuffer stays sharp on large displays', () => {
+  assert.deepEqual(cockpitCloudRenderSize(2048, 1152), { width: 1280, height: 720 });
+  assert.deepEqual(cockpitCloudRenderSize(1280, 720), { width: 922, height: 518 });
 });
 
 test('cockpit cloud framebuffer never upscales or collapses to zero', () => {
-  assert.deepEqual(cockpitCloudRenderSize(640, 360), { width: 269, height: 151 });
+  assert.deepEqual(cockpitCloudRenderSize(640, 360), { width: 461, height: 259 });
   assert.deepEqual(cockpitCloudRenderSize(0, Number.NaN), { width: 1, height: 1 });
 });
 

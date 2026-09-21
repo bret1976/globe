@@ -27,9 +27,9 @@ test('Pentagon → nearest flight → cockpit is one planner turn', () => {
   assert.equal(plan.calls[1].arguments.locationQuery, 'Pentagon');
   assert.equal(plan.calls[2].name, 'control_cockpit');
   assert.equal(plan.calls[2].arguments.action, 'enter');
-  assert.match(plan.speech, /Flying to Pentagon/);
-  assert.match(plan.speech, /nearest airborne flight/);
-  assert.match(plan.speech, /Entering the cockpit/);
+  assert.match(plan.speech, /On my way to Pentagon/);
+  assert.match(plan.speech, /closest flight/);
+  assert.match(plan.speech, /Heading into the cockpit/);
 });
 
 test('follow-up nearest flight reuses the last Pentagon place', () => {
@@ -147,5 +147,5 @@ test('Qwen tool-call payloads flatten into planner-shaped calls', () => {
     { name: 'control_cockpit', arguments: { action: 'exit' } },
   ]);
   assert.equal(parsed.speech, 'On it.');
-  assert.equal(composeSelfHostedSpeech(parsed.calls), 'Leaving the cockpit.');
+  assert.equal(composeSelfHostedSpeech(parsed.calls), 'Stepping out of the cockpit.');
 });

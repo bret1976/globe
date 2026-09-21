@@ -34,7 +34,7 @@ export function createVoiceControl({ reset = false } = {}) {
       </form>
       <div id="gev-voice-help" class="gev-voice-help-tray" role="tooltip">
         <span class="gev-voice-help-kicker">VOICE CONTROL</span>
-        <span class="gev-voice-help-detail">Click the mic and speak, or type a command</span>
+        <span class="gev-voice-help-detail">Click the mic, then talk — or type a command</span>
       </div>
       <div class="gev-voice-error-tray" role="alert" aria-live="assertive">
         <div class="gev-voice-error-header">

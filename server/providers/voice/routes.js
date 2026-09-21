@@ -20,6 +20,11 @@ import {
   hostedAsrModel,
   transcribeWithHostedAsr,
 } from './hostedAsr.js';
+import {
+  hostedTtsConfigured,
+  hostedTtsModel,
+  synthesizeWithHostedTts,
+} from './hostedTts.js';
 
 const JSON_HEADERS = {
   'Content-Type': 'application/json; charset=utf-8',
@@ -54,14 +59,16 @@ export async function handleVoiceStatus(req, res, { fetchImpl } = {}) {
     tts: false,
   }));
   const hostedAsr = hostedAsrConfigured();
+  const hostedTts = hostedTtsConfigured();
   sendJson(res, 200, {
     protocol: 'self-hosted-qwen',
     planner: true,
     asr: Boolean(health.asr) || hostedAsr,
     llm: true,
-    tts: Boolean(health.tts) || true,
+    tts: Boolean(health.tts) || hostedTts || true,
     inference: Boolean(health.configured),
     hostedAsr,
+    hostedTts,
     models: {
       asr: health.asr
         ? QWEN_ASR_MODEL
@@ -69,7 +76,11 @@ export async function handleVoiceStatus(req, res, { fetchImpl } = {}) {
           ? hostedAsrModel()
           : QWEN_ASR_MODEL,
       llm: QWEN_LLM_MODEL,
-      tts: health.tts ? KOKORO_TTS_MODEL : 'speechSynthesis',
+      tts: hostedTts
+        ? hostedTtsModel()
+        : health.tts
+          ? KOKORO_TTS_MODEL
+          : 'speechSynthesis',
       ...(health.models || {}),
     },
   });
@@ -203,21 +214,33 @@ export async function handleVoiceTts(req, res, { fetchImpl } = {}) {
     sendJson(res, 400, { error: 'TTS requires text' });
     return;
   }
-  if (!voiceInferenceConfigured()) {
-    sendJson(res, 200, { speech: text, audio: null, model: 'speechSynthesis' });
-    return;
+  if (hostedTtsConfigured()) {
+    try {
+      const audio = await synthesizeWithHostedTts({ text }, { fetchImpl });
+      res.statusCode = 200;
+      res.setHeader('Content-Type', audio.contentType || 'audio/wav');
+      res.setHeader('Cache-Control', 'no-store');
+      res.end(audio.bytes);
+      return;
+    } catch {
+      /* Fall through to Kokoro or the browser voice. */
+    }
   }
-  try {
-    const audio = await inferenceAudio(
-      '/tts',
-      { text, model: payload.model || KOKORO_TTS_MODEL },
-      { fetchImpl },
-    );
-    res.statusCode = 200;
-    res.setHeader('Content-Type', audio.contentType || 'audio/wav');
-    res.setHeader('Cache-Control', 'no-store');
-    res.end(audio.bytes);
-  } catch {
-    sendJson(res, 200, { speech: text, audio: null, model: 'speechSynthesis' });
+  if (voiceInferenceConfigured()) {
+    try {
+      const audio = await inferenceAudio(
+        '/tts',
+        { text, model: payload.model || KOKORO_TTS_MODEL },
+        { fetchImpl },
+      );
+      res.statusCode = 200;
+      res.setHeader('Content-Type', audio.contentType || 'audio/wav');
+      res.setHeader('Cache-Control', 'no-store');
+      res.end(audio.bytes);
+      return;
+    } catch {
+      /* Browser speechSynthesis remains the last resort. */
+    }
   }
+  sendJson(res, 200, { speech: text, audio: null, model: 'speechSynthesis' });
 }

@@ -7,8 +7,8 @@ import {
 
 const WEATHER_REFRESH_MS = 5 * 60_000;
 const CLOUD_FRAME_MS = 1000 / 12;
-const MAX_RENDER_WIDTH = 520;
-const MAX_RENDER_HEIGHT = 320;
+const MAX_RENDER_WIDTH = 1280;
+const MAX_RENDER_HEIGHT = 720;
 const WEATHER_MOVE_REFRESH_M = 25_000;
 const WEATHER_ENABLED_STORAGE_KEY = 'godsEyeView.cockpitWeatherEffects.enabled';
 
@@ -168,7 +168,7 @@ export function cockpitCloudRenderSize(width, height) {
   const viewportWidth = Math.max(1, Number(width) || 1);
   const viewportHeight = Math.max(1, Number(height) || 1);
   const scale = Math.min(
-    0.42,
+    0.72,
     MAX_RENDER_WIDTH / viewportWidth,
     MAX_RENDER_HEIGHT / viewportHeight,
   );

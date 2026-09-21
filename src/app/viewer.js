@@ -5,6 +5,7 @@ export {
   configureGlobeFraming,
 } from './globeFraming.js';
 import { configureGlobeFraming } from './globeFraming.js';
+import { applyViewerPresentation } from './viewerPresentation.js';
 
 /** Create the standard globe viewer in caller-owned, visible containers. */
 export function createApplicationViewer({ container, creditContainer }) {
@@ -24,11 +25,13 @@ export function createApplicationViewer({ container, creditContainer }) {
     infoBox: false,
     baseLayer: false,
     creditContainer,
-    msaaSamples: 4,
+    msaaSamples: 8,
+    useBrowserRecommendedResolution: false,
     contextOptions: { webgl: { preserveDrawingBuffer: true } },
   });
   try {
     viewer.targetFrameRate = 60;
+    applyViewerPresentation(viewer);
     configureGlobeFraming(viewer);
     viewer.scene.skyAtmosphere.show = true;
     viewer.scene.skyAtmosphere.atmosphereLightIntensity = 18;
