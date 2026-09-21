@@ -173,5 +173,6 @@ test('Live Vessels click then flies to a ship once AIS rows arrive', async () =>
   const lon = Cesium.Math.toDegrees(carto.longitude);
   assert.ok(Math.abs(lat - 33.751) < 0.05, `expected ship lat, got ${lat}`);
   assert.ok(Math.abs(lon + 118.22) < 0.05, `expected ship lon, got ${lon}`);
+  assert.ok(carto.height < 12_000, `expected ship height, got ${carto.height}`);
   clearCachedOperatorLocation();
 });

@@ -272,7 +272,7 @@ async function refineLiveVesselFocus({ viewer, module, venue, epoch }) {
     viewer,
     selected.latitude,
     selected.longitude,
-    layerFocusHeightM('ais-live-vessels'),
+    8_000,
     1.6,
     layerFocusPitchDeg('ais-live-vessels'),
   );
