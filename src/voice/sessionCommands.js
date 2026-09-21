@@ -36,7 +36,7 @@ export function createVoiceCommands({
   if (ui.costValue) ui.costValue.hidden = !capabilities.costControls;
   if (!capabilities.costControls) {
     if (ui.helpDetail)
-      ui.helpDetail.textContent = 'Click the mic and speak, or type a command';
+      ui.helpDetail.textContent = 'Click the mic, then talk — or type a command';
   }
   ui.button?.setAttribute?.(
     'aria-label',
@@ -71,6 +71,7 @@ export function createVoiceCommands({
   const COMMIT_HOLD_MS = 400;
   let pressStartedAt = 0;
   let skipClick = false;
+  let holdTimer = null;
   const startPress = (event) => {
     if (event.pointerType === 'mouse' && event.button !== 0) return;
     event.preventDefault();
@@ -85,13 +86,22 @@ export function createVoiceCommands({
     // toggle the session back off — that was swallowing spoken commands.
     adapter.primeMic?.();
     if (!session.isActive()) void session.start({ pushToTalk: false });
-    adapter.holdTalk?.();
+    if (holdTimer) clearTimeout(holdTimer);
+    // Delay hold-to-talk so a leftover click does not flush the open mic.
+    holdTimer = setTimeout(() => {
+      holdTimer = null;
+      adapter.holdTalk?.();
+    }, COMMIT_HOLD_MS);
   };
   const endPress = () => {
     if (!pressStartedAt) return;
     const heldMs = Date.now() - pressStartedAt;
     pressStartedAt = 0;
     skipClick = true;
+    if (holdTimer) {
+      clearTimeout(holdTimer);
+      holdTimer = null;
+    }
     if (heldMs >= COMMIT_HOLD_MS) void adapter.releaseTalk?.();
     else adapter.cancelHold?.();
   };
@@ -102,6 +112,12 @@ export function createVoiceCommands({
       return;
     }
     if (session.isActive()) {
+      if (capabilities.pushToTalk) {
+        // Self-hosted TALK: a later click means listen again, not hang up.
+        adapter.primeMic?.();
+        adapter.cancelHold?.();
+        return;
+      }
       if (typeof adapter.stopRecording === 'function') {
         void Promise.resolve(adapter.stopRecording()).finally(() => {
           if (session.isActive()) session.stop();
@@ -130,6 +146,10 @@ export function createVoiceCommands({
   session.signal.addEventListener(
     'abort',
     () => {
+      if (holdTimer) {
+        clearTimeout(holdTimer);
+        holdTimer = null;
+      }
       ui.button.removeEventListener('pointerdown', startPress);
       ui.button.removeEventListener('pointerup', endPress);
       ui.button.removeEventListener('pointercancel', endPress);

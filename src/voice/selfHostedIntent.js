@@ -325,7 +325,7 @@ export function composeSelfHostedSpeech(calls, originalText) {
   for (const call of calls) {
     if (call.name === 'fly_to_location') {
       parts.push(
-        `Flying to ${call.arguments.query || call.arguments.locationId}.`,
+        `On my way to ${call.arguments.query || call.arguments.locationId}.`,
       );
     } else if (call.name === 'set_layer_visibility') {
       const labels = {
@@ -341,17 +341,17 @@ export function composeSelfHostedSpeech(calls, originalText) {
         satellites: 'satellites',
       };
       parts.push(
-        `Turning on ${labels[call.arguments.layerId] || call.arguments.layerId}.`,
+        `I'll turn on ${labels[call.arguments.layerId] || call.arguments.layerId}.`,
       );
     } else if (call.name === 'control_cctv') {
-      parts.push('Opening the nearest camera.');
+      parts.push("I'll open the nearest camera.");
     } else if (call.name === 'select_nearest_aircraft') {
-      parts.push('Finding the nearest airborne flight.');
+      parts.push("Looking for the closest flight that's in the air.");
     } else if (call.name === 'control_cockpit') {
       parts.push(
         call.arguments.action === 'exit'
-          ? 'Leaving the cockpit.'
-          : 'Entering the cockpit.',
+          ? 'Stepping out of the cockpit.'
+          : 'Heading into the cockpit.',
       );
     }
   }

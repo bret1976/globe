@@ -214,6 +214,27 @@ test('dependent voice navigation waits for the destination viewport to arrive', 
   assert.equal(result.arrived, true);
 });
 
+test('a fly that never completes still releases the voice turn', async () => {
+  globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
+  const { viewer, styleManager } = createVoiceNavigationHarness();
+  viewer.camera.flyTo = () => {};
+  styleManager.runImmediateLocationNavigation = (navigate) => (
+    styleManager.runImmediateNavigation('location', navigate)
+  );
+  const runner = createGevActionRunner({
+    viewer,
+    styleManager,
+    dataManager: { layers: new Map(), getAll: () => [] },
+  });
+  const result = await runner('fly_to_location', {
+    locationId: 'austin',
+    waitForArrival: true,
+    arrivalTimeoutMs: 20,
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.arrived, false);
+});
+
 test('nearest-aircraft voice action serializes layer enable, arrival, refresh, airborne query, and selection', async () => {
   globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
   const { viewer, styleManager } = createVoiceNavigationHarness();

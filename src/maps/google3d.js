@@ -1,5 +1,8 @@
 const clean = (value) => String(value || '').trim();
 
+/** Sharper than Cesium's default 16 so cockpit windshields stay readable. */
+export const PHOTOREAL_MAXIMUM_SCREEN_SPACE_ERROR = 4;
+
 /**
  * Decide which map provider can deliver the best startup experience.
  * @param {{googleApiKey?: string, cesiumToken?: string}} credentials
@@ -56,6 +59,7 @@ export function createGoogleDirectTileset(Cesium, key) {
   return Cesium.createGooglePhotorealistic3DTileset({
     key,
     onlyUsingWithGoogleGeocoder: true,
+    maximumScreenSpaceError: PHOTOREAL_MAXIMUM_SCREEN_SPACE_ERROR,
   });
 }
 
@@ -77,5 +81,6 @@ export async function createGoogleIonTileset(
     cacheBytes: 1536 * 1024 * 1024,
     maximumCacheOverflowBytes: 1024 * 1024 * 1024,
     enableCollision: true,
+    maximumScreenSpaceError: PHOTOREAL_MAXIMUM_SCREEN_SPACE_ERROR,
   });
 }

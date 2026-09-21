@@ -315,7 +315,22 @@ function installMicRecorder({ chunkSize = 800 } = {}) {
     value: {
       mediaDevices: {
         async getUserMedia() {
-          return { getTracks: () => [{ stop() {} }] };
+          return {
+            getTracks: () => [
+              { stop() {}, readyState: 'live', enabled: true },
+            ],
+            getAudioTracks: () => [
+              {
+                getSettings: () => ({ deviceId: 'default' }),
+                readyState: 'live',
+                enabled: true,
+                stop() {},
+              },
+            ],
+          };
+        },
+        async enumerateDevices() {
+          return [];
         },
       },
     },
@@ -367,8 +382,8 @@ test('holdTalk records the mic and releaseTalk transcribes it', async () => {
         }),
     });
     session.adapter.primeMic();
-    await new Promise((resolve) => setTimeout(resolve, 0));
     session.adapter.holdTalk();
+    await new Promise((resolve) => setTimeout(resolve, 0));
     assert.equal(mic.recorders.length, 1);
     assert.equal(mic.recorders[0].state, 'recording');
     await session.adapter.releaseTalk();
@@ -385,14 +400,16 @@ test('holdTalk records the mic and releaseTalk transcribes it', async () => {
   }
 });
 
-test('start uses SpeechRecognition and MediaRecorder together when both exist', async () => {
+test('start records the real microphone even when SpeechRecognition exists', async () => {
   const order = [];
   const previousRecognition = globalThis.SpeechRecognition;
   class FakeRecognition {
     start() {
       order.push('recognition-start');
     }
-    stop() {}
+    stop() {
+      order.push('recognition-stop');
+    }
   }
   const mic = installMicRecorder();
   globalThis.SpeechRecognition = FakeRecognition;
@@ -409,14 +426,236 @@ test('start uses SpeechRecognition and MediaRecorder together when both exist', 
           }),
         }),
     });
+    session.adapter.primeMic();
     await session.start();
     await new Promise((resolve) => setTimeout(resolve, 0));
-    assert.equal(order[0], 'recognition-start');
     assert.ok(mic.recorders.length >= 1);
+    assert.ok(!order.includes('recognition-start'));
     session.stop();
   } finally {
     mic.restore();
     globalThis.SpeechRecognition = previousRecognition;
+  }
+});
+
+test('cancelHold after a short press keeps the open-mic recorder', async () => {
+  const order = [];
+  const previousRecognition = globalThis.SpeechRecognition;
+  class FakeRecognition {
+    start() {
+      order.push('recognition-start');
+    }
+    stop() {
+      order.push('recognition-stop');
+    }
+  }
+  const mic = installMicRecorder();
+  globalThis.SpeechRecognition = FakeRecognition;
+  try {
+    const session = createVoiceSession({
+      runner: async () => ({ ok: true }),
+      createAdapter: (hooks) =>
+        createSelfHostedSession({
+          ...hooks,
+          backend: backendFixture({
+            calls: [],
+            speech: 'Done.',
+            source: 'planner',
+          }),
+        }),
+    });
+    session.adapter.primeMic();
+    await session.start();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    session.adapter.holdTalk();
+    session.adapter.cancelHold();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.ok(mic.recorders.some((recorder) => recorder.state === 'recording'));
+    assert.ok(!order.includes('recognition-start'));
+    session.stop();
+  } finally {
+    mic.restore();
+    globalThis.SpeechRecognition = previousRecognition;
+  }
+});
+
+test('open-mic recording is transcribed after releaseTalk', async () => {
+  const mic = installMicRecorder();
+  const backend = backendFixture({
+    calls: [
+      {
+        name: 'fly_to_location',
+        arguments: { query: 'Pentagon', waitForArrival: true },
+      },
+    ],
+    speech: 'On my way to the Pentagon.',
+    locationQuery: 'Pentagon',
+    place: { query: 'Pentagon' },
+    source: 'planner',
+  });
+  backend.transcribe = async () => {
+    backend.calls.push(['transcribe']);
+    return { text: 'Take me to the Pentagon' };
+  };
+  const actions = [];
+  try {
+    const session = createVoiceSession({
+      runner: async (name, args) => {
+        actions.push([name, args]);
+        return { ok: true, name };
+      },
+      createAdapter: (hooks) =>
+        createSelfHostedSession({
+          ...hooks,
+          backend,
+        }),
+    });
+    session.adapter.primeMic();
+    await session.start();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await session.adapter.releaseTalk();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.ok(backend.calls.some(([kind]) => kind === 'transcribe'));
+    assert.deepEqual(
+      actions.map(([name]) => name),
+      ['fly_to_location'],
+    );
+    session.stop();
+  } finally {
+    mic.restore();
+  }
+});
+
+test('open-mic records a second command after the first reply', async () => {
+  const mic = installMicRecorder();
+  let spokenTurn = 0;
+  const backend = backendFixture({
+    calls: [
+      {
+        name: 'fly_to_location',
+        arguments: { query: 'Pentagon', waitForArrival: true },
+      },
+    ],
+    speech: 'On my way to the Pentagon.',
+    locationQuery: 'Pentagon',
+    place: { query: 'Pentagon' },
+    source: 'planner',
+  });
+  backend.act = async (payload) => {
+    backend.calls.push(['act', payload.text]);
+    if (/miami/i.test(payload.text)) {
+      return {
+        calls: [
+          {
+            name: 'fly_to_location',
+            arguments: { query: 'Miami', waitForArrival: true },
+          },
+        ],
+        speech: 'Heading to Miami.',
+        locationQuery: 'Miami',
+        place: { query: 'Miami' },
+        source: 'planner',
+      };
+    }
+    return {
+      calls: [
+        {
+          name: 'fly_to_location',
+          arguments: { query: 'Pentagon', waitForArrival: true },
+        },
+      ],
+      speech: 'On my way to the Pentagon.',
+      locationQuery: 'Pentagon',
+      place: { query: 'Pentagon' },
+      source: 'planner',
+    };
+  };
+  backend.transcribe = async () => {
+    spokenTurn += 1;
+    backend.calls.push(['transcribe', spokenTurn]);
+    return {
+      text:
+        spokenTurn === 1 ? 'Take me to the Pentagon' : 'Take me to Miami',
+    };
+  };
+  const actions = [];
+  try {
+    const session = createVoiceSession({
+      runner: async (name, args) => {
+        actions.push([name, args]);
+        return { ok: true, name };
+      },
+      createAdapter: (hooks) =>
+        createSelfHostedSession({
+          ...hooks,
+          backend,
+        }),
+    });
+    session.adapter.primeMic();
+    await session.start();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(mic.recorders.length, 1);
+    assert.equal(mic.recorders[0].state, 'recording');
+    await session.adapter.releaseTalk();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.ok(
+      mic.recorders.some((recorder) => recorder.state === 'recording'),
+      'mic must keep recording after the first reply',
+    );
+    await session.adapter.releaseTalk();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.deepEqual(
+      actions.map(([name, args]) => [name, args.query]),
+      [
+        ['fly_to_location', 'Pentagon'],
+        ['fly_to_location', 'Miami'],
+      ],
+    );
+    assert.equal(spokenTurn, 2);
+    session.stop();
+  } finally {
+    mic.restore();
+  }
+});
+
+test('empty ASR after a clip still restarts the open-mic recorder', async () => {
+  const mic = installMicRecorder();
+  const backend = backendFixture({
+    calls: [],
+    speech: 'Done.',
+    source: 'planner',
+  });
+  backend.transcribe = async () => {
+    backend.calls.push(['transcribe']);
+    return { text: '' };
+  };
+  try {
+    const session = createVoiceSession({
+      runner: async () => ({ ok: true }),
+      createAdapter: (hooks) =>
+        createSelfHostedSession({
+          ...hooks,
+          backend,
+        }),
+    });
+    session.adapter.primeMic();
+    await session.start();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const first = mic.recorders[0];
+    await session.adapter.releaseTalk();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.ok(backend.calls.some(([kind]) => kind === 'transcribe'));
+    assert.ok(
+      mic.recorders.some(
+        (recorder) => recorder !== first && recorder.state === 'recording',
+      ),
+      'silence from ASR must not leave the mic dead',
+    );
+    session.stop();
+  } finally {
+    mic.restore();
   }
 });
 
@@ -471,4 +710,160 @@ test('typed Pentagon still flies when getUserMedia is denied', async () => {
   } finally {
     mic.restore();
   }
+});
+
+test('a second command still runs after a blocking fly-to', async () => {
+  const actions = [];
+  const backend = backendFixture({
+    calls: [
+      {
+        name: 'fly_to_location',
+        arguments: { query: 'Pentagon', waitForArrival: true },
+      },
+    ],
+    speech: 'Flying to Pentagon.',
+    locationQuery: 'Pentagon',
+    place: { query: 'Pentagon' },
+    source: 'planner',
+  });
+  let actCount = 0;
+  const originalAct = backend.act;
+  backend.act = async (payload) => {
+    actCount += 1;
+    if (actCount === 1) return originalAct(payload);
+    return {
+      calls: [{ name: 'zoom_to_globe', arguments: {} }],
+      speech: 'Pulling back to the globe.',
+      source: 'planner',
+    };
+  };
+  const session = createVoiceSession({
+    runner: async (name, args) => {
+      actions.push([name, args]);
+      return { ok: true, name };
+    },
+    createAdapter: (hooks) =>
+      createSelfHostedSession({
+        ...hooks,
+        backend,
+      }),
+  });
+  await session.start();
+  assert.equal(await session.sendText('Take me to the Pentagon'), true);
+  assert.equal(await session.sendText('Zoom to globe'), true);
+  assert.deepEqual(
+    actions.map(([name]) => name),
+    ['fly_to_location', 'zoom_to_globe'],
+  );
+  session.stop();
+});
+
+test('a follow-up typed during the first fly is queued, not dropped', async () => {
+  const actions = [];
+  let releaseFly;
+  const flying = new Promise((resolve) => {
+    releaseFly = resolve;
+  });
+  const backend = backendFixture({
+    calls: [
+      {
+        name: 'fly_to_location',
+        arguments: { query: 'Pentagon', waitForArrival: true },
+      },
+    ],
+    speech: 'Flying to Pentagon.',
+    locationQuery: 'Pentagon',
+    place: { query: 'Pentagon' },
+    source: 'planner',
+  });
+  let actCount = 0;
+  const originalAct = backend.act;
+  backend.act = async (payload) => {
+    actCount += 1;
+    if (actCount === 1) return originalAct(payload);
+    return {
+      calls: [{ name: 'zoom_to_globe', arguments: {} }],
+      speech: 'Pulling back.',
+      source: 'planner',
+    };
+  };
+  const session = createVoiceSession({
+    runner: async (name, args) => {
+      if (name === 'fly_to_location') await flying;
+      actions.push([name, args]);
+      return { ok: true, name };
+    },
+    createAdapter: (hooks) =>
+      createSelfHostedSession({
+        ...hooks,
+        backend,
+      }),
+  });
+  await session.start();
+  const first = session.sendText('Take me to the Pentagon');
+  await Promise.resolve();
+  const second = session.sendText('Zoom to globe');
+  releaseFly();
+  assert.equal(await first, true);
+  assert.equal(await second, true);
+  assert.deepEqual(
+    actions.map(([name]) => name),
+    ['fly_to_location', 'zoom_to_globe'],
+  );
+  session.stop();
+});
+
+test('a hanging TTS reply still releases the session for the next command', async () => {
+  const actions = [];
+  const backend = backendFixture({
+    calls: [
+      {
+        name: 'fly_to_location',
+        arguments: { query: 'Pentagon', waitForArrival: true },
+      },
+    ],
+    speech: 'Flying to Pentagon.',
+    source: 'planner',
+  });
+  let speakCount = 0;
+  backend.speak = ({ text }) => {
+    speakCount += 1;
+    if (speakCount === 1) return new Promise(() => {});
+    return { text, audio: null };
+  };
+  let actCount = 0;
+  const originalAct = backend.act;
+  backend.act = async (payload) => {
+    actCount += 1;
+    if (actCount === 1) return originalAct(payload);
+    return {
+      calls: [{ name: 'zoom_to_globe', arguments: {} }],
+      speech: 'Pulling back.',
+      source: 'planner',
+    };
+  };
+  const session = createVoiceSession({
+    runner: async (name, args) => {
+      actions.push([name, args]);
+      return { ok: true, name };
+    },
+    createAdapter: (hooks) =>
+      createSelfHostedSession({
+        ...hooks,
+        backend,
+      }),
+  });
+  await session.start();
+  const started = Date.now();
+  assert.equal(await session.sendText('Take me to the Pentagon'), true);
+  assert.equal(await session.sendText('Zoom to globe'), true);
+  assert.ok(
+    Date.now() - started < 8_000,
+    'TTS must not pin the session past its speak deadline',
+  );
+  assert.deepEqual(
+    actions.map(([name]) => name),
+    ['fly_to_location', 'zoom_to_globe'],
+  );
+  session.stop();
 });

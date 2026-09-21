@@ -89,6 +89,10 @@ body {
   left: 0;
 }
 
+#cesiumContainer canvas {
+  image-rendering: auto;
+}
+
 /* Unified world-overlay host: detection uses one host-owned blend surface
    beneath the shared text/card canvas; both share one frame path. The root
    holds ONLY the card canvas — it is a stacking context (z-index below), and
@@ -152,7 +156,7 @@ body {
 }
 
 /* ── Source-backed cockpit weather ─────────────
-   Low-resolution GPU cloud pass composited only inside the cockpit keyhole. */
+   GPU cloud pass composited only inside the cockpit keyhole. */
 #cockpit-cloud-effects {
   position: fixed;
   inset: 0;
@@ -163,14 +167,14 @@ body {
   opacity: 0;
   pointer-events: none;
   clip-path: circle(min(40vw, 52vh) at 50% 50%);
-  filter: blur(0.7px) saturate(0.72) contrast(1.08);
+  filter: saturate(0.88) contrast(1.04);
   transform: translateZ(0);
   transition: opacity 900ms ease;
 }
 
 body.cockpit-mode #cockpit-cloud-effects.active {
   display: block;
-  opacity: 0.86;
+  opacity: 0.42;
 }
 
 /* ── Full-globe celestial keyhole ring ─────── */

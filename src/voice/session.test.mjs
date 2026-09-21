@@ -361,7 +361,7 @@ test('typed command form starts an idle session then sends the utterance', async
     });
     assert.match(
       ui.helpDetail.textContent,
-      /Click the mic and speak, or type a command/,
+      /Click the mic, then talk/,
     );
     const submit = new Event('submit', { cancelable: true });
     form.dispatchEvent(submit);
@@ -527,10 +527,76 @@ test('a short mic click starts listening and the leftover click does not stop it
       new Event('click', { bubbles: true, cancelable: true }),
     );
     await new Promise((done) => setTimeout(done, 0));
-    assert.deepEqual(held, ['prime', 'hold']);
+    assert.deepEqual(held, ['prime']);
     assert.deepEqual(cancelled, ['cancel']);
     assert.deepEqual(released, []);
     assert.equal(started.length, 1);
+    assert.equal(stopped, 0);
+    lifetime.abort();
+  } finally {
+    globalThis.window = previous;
+  }
+});
+
+test('a later mic click keeps voice on so the next command can be spoken', async () => {
+  const previous = globalThis.window;
+  globalThis.window = {};
+  try {
+    const button = new EventTarget();
+    button.setAttribute = () => {};
+    const primed = [];
+    let stopped = 0;
+    const ui = {
+      button,
+      root: { dataset: {}, classList: { remove() {} }, remove() {} },
+      status: {},
+      detail: {},
+      tierButton: {},
+      costValue: {},
+      helpDetail: {},
+    };
+    const lifetime = new AbortController();
+    createVoiceCommands({
+      runner: async () => ({ ok: true }),
+      signal: lifetime.signal,
+      createControl: () => ui,
+      createSession({ emit }) {
+        return {
+          capabilities: { costControls: false, pushToTalk: true },
+          primeMic() {
+            primed.push('prime');
+            return true;
+          },
+          cancelHold() {
+            primed.push('cancel');
+            return true;
+          },
+          ignoreButtonClick() {
+            return false;
+          },
+          async start() {
+            emit({ type: 'state', state: 'listening', detail: 'Ready' });
+          },
+          stop() {
+            stopped += 1;
+            emit({ type: 'state', state: 'idle' });
+          },
+          sendText() {},
+          sendMapEvent() {},
+        };
+      },
+    });
+    dispatchPointer(button, 'pointerdown');
+    dispatchPointer(button, 'pointerup');
+    button.dispatchEvent(
+      new Event('click', { bubbles: true, cancelable: true }),
+    );
+    await new Promise((done) => setTimeout(done, 0));
+    button.dispatchEvent(
+      new Event('click', { bubbles: true, cancelable: true }),
+    );
+    await new Promise((done) => setTimeout(done, 0));
+    assert.ok(primed.includes('prime'));
     assert.equal(stopped, 0);
     lifetime.abort();
   } finally {
