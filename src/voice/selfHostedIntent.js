@@ -109,12 +109,15 @@ const LAYER_ALIASES = Object.freeze([
   ['flights', 'flights'],
   ['military', 'military'],
   ['fires', 'local-firms'],
+  ['fire perimeters', 'fire-perimeters'],
+  ['wildfire perimeters', 'fire-perimeters'],
+  ['perimeters', 'fire-perimeters'],
   ['earthquakes', 'earthquakes'],
   ['satellites', 'satellites'],
 ]);
 
 const LAYER_FILLER =
-  /\b(street traffic|road traffic|live traffic|traffic|live vessels|live ships|live boats|vessels|ships|ais|submarine cables|undersea cables|sea cables|cable seas|cables|live cameras|street cameras|cctv|cameras|zip code|zip|cockpit view|data layers?|layer)\b/g;
+  /\b(street traffic|road traffic|live traffic|traffic|live vessels|live ships|live boats|vessels|ships|ais|submarine cables|undersea cables|sea cables|cable seas|cables|live cameras|street cameras|cctv|cameras|fire perimeters|wildfire perimeters|perimeters|zip code|zip|cockpit view|data layers?|layer)\b/g;
 
 const PLACE_ALIAS_KEYS = Object.keys(PLACE_ALIASES).sort(
   (a, b) => b.length - a.length,
@@ -333,6 +336,7 @@ export function composeSelfHostedSpeech(calls, originalText) {
         flights: 'flights',
         military: 'military flights',
         'local-firms': 'fires',
+        'fire-perimeters': 'fire perimeters',
         earthquakes: 'earthquakes',
         satellites: 'satellites',
       };
@@ -381,7 +385,7 @@ export function qwenToolDefinitions() {
       function: {
         name: 'set_layer_visibility',
         description:
-          'Turn a data layer on. Use traffic, ais-live-vessels, telegeography-submarine-cables, or cctv when asked.',
+          'Turn a data layer on. Use traffic, ais-live-vessels, telegeography-submarine-cables, cctv, or fire-perimeters when asked.',
         parameters: {
           type: 'object',
           properties: {
@@ -395,6 +399,7 @@ export function qwenToolDefinitions() {
                 'ais-live-vessels',
                 'telegeography-submarine-cables',
                 'local-firms',
+                'fire-perimeters',
                 'earthquakes',
                 'satellites',
               ],
