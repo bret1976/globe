@@ -318,7 +318,41 @@ export async function focusEnabledLayer({
     nearestCameraDistKm = nearest?.distKm ?? null;
   }
 
-  const needsLiveObjects = layerId === 'flights' || layerId === 'military';
+  const needsLiveObjects = layerId === 'flights';
+  // Military Flights must not chase the nearest jet — that latches tracking
+  // and looks like cockpit. Fly to the Nellis venue only.
+  if (layerId === 'military') {
+    const venue = layerLiveDestination(layerId);
+    if (venue) {
+      flyToLatLon(
+        viewer,
+        venue.lat,
+        venue.lon,
+        venue.heightM,
+        1.4,
+        venue.pitchDeg || layerFocusPitchDeg(layerId),
+      );
+    }
+    return { ok: true, mode: 'venue', location: venue };
+  }
+  if (layerId === 'satellites') {
+    const venue = layerLiveDestination(layerId);
+    if (venue) {
+      flyToLatLon(
+        viewer,
+        venue.lat,
+        venue.lon,
+        venue.heightM,
+        1.8,
+        venue.pitchDeg || layerFocusPitchDeg(layerId),
+      );
+    }
+    const iss = module.findByQuery?.('25544') || module.findByQuery?.('ISS');
+    if (iss && module.trackById?.(iss.noradId || 25544)) {
+      return { ok: true, mode: 'iss', id: iss.noradId || 25544, location };
+    }
+    return { ok: true, mode: 'venue', location: venue };
+  }
   // Live Vessels has no inland data. Fly to the ships venue immediately so
   // the Data Layers click is never a 4–10s no-op while AIS downloads.
   if (layerId === 'ais-live-vessels') {
@@ -393,13 +427,6 @@ export async function focusEnabledLayer({
     });
     module.focusNearest?.({ lat: destLat, lon: destLon });
     return { ok: true, mode: 'alpr', location: plan };
-  }
-
-  if (layerId === 'satellites') {
-    const iss = module.findByQuery?.('25544') || module.findByQuery?.('ISS');
-    if (iss && module.trackById?.(iss.noradId || 25544)) {
-      return { ok: true, mode: 'iss', id: iss.noradId || 25544, location };
-    }
   }
 
   if (

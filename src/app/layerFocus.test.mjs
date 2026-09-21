@@ -101,6 +101,57 @@ test('flights enable waits for contacts before flying to the nearest', async () 
   }
 });
 
+test('Military Flights click flies to Nellis and does not chase a jet', async () => {
+  clearCachedOperatorLocation();
+  const viewer = mockViewer();
+  const tracked = [];
+  const result = await focusEnabledLayer({
+    viewer,
+    layerId: 'military',
+    module: {
+      async update() {},
+      getDetectableObjects: () => [{ id: 'R123', position: {} }],
+      getAllPositions: () => [{ id: 'R123', latitude: 36.24, longitude: -115.03 }],
+      trackById(id) {
+        tracked.push(id);
+        return true;
+      },
+    },
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.mode, 'venue');
+  assert.equal(tracked.length, 0, 'panel click must not latch tracking / cockpit');
+  const first = viewer.flights[0];
+  assert.equal(first.type, 'flyTo');
+  const carto = Cesium.Cartographic.fromCartesian(first.options.destination);
+  const lat = Cesium.Math.toDegrees(carto.latitude);
+  const lon = Cesium.Math.toDegrees(carto.longitude);
+  assert.ok(Math.abs(lat - 36.236) < 0.05, `expected Nellis lat, got ${lat}`);
+  assert.ok(Math.abs(lon + 115.034) < 0.05, `expected Nellis lon, got ${lon}`);
+  clearCachedOperatorLocation();
+});
+
+test('Satellites click flies to orbit even when CelesTrak is empty', async () => {
+  clearCachedOperatorLocation();
+  const viewer = mockViewer();
+  const result = await focusEnabledLayer({
+    viewer,
+    layerId: 'satellites',
+    module: {
+      findByQuery: () => null,
+      trackById: () => false,
+    },
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.mode, 'venue');
+  assert.ok(viewer.flights.length >= 1);
+  const carto = Cesium.Cartographic.fromCartesian(
+    viewer.flights[0].options.destination,
+  );
+  assert.ok(carto.height > 1_000_000, `expected orbit height, got ${carto.height}`);
+  clearCachedOperatorLocation();
+});
+
 test('Live Vessels click flies to Long Beach before AIS rows arrive', async () => {
   clearCachedOperatorLocation();
   rememberOperatorLocation({

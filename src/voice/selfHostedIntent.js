@@ -200,10 +200,12 @@ function wantsNearestAircraft(normalized) {
 }
 
 function wantsCockpitEnter(normalized) {
+  if (wantsCockpitExit(normalized)) return false;
+  if (/\bcockpit view\b/.test(normalized)) return false;
   return (
-    (/\bcockpit\b/.test(normalized) &&
-      !/\b(exit|leave|get out)\b/.test(normalized)) ||
-    /\benter (the )?cockpit\b/.test(normalized)
+    /\benter (the )?cockpit\b/.test(normalized) ||
+    /\bgo into (the )?cockpit\b/.test(normalized) ||
+    /\bget in(to)? (the )?cockpit\b/.test(normalized)
   );
 }
 
