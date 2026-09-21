@@ -868,6 +868,90 @@ test('a hanging TTS reply still releases the session for the next command', asyn
   session.stop();
 });
 
+test('a second spoken command is heard while the first reply is still talking', async () => {
+  const mic = installMicRecorder();
+  let spokenTurn = 0;
+  const backend = backendFixture({
+    calls: [
+      {
+        name: 'fly_to_location',
+        arguments: { query: 'Pentagon', waitForArrival: true },
+      },
+    ],
+    speech: 'On my way to the Pentagon.',
+    source: 'planner',
+  });
+  backend.speak = () => new Promise(() => {});
+  backend.act = async (payload) => {
+    backend.calls.push(['act', payload.text]);
+    if (/miami/i.test(payload.text)) {
+      return {
+        calls: [
+          {
+            name: 'fly_to_location',
+            arguments: { query: 'Miami', waitForArrival: true },
+          },
+        ],
+        speech: 'Heading to Miami.',
+        source: 'planner',
+      };
+    }
+    return {
+      calls: [
+        {
+          name: 'fly_to_location',
+          arguments: { query: 'Pentagon', waitForArrival: true },
+        },
+      ],
+      speech: 'On my way to the Pentagon.',
+      source: 'planner',
+    };
+  };
+  backend.transcribe = async () => {
+    spokenTurn += 1;
+    return {
+      text: spokenTurn === 1 ? 'Take me to the Pentagon' : 'Take me to Miami',
+    };
+  };
+  const actions = [];
+  try {
+    const session = createVoiceSession({
+      runner: async (name, args) => {
+        actions.push([name, args]);
+        return { ok: true, name };
+      },
+      createAdapter: (hooks) =>
+        createSelfHostedSession({
+          ...hooks,
+          backend,
+        }),
+    });
+    session.adapter.primeMic();
+    await session.start();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await session.adapter.releaseTalk();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.ok(
+      mic.recorders.some((recorder) => recorder.state === 'recording'),
+      'the mic must stay open during the first spoken reply',
+    );
+    await session.adapter.releaseTalk();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.deepEqual(
+      actions.map(([name, args]) => [name, args.query]),
+      [
+        ['fly_to_location', 'Pentagon'],
+        ['fly_to_location', 'Miami'],
+      ],
+    );
+    session.stop();
+  } finally {
+    mic.restore();
+  }
+});
+
 test('open-mic is recording again before a hanging TTS reply ends', async () => {
   const mic = installMicRecorder();
   const backend = backendFixture({

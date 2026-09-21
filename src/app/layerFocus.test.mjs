@@ -132,3 +132,46 @@ test('Live Vessels click flies to Long Beach before AIS rows arrive', async () =
   assert.ok(Math.abs(lon + 118.216) < 0.05, `expected Long Beach lon, got ${lon}`);
   clearCachedOperatorLocation();
 });
+
+test('Live Vessels click then flies to a ship once AIS rows arrive', async () => {
+  clearCachedOperatorLocation();
+  const viewer = mockViewer();
+  let positions = [];
+  let selected = null;
+  const started = Date.now();
+  const result = await focusEnabledLayer({
+    viewer,
+    layerId: 'ais-live-vessels',
+    module: {
+      async update() {},
+      getDetectableObjects: () => [],
+      getAllPositions: () => positions,
+      focusNearest() {
+        selected = {
+          mmsi: '366999999',
+          latitude: 33.751,
+          longitude: -118.22,
+        };
+        return selected.mmsi;
+      },
+      getSelectedInfo: () => selected,
+    },
+  });
+  assert.ok(
+    Date.now() - started < 400,
+    'the click must return before AIS rows arrive',
+  );
+  assert.equal(result.ok, true);
+  assert.equal(result.mode, 'venue');
+  positions = [{ id: '366999999', latitude: 33.751, longitude: -118.22 }];
+  await new Promise((resolve) => setTimeout(resolve, 350));
+  assert.ok(selected?.mmsi, 'a live ship must be selected once rows arrive');
+  const last = viewer.flights.at(-1);
+  assert.equal(last.type, 'flyTo');
+  const carto = Cesium.Cartographic.fromCartesian(last.options.destination);
+  const lat = Cesium.Math.toDegrees(carto.latitude);
+  const lon = Cesium.Math.toDegrees(carto.longitude);
+  assert.ok(Math.abs(lat - 33.751) < 0.05, `expected ship lat, got ${lat}`);
+  assert.ok(Math.abs(lon + 118.22) < 0.05, `expected ship lon, got ${lon}`);
+  clearCachedOperatorLocation();
+});

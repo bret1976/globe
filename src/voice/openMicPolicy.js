@@ -8,6 +8,29 @@ export function nextListenArmTime(now, armMs = OPEN_MIC_ARM_MS) {
   return now + armMs;
 }
 
+/**
+ * Open-mic VAD must hear the next command even while TTS is still playing.
+ * `speaking` is intentionally omitted — blocking on it left the mic dead.
+ */
+export function shouldHearOpenMic({
+  busy = false,
+  flushing = false,
+  holding = false,
+  now = 0,
+  listenArmedAt = 0,
+} = {}) {
+  return !busy && !flushing && !holding && now >= listenArmedAt;
+}
+
+/** Re-arm after TTS only when the user has not already started talking. */
+export function shouldRearmAfterReply({
+  busy = false,
+  flushing = false,
+  heardSpeech = false,
+} = {}) {
+  return !busy && !flushing && !heardSpeech;
+}
+
 /** Commit a clip only after fresh speech and a real pause. */
 export function shouldCommitOpenMic({
   heardSpeech = false,
