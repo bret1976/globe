@@ -165,7 +165,9 @@ export class LayerPanel {
       const topRow = document.createElement('div');
       topRow.className = 'data-toggle-top';
 
-      const left = document.createElement('div');
+      const left = document.createElement('button');
+      left.type = 'button';
+      left.setAttribute('aria-label', `Show ${panelLabel(layer)} on map`);
       left.className = 'data-toggle-left';
       const icon = document.createElement('span');
       icon.className = 'data-icon';

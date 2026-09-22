@@ -316,9 +316,7 @@ function installMicRecorder({ chunkSize = 800 } = {}) {
       mediaDevices: {
         async getUserMedia() {
           return {
-            getTracks: () => [
-              { stop() {}, readyState: 'live', enabled: true },
-            ],
+            getTracks: () => [{ stop() {}, readyState: 'live', enabled: true }],
             getAudioTracks: () => [
               {
                 getSettings: () => ({ deviceId: 'default' }),
@@ -575,8 +573,7 @@ test('open-mic records a second command after the first reply', async () => {
     spokenTurn += 1;
     backend.calls.push(['transcribe', spokenTurn]);
     return {
-      text:
-        spokenTurn === 1 ? 'Take me to the Pentagon' : 'Take me to Miami',
+      text: spokenTurn === 1 ? 'Take me to the Pentagon' : 'Take me to Miami',
     };
   };
   const actions = [];
@@ -991,4 +988,87 @@ test('open-mic is recording again before a hanging TTS reply ends', async () => 
   } finally {
     mic.restore();
   }
+});
+
+test('late chunks from a stopped recorder cannot corrupt ten successive commands', async () => {
+  const mic = installMicRecorder();
+  const audioSizes = [];
+  const actions = [];
+  const session = createSelfHostedSession({
+    emit() {},
+    runAction: async (name) => {
+      actions.push(name);
+      return { ok: true };
+    },
+    backend: {
+      ...backendFixture({
+        calls: [{ name: 'fly_to_location', arguments: {} }],
+        speech: 'Done.',
+      }),
+      async transcribe({ audio }) {
+        audioSizes.push(audio.length);
+        return { text: 'Take me to the Pentagon' };
+      },
+    },
+  });
+  try {
+    await session.start();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    for (let i = 0; i < 10; i++) {
+      const old = mic.recorders.at(-1);
+      await session.releaseTalk();
+      old.ondataavailable({ data: new Blob([new Uint8Array(999)]) });
+    }
+    assert.equal(actions.length, 10);
+    assert.deepEqual(audioSizes, Array(10).fill(800));
+  } finally {
+    session.stop();
+    mic.restore();
+  }
+});
+
+test('failed actions stop dependent cockpit entry and leave the next command usable', async () => {
+  const events = [],
+    actions = [];
+  const session = createSelfHostedSession({
+    emit: (e) => events.push(e),
+    backend: backendFixture({
+      calls: [{ name: 'select_nearest_aircraft' }, { name: 'control_cockpit' }],
+      speech: 'Entering cockpit.',
+    }),
+    runAction: async (name) => {
+      actions.push(name);
+      return { ok: false, error: 'No airborne aircraft nearby' };
+    },
+  });
+  await session.sendText('Cockpit view');
+  await session.sendText('Try again');
+  assert.deepEqual(actions, [
+    'select_nearest_aircraft',
+    'select_nearest_aircraft',
+  ]);
+  assert.equal(events.filter((e) => e.status === 'failed').length, 2);
+  assert.ok(!events.some((e) => e.text === 'Entering cockpit.'));
+  session.stop();
+});
+
+test('a planner response after stop cannot execute or restart microphone capture', async () => {
+  let resolve;
+  const actions = [];
+  const session = createSelfHostedSession({
+    emit() {},
+    runAction: async (name) => actions.push(name),
+    backend: {
+      ...backendFixture({}),
+      act: () =>
+        new Promise((r) => {
+          resolve = r;
+        }),
+    },
+  });
+  const turn = session.sendText('Pentagon');
+  session.stop();
+  resolve({ calls: [{ name: 'fly_to_location' }] });
+  await turn;
+  assert.deepEqual(actions, []);
 });

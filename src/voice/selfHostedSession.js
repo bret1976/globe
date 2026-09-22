@@ -57,6 +57,7 @@ export function createSelfHostedSession({
   let flushing = false;
   let queuedUtterance = '';
   let speakEpoch = 0;
+  let sessionEpoch = 0;
   let status = {
     asr: false,
     llm: true,
@@ -208,6 +209,9 @@ export function createSelfHostedSession({
       queuedUtterance = spoken;
       return;
     }
+    const turnEpoch = sessionEpoch;
+    const isCurrent = () =>
+      live && !signal?.aborted && turnEpoch === sessionEpoch;
     busy = true;
     queuedUtterance = '';
     clearSilenceTimer();
@@ -231,10 +235,15 @@ export function createSelfHostedSession({
         lastPlace,
         signal,
       });
+      if (!isCurrent()) return;
       if (plan.locationQuery) lastLocationQuery = plan.locationQuery;
       if (plan.place) lastPlace = plan.place;
       for (const call of plan.calls) {
-        await runAction(call.name, call.arguments || {});
+        if (!isCurrent()) return;
+        const result = await runAction(call.name, call.arguments || {});
+        if (!isCurrent()) return;
+        if (result?.ok === false)
+          throw new Error(result.error || `Could not complete ${call.name}`);
       }
       const speech =
         plan.speech ||
@@ -262,7 +271,18 @@ export function createSelfHostedSession({
         await playSpeech(spokenAudio?.text || speech, spokenAudio?.audio);
       })().catch(() => {});
       emit({ type: 'completion', status: 'completed' });
+    } catch (error) {
+      if (isCurrent()) {
+        emit({
+          type: 'transcript',
+          role: 'assistant',
+          text: error?.message || 'Command failed. Please try again.',
+          final: true,
+        });
+        emit({ type: 'completion', status: 'failed' });
+      }
     } finally {
+      if (turnEpoch !== sessionEpoch) return;
       busy = false;
       const next = queuedUtterance;
       queuedUtterance = '';
@@ -415,8 +435,10 @@ export function createSelfHostedSession({
   }
 
   function bindRecorder(instance) {
+    // Capture each clip's buffer: late stop events must not corrupt the next clip.
+    const clipChunks = chunks;
     instance.ondataavailable = (event) => {
-      if (event?.data?.size) chunks.push(event.data);
+      if (event?.data?.size) clipChunks.push(event.data);
     };
     instance.start(200);
     if (instance.state === 'inactive') {
@@ -462,7 +484,10 @@ export function createSelfHostedSession({
     if (busy || flushing || pendingTranscript) return;
     const current = recorder;
     if (!current || !chunks.length) return;
+    const clipEpoch = sessionEpoch;
+    const clipChunks = chunks;
     flushing = true;
+    clearRecordWatch();
     let resumeAfter = false;
     const finished = new Promise((resolve) => {
       current.onstop = resolve;
@@ -477,7 +502,10 @@ export function createSelfHostedSession({
         finished,
         new Promise((resolve) => setTimeout(resolve, 3_000)),
       ]);
-      const blob = new Blob(chunks, { type: current.mimeType || 'audio/webm' });
+      if (!live || clipEpoch !== sessionEpoch) return;
+      const blob = new Blob(clipChunks, {
+        type: current.mimeType || 'audio/webm',
+      });
       chunks = [];
       recorder = null;
       if (blob.size < MIN_RECORDING_BYTES) {
@@ -495,16 +523,14 @@ export function createSelfHostedSession({
         detail: 'Hearing you…',
       });
       const bytes = new Uint8Array(await blob.arrayBuffer());
-      const result = await withDeadline(
-        Promise.resolve(
-          backend.transcribe({
-            audio: bytes,
-            mimeType: blob.type || 'audio/webm',
-            signal,
-          }),
+      const result = await backend.transcribe({
+        audio: bytes,
+        mimeType: blob.type || 'audio/webm',
+        signal: AbortSignal.any(
+          [signal, AbortSignal.timeout(30_000)].filter(Boolean),
         ),
-        8_000,
-      );
+      });
+      if (!live || clipEpoch !== sessionEpoch) return;
       const spoken = String(result?.text || '').trim();
       if (!spoken) {
         emit({
@@ -525,6 +551,7 @@ export function createSelfHostedSession({
       });
       resumeAfter = live && !busy;
     } finally {
+      if (clipEpoch !== sessionEpoch) return;
       flushing = false;
       if (resumeAfter) resumeListening();
     }
@@ -717,7 +744,8 @@ export function createSelfHostedSession({
     } catch {
       devices = [];
     }
-    const currentId = stream.getAudioTracks?.()[0]?.getSettings?.().deviceId || '';
+    const currentId =
+      stream.getAudioTracks?.()[0]?.getSettings?.().deviceId || '';
     const preferredId = pickPreferredMicId(devices, currentId);
     if (!preferredId) return stream;
     try {
@@ -881,6 +909,8 @@ export function createSelfHostedSession({
         });
     },
     stop() {
+      sessionEpoch += 1;
+      interruptSpeech();
       live = false;
       busy = false;
       holding = false;

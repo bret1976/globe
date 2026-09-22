@@ -117,7 +117,7 @@ const LAYER_ALIASES = Object.freeze([
 ]);
 
 const LAYER_FILLER =
-  /\b(street traffic|road traffic|live traffic|traffic|live vessels|live ships|live boats|vessels|ships|ais|submarine cables|undersea cables|sea cables|cable seas|cables|live cameras|street cameras|cctv|cameras|fire perimeters|wildfire perimeters|perimeters|zip code|zip|cockpit view|data layers?|layer)\b/g;
+  /\b(street traffic|road traffic|live traffic|traffic|live vessels|live ships|live boats|vessels|ships|ais|submarine cables|undersea cables|sea cables|cable seas|cables|live cameras|street cameras|cctv|cameras|fire perimeters|wildfire perimeters|perimeters|zip code|zip|cockpit(?: view| mode)?|data layers?|layer)\b/g;
 
 const PLACE_ALIAS_KEYS = Object.keys(PLACE_ALIASES).sort(
   (a, b) => b.length - a.length,
@@ -201,7 +201,11 @@ function wantsNearestAircraft(normalized) {
 
 function wantsCockpitEnter(normalized) {
   if (wantsCockpitExit(normalized)) return false;
-  if (/\bcockpit view\b/.test(normalized)) return false;
+  if (
+    /\bcockpit(?: view| mode)?\b/.test(normalized) &&
+    !/\b(no|not|don't|do not)\b/.test(normalized)
+  )
+    return true;
   return (
     /\benter (the )?cockpit\b/.test(normalized) ||
     /\bgo into (the )?cockpit\b/.test(normalized) ||
@@ -275,7 +279,10 @@ export function planSelfHostedVoiceTurn(text, context = {}) {
     }
   }
 
-  if (wantsNearestAircraft(normalized)) {
+  if (
+    wantsNearestAircraft(normalized) ||
+    (wantsCockpitEnter(normalized) && spokenPlace)
+  ) {
     const args = { layerId: nearestLayerId(normalized) };
     if (place?.locationId) args.locationId = place.locationId;
     if (locationQuery) args.locationQuery = locationQuery;

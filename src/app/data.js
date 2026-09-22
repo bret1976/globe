@@ -24,6 +24,13 @@ export function createApplicationData({
     onUserLayerEnablePrepare: async (layerId) => {
       const { abortShortsPack } = await import('../data/shortsPack.js');
       abortShortsPack();
+      if (styleManager.cockpitView?.active) {
+        const result = await styleManager.controlCockpit('exit');
+        if (result?.ok === false)
+          throw new Error(result.error || 'Could not leave cockpit');
+      }
+      // Release Context, follow, orbit and deferred navigation before moving.
+      styleManager.runImmediateNavigation?.('data layer', () => true);
       const { prepareEnabledLayerFocus } = await import('./layerFocus.js');
       return prepareEnabledLayerFocus({
         viewer,
