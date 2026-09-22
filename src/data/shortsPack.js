@@ -1,20 +1,21 @@
 /**
- * GodsEye Shorts pack (2026-09-10 → 2026-09-18) — Bret Railway globe.
+ * GodsEye Shorts pack (2026-09-10 → 2026-09-22) — Bret Railway globe.
  *
  * Reimplements ideas from Bilawal Sidhu's free/public Shorts on HIS hosted globe:
  *  1) Bay Area air + marine traffic
- *  2) Digital nervous system (TeleGeography cables + landings + OSM DCs + HUD)
+ *  2) Digital nervous system (OSM ODbL cables + landings + OSM DCs + HUD)
  *  3) Delta / voice cockpit (uses existing cockpit HUD; this pack flies a Delta-style approach)
  *  4) Area 51 TR-3B easter egg (fly Groom Lake + surface TR-3B toggle tip)
  *  5) Nepal floods reconstruction (enables upstream Bhote Koshi scene layers)
  *  6) Traffic & CCTV God's Eye (Austin → London → SF; TomTom / camera layers)
+ *  7) Typhoon Dujuan → Japan (W. Pacific hop; in-repo Open-Meteo / weather-effects)
  *
- * Cable geometry: same bilawalsidhu/gods-eye-view bundled TeleGeography public map
- * GeoJSON (CC BY-NC-SA 3.0). Not scraped from submarinecablemap.com in this change.
+ * Cable geometry: OSM ODbL free extract already in this fork. TeleGeography dump
+ * is not shipped and must not be reintroduced.
  */
 import * as Cesium from 'cesium';
 
-export const SHORTS_PACK_VERSION = '2026-09-18-miami-landing';
+export const SHORTS_PACK_VERSION = '2026-09-22-typhoon';
 export const SHORTS_PARAM = 'shorts';
 
 let shortsAbortGeneration = 0;
@@ -49,6 +50,11 @@ export const SHORTS_ALIASES = Object.freeze({
   streets: 'traffic',
   tomtom: 'traffic',
   spy: 'traffic',
+  typhoon: 'typhoon',
+  dujuan: 'typhoon',
+  storm: 'typhoon',
+  himawari: 'typhoon',
+  'japan-storm': 'typhoon',
 });
 
 const BAY_VIEW = Object.freeze({
@@ -143,6 +149,26 @@ const TRAFFIC_SF = Object.freeze({
   heading: 28,
   pitch: -48,
   duration: 2.6,
+});
+
+/** Western Pacific basin — Typhoon Dujuan approach (2026-09-21). */
+const TYPHOON_WPAC = Object.freeze({
+  lon: 138.5,
+  lat: 24.2,
+  height: 3_800_000,
+  heading: 350,
+  pitch: -78,
+  duration: 3.0,
+});
+
+/** Southern Honshu / Kansai — landfall corridor. */
+const TYPHOON_JAPAN = Object.freeze({
+  lon: 135.5,
+  lat: 34.4,
+  height: 720_000,
+  heading: 15,
+  pitch: -52,
+  duration: 2.8,
 });
 
 function flyTo(viewer, shot, token = shortsAbortGeneration) {
@@ -315,6 +341,17 @@ export async function runShortsPack(input = {}) {
     if (!(await hop(TRAFFIC_AUSTIN))) return pack;
     if (!(await hop(TRAFFIC_LONDON))) return pack;
     await hop(TRAFFIC_SF);
+    return pack;
+  }
+
+  if (pack === 'typhoon') {
+    toast('SHORTS · Typhoon Dujuan → Japan (Open-Meteo weather)');
+    await enableLayers(dataManager, ['weather', 'weather-effects']);
+    document.getElementById('wx-on')?.click?.();
+    document.querySelector('[data-weather="on"]')?.click?.();
+    document.querySelector('[data-wx="on"]')?.click?.();
+    if (!(await hop(TYPHOON_WPAC))) return pack;
+    await hop(TYPHOON_JAPAN);
     return pack;
   }
 

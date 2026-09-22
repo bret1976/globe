@@ -75,6 +75,15 @@ export const DATA_CREDITS = [
       '<a href="https://inciweb.wildfire.gov/" target="_blank" rel="noopener">InciWeb</a>',
   },
   {
+    key: 'au-fire',
+    html:
+      'AU Fire Incidents: ' +
+      '<a href="https://www.rfs.nsw.gov.au/" target="_blank" rel="noopener">NSW Rural Fire Service</a> ' +
+      ' &amp; ' +
+      '<a href="https://emergency.vic.gov.au/" target="_blank" rel="noopener">Emergency Management Victoria</a> ' +
+      '— public GeoJSON feeds',
+  },
+  {
     key: 'overpass',
     html:
       'Road geometry (traffic): ' +
@@ -279,6 +288,12 @@ export const DATA_CREDITS = [
       'CCTV camera locations (Washington, DC): ' +
       '<a href="https://maps2.dcgis.dc.gov/dcgis/rest/services/DDOT/TrafficOperations/FeatureServer/2" target="_blank" rel="noopener">DDOT TrafficOperations / DC GIS</a> — ' +
       'District Department of Transportation (locations only)',
+  },
+  {
+    key: 'colorado-cctv',
+    html:
+      'CCTV cameras &amp; frames (Colorado): ' +
+      '<a href="https://www.cotrip.org/" target="_blank" rel="noopener">Colorado Department of Transportation — COtrip</a> (courtesy)',
   },
   {
     key: 'telegeography',

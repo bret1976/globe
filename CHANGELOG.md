@@ -1,5 +1,23 @@
 # Changelog
 
+- Add `#shorts=typhoon` (aliases: dujuan, storm, himawari, japan-storm): fly
+  the western Pacific then southern Honshu for Typhoon Dujuan (2026-09-21),
+  enable in-repo Open-Meteo / weather-effects if present, and show the SHORTS
+  badge + toast. No proprietary satellite tile keys.
+
+- Add AU Fire Incidents layer aggregating NSW Rural Fire Service and Emergency
+  Management Victoria public GeoJSON feeds. Coloured dots (size/colour encode
+  alert level and area) plus perimeter polygons draped on 3D tiles; the
+  `/api/au-fire` proxy (TTL 2 min) fetches both feeds in parallel and serves
+  stale on failure. Layer id `au-fire` (share token `y`). Ported from
+  upstream gods-eye-view #702.
+
+- Add a Colorado (CDOT / COtrip) CCTV camera pack as a standalone loader
+  matching Maryland CHART / DDOT: keyless `api-511x-co.carsprogram.org/cameras/map-features`,
+  still frames pinned to `cocam.carsprogram.org`, nearest 300 to Denver /
+  Colorado Springs by default. `CCTV_COLORADO_MAX_SOURCES` raises the cap and
+  `CCTV_COLORADO_ENABLED=0` turns the pack off. Ported from upstream #700.
+
 - New Fire Perimeters layer (Events group): live NIFC WFIGS interagency
   wildfire incident perimeters as ground-clamped polygons with a
   containment-colored fire line, refreshed every 5 minutes from the public

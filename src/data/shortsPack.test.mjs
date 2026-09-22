@@ -71,18 +71,26 @@ function mockViewer() {
 }
 
 test('traffic aliases resolve from hash or search', () => {
-  assert.equal(SHORTS_PACK_VERSION, '2026-09-18-miami-landing');
+  assert.equal(SHORTS_PACK_VERSION, '2026-09-22-typhoon');
   assert.equal(SHORTS_ALIASES.traffic, 'traffic');
   assert.equal(SHORTS_ALIASES.cctv, undefined);
   assert.equal(SHORTS_ALIASES.streets, 'traffic');
   assert.equal(SHORTS_ALIASES.tomtom, 'traffic');
   assert.equal(SHORTS_ALIASES.spy, 'traffic');
   assert.equal(SHORTS_ALIASES.miami, 'miami-landing');
+  assert.equal(SHORTS_ALIASES.typhoon, 'typhoon');
+  assert.equal(SHORTS_ALIASES.dujuan, 'typhoon');
+  assert.equal(SHORTS_ALIASES.storm, 'typhoon');
+  assert.equal(SHORTS_ALIASES.himawari, 'typhoon');
+  assert.equal(SHORTS_ALIASES['japan-storm'], 'typhoon');
   assert.equal(parseShortsPackFromLocation(loc({ hash: '#shorts=traffic' })), 'traffic');
   assert.equal(parseShortsPackFromLocation(loc({ hash: '#shorts=cctv' })), null);
   assert.equal(parseShortsPackFromLocation(loc({ search: '?shorts=spy' })), 'traffic');
   assert.equal(parseShortsPackFromLocation(loc({ hash: '#shorts=miami' })), 'miami-landing');
   assert.equal(parseShortsPackFromLocation(loc({ hash: '#shorts=bay' })), 'bay-area');
+  assert.equal(parseShortsPackFromLocation(loc({ hash: '#shorts=typhoon' })), 'typhoon');
+  assert.equal(parseShortsPackFromLocation(loc({ hash: '#shorts=dujuan' })), 'typhoon');
+  assert.equal(parseShortsPackFromLocation(loc({ search: '?shorts=japan-storm' })), 'typhoon');
   assert.equal(parseShortsPackFromLocation(loc()), null);
 });
 
@@ -118,7 +126,7 @@ test('traffic pack enables traffic + CCTV and hops Austin → London → SF', as
     assert.ok(Math.abs(Cesium.Math.toDegrees(sf.latitude) - 37.7952) < 0.001);
     assert.ok(Math.abs(Cesium.Math.toDegrees(sf.longitude) - -122.4028) < 0.001);
     assert.match(dom.toast.textContent, /Traffic & CCTV/);
-    assert.match(dom.badge.textContent, /2026-09-18-miami-landing/);
+    assert.match(dom.badge.textContent, /2026-09-22-typhoon/);
   } finally {
     dom.restore();
   }
@@ -232,6 +240,42 @@ test('hashchange after boot still launches the traffic cinematic', async () => {
     await hashListener.handler();
     assert.deepEqual(enabled, ['traffic', 'cctv']);
     assert.equal(hops.length, 3);
+  } finally {
+    dom.restore();
+  }
+});
+
+test('typhoon pack enables weather layers and hops W. Pacific → Japan', async () => {
+  const dom = mockDom();
+  const enabled = [];
+  const { viewer, hops } = mockViewer();
+  try {
+    const pack = await runShortsPack({
+      pack: 'typhoon',
+      viewer,
+      dataManager: {
+        async setEnabled(id, on, options) {
+          enabled.push({ id, on, origin: options?.origin });
+          return true;
+        },
+      },
+    });
+    assert.equal(pack, 'typhoon');
+    assert.deepEqual(enabled, [
+      { id: 'weather', on: true, origin: 'programmatic' },
+      { id: 'weather-effects', on: true, origin: 'programmatic' },
+    ]);
+    assert.equal(hops.length, 2);
+    const [wpac, japan] = hops.map((hop) =>
+      Cesium.Cartographic.fromCartesian(hop.destination),
+    );
+    assert.ok(Math.abs(Cesium.Math.toDegrees(wpac.longitude) - 138.5) < 0.001);
+    assert.ok(Math.abs(Cesium.Math.toDegrees(wpac.latitude) - 24.2) < 0.001);
+    assert.ok(Math.abs(wpac.height - 3_800_000) < 1);
+    assert.ok(Math.abs(Cesium.Math.toDegrees(japan.longitude) - 135.5) < 0.001);
+    assert.ok(Math.abs(Cesium.Math.toDegrees(japan.latitude) - 34.4) < 0.001);
+    assert.match(dom.toast.textContent, /Typhoon Dujuan/);
+    assert.match(dom.badge.textContent, /2026-09-22-typhoon/);
   } finally {
     dom.restore();
   }

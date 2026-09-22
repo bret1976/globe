@@ -2,7 +2,7 @@
 
 Live: https://globe-production-e799.up.railway.app/
 
-## Shorts pack (2026-09-18)
+## Shorts pack (2026-09-22)
 
 Share / smoke hashes (append to live URL):
 
@@ -11,7 +11,8 @@ Share / smoke hashes (append to live URL):
 - `#shorts=cockpit` — Delta/voice cockpit approach (SFO)
 - `#shorts=area51` — Area 51 / Groom Lake + TR-3B tip
 - `#shorts=nepal` — Nepal floods reconstruction
-- `#shorts=traffic` — Traffic & CCTV God's Eye (Austin → London → SF; aliases: cctv, streets, tomtom, spy)
+- `#shorts=traffic` — Traffic & CCTV God's Eye (Austin → London → SF; aliases: streets, tomtom, spy)
+- `#shorts=typhoon` — Typhoon Dujuan → Japan (2026-09-21; aliases: dujuan, storm, himawari, japan-storm). Uses in-repo Open-Meteo / weather-effects — no proprietary sat tiles.
 
 Vessel feed **PARTIAL vs STALE** comes from upstream #626 (layer panel).
 

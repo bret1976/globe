@@ -112,6 +112,8 @@ const LAYER_ALIASES = Object.freeze([
   ['fire perimeters', 'fire-perimeters'],
   ['wildfire perimeters', 'fire-perimeters'],
   ['perimeters', 'fire-perimeters'],
+  ['au fire', 'au-fire'],
+  ['australia fire', 'au-fire'],
   ['earthquakes', 'earthquakes'],
   ['satellites', 'satellites'],
 ]);
@@ -339,6 +341,7 @@ export function composeSelfHostedSpeech(calls, originalText) {
         military: 'military flights',
         'local-firms': 'fires',
         'fire-perimeters': 'fire perimeters',
+        'au-fire': 'AU fire incidents',
         earthquakes: 'earthquakes',
         satellites: 'satellites',
       };
@@ -402,6 +405,7 @@ export function qwenToolDefinitions() {
                 'telegeography-submarine-cables',
                 'local-firms',
                 'fire-perimeters',
+                'au-fire',
                 'earthquakes',
                 'satellites',
               ],
