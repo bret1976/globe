@@ -21,6 +21,7 @@ import { openAiRealtimeProxy } from './openai.js';
 import { selfHostedVoiceProxy } from './voice.js';
 import { googlePlacesContextProxy } from './places.js';
 import { keySetupEndpoint } from '../standalone/key-setup.js';
+import { auFireProxy } from './auFire.js';
 
 /** Construct the local provider plugins in their established order. */
 function localProviderPlugins() {
@@ -47,6 +48,7 @@ function localProviderPlugins() {
     openAiRealtimeProxy(),
     selfHostedVoiceProxy(),
     googlePlacesContextProxy(),
+    auFireProxy(),
     keySetupEndpoint(),
   ];
 }
