@@ -240,7 +240,9 @@ export function parseShortsPackFromLocation(loc = window.location) {
   try {
     const hash = String(loc.hash || '').replace(/^#/, '');
     const params = new URLSearchParams(hash);
-    const search = new URLSearchParams(String(loc.search || '').replace(/^\?/, ''));
+    const search = new URLSearchParams(
+      String(loc.search || '').replace(/^\?/, ''),
+    );
     const raw = params.get(SHORTS_PARAM) || search.get(SHORTS_PARAM);
     if (!raw) return null;
     const key = String(raw).trim().toLowerCase();
@@ -336,7 +338,7 @@ export async function runShortsPack(input = {}) {
   }
 
   if (pack === 'traffic') {
-    toast('SHORTS · Traffic & CCTV · God\'s Eye (Austin → London → SF)');
+    toast("SHORTS · Traffic & CCTV · God's Eye (Austin → London → SF)");
     await enableLayers(dataManager, ['traffic', 'cctv']);
     if (!(await hop(TRAFFIC_AUSTIN))) return pack;
     if (!(await hop(TRAFFIC_LONDON))) return pack;
@@ -347,9 +349,9 @@ export async function runShortsPack(input = {}) {
   if (pack === 'typhoon') {
     toast('SHORTS · Typhoon Dujuan → Japan (Open-Meteo weather)');
     await enableLayers(dataManager, ['weather', 'weather-effects']);
-    document.getElementById('wx-on')?.click?.();
-    document.querySelector('[data-weather="on"]')?.click?.();
-    document.querySelector('[data-wx="on"]')?.click?.();
+    document.getElementById?.('wx-on')?.click?.();
+    document.querySelector?.('[data-weather="on"]')?.click?.();
+    document.querySelector?.('[data-wx="on"]')?.click?.();
     if (!(await hop(TYPHOON_WPAC))) return pack;
     await hop(TYPHOON_JAPAN);
     return pack;
@@ -381,7 +383,8 @@ export function initShortsPack(input = {}) {
     );
   };
 
-  const target = input.windowRef || (typeof window !== 'undefined' ? window : null);
+  const target =
+    input.windowRef || (typeof window !== 'undefined' ? window : null);
   if (target?.addEventListener) {
     target.addEventListener('hashchange', () => {
       const next = parseShortsPackFromLocation(target.location || location);

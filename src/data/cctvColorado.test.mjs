@@ -154,7 +154,12 @@ test('no heading is derived from the roadway direction in the name', () => {
   assert.equal(directionToHeading('NB', true), 0);
   assert.equal(directionToHeading('WB', true), 270);
 
-  for (const name of ['I-25 NB at 20th', 'I-70 WB Vail', 'US-6 EB', 'SH-2 SB']) {
+  for (const name of [
+    'I-25 NB at 20th',
+    'I-70 WB Vail',
+    'US-6 EB',
+    'SH-2 SB',
+  ]) {
     const [source] = coloradoFeatureToSources(
       feature({
         properties: {
@@ -173,7 +178,10 @@ test('no heading is derived from the roadway direction in the name', () => {
     assert.equal(source.headingConfidence, 'low');
     assert.ok(Number.isFinite(source.headingDeg));
     // Same id, same fallback heading, whatever the direction token says.
-    assert.equal(source.headingDeg, coloradoFeatureToSources(feature())[0].headingDeg);
+    assert.equal(
+      source.headingDeg,
+      coloradoFeatureToSources(feature())[0].headingDeg,
+    );
   }
 });
 
@@ -186,7 +194,9 @@ test('non-public, broken, off-state and off-host records are dropped', () => {
   // Salt Lake City: a plausible lat/lon, but not a Colorado camera.
   assert.deepEqual(
     coloradoFeatureToSources(
-      feature({ geometry: { type: 'Point', coordinates: [-111.891, 40.7608] } }),
+      feature({
+        geometry: { type: 'Point', coordinates: [-111.891, 40.7608] },
+      }),
     ),
     [],
   );
@@ -266,12 +276,16 @@ test('frame URLs upgrade to HTTPS and ids stay stable', () => {
 
   // The full ".flv.png" double extension is stripped, leaving CDOT's code.
   assert.equal(
-    coloradoCameraId('https://cocam.carsprogram.org/Snapshots/025N21210CAM1SEC.flv.png'),
+    coloradoCameraId(
+      'https://cocam.carsprogram.org/Snapshots/025N21210CAM1SEC.flv.png',
+    ),
     'colorado-025n21210cam1sec',
   );
   // A filename-scheme change degrades to a still-stable slug, not a dropped camera.
   assert.equal(
-    coloradoCameraId('https://cocam.carsprogram.org/Snapshots/us6_clear_creek.jpg'),
+    coloradoCameraId(
+      'https://cocam.carsprogram.org/Snapshots/us6_clear_creek.jpg',
+    ),
     'colorado-us6-clear-creek',
   );
   assert.equal(coloradoCameraId(''), null);
@@ -279,17 +293,22 @@ test('frame URLs upgrade to HTTPS and ids stay stable', () => {
 
 test('a nameless view still gets a label', () => {
   assert.equal(
-    coloradoCameraName({ properties: { name: 'Feature name' } }, { name: '  View name ' }, 'colorado-a1'),
+    coloradoCameraName(
+      { properties: { name: 'Feature name' } },
+      { name: '  View name ' },
+      'colorado-a1',
+    ),
     'View name',
   );
   assert.equal(
-    coloradoCameraName({ properties: { name: 'Feature name' } }, {}, 'colorado-a1'),
+    coloradoCameraName(
+      { properties: { name: 'Feature name' } },
+      {},
+      'colorado-a1',
+    ),
     'Feature name',
   );
-  assert.equal(
-    coloradoCameraName({}, {}, 'colorado-a1'),
-    'Colorado Camera a1',
-  );
+  assert.equal(coloradoCameraName({}, {}, 'colorado-a1'), 'Colorado Camera a1');
 });
 
 test('the loader reads the keyless feed and collapses duplicate ids', async (t) => {
@@ -405,13 +424,16 @@ test('the catalog fetch refuses redirects and oversized bodies', async (t) => {
   // A body over the cap is refused rather than buffered.
   t.mock.restoreAll();
   t.mock.method(console, 'warn', () => {});
-  t.mock.method(globalThis, 'fetch', async () =>
-    new Response(JSON.stringify({ features: [feature()] }), {
-      headers: {
-        'Content-Type': 'application/json',
-        'content-length': String(COLORADO_MAX_CATALOG_BYTES + 1),
-      },
-    }),
+  t.mock.method(
+    globalThis,
+    'fetch',
+    async () =>
+      new Response(JSON.stringify({ features: [feature()] }), {
+        headers: {
+          'Content-Type': 'application/json',
+          'content-length': String(COLORADO_MAX_CATALOG_BYTES + 1),
+        },
+      }),
   );
   assert.deepEqual(await loadColoradoSourcesFromOpenData(), []);
 

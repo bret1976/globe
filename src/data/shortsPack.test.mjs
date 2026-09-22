@@ -83,14 +83,38 @@ test('traffic aliases resolve from hash or search', () => {
   assert.equal(SHORTS_ALIASES.storm, 'typhoon');
   assert.equal(SHORTS_ALIASES.himawari, 'typhoon');
   assert.equal(SHORTS_ALIASES['japan-storm'], 'typhoon');
-  assert.equal(parseShortsPackFromLocation(loc({ hash: '#shorts=traffic' })), 'traffic');
-  assert.equal(parseShortsPackFromLocation(loc({ hash: '#shorts=cctv' })), null);
-  assert.equal(parseShortsPackFromLocation(loc({ search: '?shorts=spy' })), 'traffic');
-  assert.equal(parseShortsPackFromLocation(loc({ hash: '#shorts=miami' })), 'miami-landing');
-  assert.equal(parseShortsPackFromLocation(loc({ hash: '#shorts=bay' })), 'bay-area');
-  assert.equal(parseShortsPackFromLocation(loc({ hash: '#shorts=typhoon' })), 'typhoon');
-  assert.equal(parseShortsPackFromLocation(loc({ hash: '#shorts=dujuan' })), 'typhoon');
-  assert.equal(parseShortsPackFromLocation(loc({ search: '?shorts=japan-storm' })), 'typhoon');
+  assert.equal(
+    parseShortsPackFromLocation(loc({ hash: '#shorts=traffic' })),
+    'traffic',
+  );
+  assert.equal(
+    parseShortsPackFromLocation(loc({ hash: '#shorts=cctv' })),
+    null,
+  );
+  assert.equal(
+    parseShortsPackFromLocation(loc({ search: '?shorts=spy' })),
+    'traffic',
+  );
+  assert.equal(
+    parseShortsPackFromLocation(loc({ hash: '#shorts=miami' })),
+    'miami-landing',
+  );
+  assert.equal(
+    parseShortsPackFromLocation(loc({ hash: '#shorts=bay' })),
+    'bay-area',
+  );
+  assert.equal(
+    parseShortsPackFromLocation(loc({ hash: '#shorts=typhoon' })),
+    'typhoon',
+  );
+  assert.equal(
+    parseShortsPackFromLocation(loc({ hash: '#shorts=dujuan' })),
+    'typhoon',
+  );
+  assert.equal(
+    parseShortsPackFromLocation(loc({ search: '?shorts=japan-storm' })),
+    'typhoon',
+  );
   assert.equal(parseShortsPackFromLocation(loc()), null);
 });
 
@@ -118,13 +142,23 @@ test('traffic pack enables traffic + CCTV and hops Austin → London → SF', as
     const [austin, london, sf] = hops.map((hop) =>
       Cesium.Cartographic.fromCartesian(hop.destination),
     );
-    assert.ok(Math.abs(Cesium.Math.toDegrees(austin.latitude) - 30.2747) < 0.001);
-    assert.ok(Math.abs(Cesium.Math.toDegrees(austin.longitude) - -97.7403) < 0.001);
+    assert.ok(
+      Math.abs(Cesium.Math.toDegrees(austin.latitude) - 30.2747) < 0.001,
+    );
+    assert.ok(
+      Math.abs(Cesium.Math.toDegrees(austin.longitude) - -97.7403) < 0.001,
+    );
     assert.ok(Math.abs(austin.height - 42_000) < 1);
-    assert.ok(Math.abs(Cesium.Math.toDegrees(london.latitude) - 51.5055) < 0.001);
-    assert.ok(Math.abs(Cesium.Math.toDegrees(london.longitude) - -0.0754) < 0.001);
+    assert.ok(
+      Math.abs(Cesium.Math.toDegrees(london.latitude) - 51.5055) < 0.001,
+    );
+    assert.ok(
+      Math.abs(Cesium.Math.toDegrees(london.longitude) - -0.0754) < 0.001,
+    );
     assert.ok(Math.abs(Cesium.Math.toDegrees(sf.latitude) - 37.7952) < 0.001);
-    assert.ok(Math.abs(Cesium.Math.toDegrees(sf.longitude) - -122.4028) < 0.001);
+    assert.ok(
+      Math.abs(Cesium.Math.toDegrees(sf.longitude) - -122.4028) < 0.001,
+    );
     assert.match(dom.toast.textContent, /Traffic & CCTV/);
     assert.match(dom.badge.textContent, /2026-09-22-typhoon/);
   } finally {
