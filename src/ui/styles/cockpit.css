@@ -2188,3 +2188,16 @@ body.cockpit-mode #intel-hud .hud-right-edge {
     animation: none;
   }
 }
+
+/* Keep voice and its typed fallback reachable while flying. */
+body.cockpit-mode #command-dock {
+  display: grid !important;
+  grid-template-areas: 'voice';
+  grid-template-columns: minmax(0, 220px);
+  width: max-content;
+  max-width: calc(100vw - 32px);
+}
+body.cockpit-mode #command-dock > #location-bar,
+body.cockpit-mode #command-dock > #control-panel {
+  display: none;
+}

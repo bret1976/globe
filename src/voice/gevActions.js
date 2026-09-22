@@ -43,6 +43,18 @@ const VOICE_LAYER_FOCUS_IDS = new Set([
   'earthquakes',
   'local-firms',
   'fire-perimeters',
+  'flights',
+  'traffic',
+  'transit',
+  'bikeshare',
+  'cctv',
+  'alpr-cameras',
+  'local-datacenters',
+  'local-dams',
+  'military-installations',
+  'directions',
+  'radio',
+  'telegeography-submarine-cables',
 ]);
 
 async function leaveCockpitForGlobeNav(styleManager) {
@@ -405,6 +417,20 @@ export function createGevActionRunner({
         throw new Error(`Unknown data layer: ${args.layerId || 'missing'}`);
       }
       const enabled = Boolean(args.enabled);
+      if (enabled) {
+        await leaveCockpitForGlobeNav(styleManager);
+        const context = styleManager.getContextModeState?.();
+        if (
+          context?.mode === 'space-missions' &&
+          !['rocket-launches', 'satellites', 'radio'].includes(layerId)
+        ) {
+          const result = await styleManager.setContextMode('off', {
+            signal: runOptions.signal,
+            isCurrent: runOptions.isCurrent,
+          });
+          if (result?.ok === false) return result;
+        }
+      }
       const changeOptions = { origin: 'voice' };
       if (runOptions.signal) changeOptions.signal = runOptions.signal;
       let changed = false;
@@ -502,7 +528,7 @@ export function createGevActionRunner({
       const layer = dataManager.getAll().find((item) => item.id === layerId);
       if (enabled) {
         await leaveCockpitForGlobeNav(styleManager);
-        if (VOICE_LAYER_FOCUS_IDS.has(layerId)) {
+        if (args.focus !== false && VOICE_LAYER_FOCUS_IDS.has(layerId)) {
           try {
             const { focusEnabledLayer } = await import('../app/layerFocus.js');
             await focusEnabledLayer({
@@ -566,6 +592,7 @@ export function createGevActionRunner({
         {
           layerId,
           enabled: true,
+          focus: false,
         },
         runOptions,
       );

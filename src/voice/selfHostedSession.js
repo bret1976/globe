@@ -45,6 +45,7 @@ export function createSelfHostedSession({
   let pendingTranscript = '';
   let silenceTimer = null;
   let audioContext = null;
+  let playbackContext = null;
   let analyser = null;
   let visualizerSource = null;
   let visualizerFrame = null;
@@ -108,6 +109,8 @@ export function createSelfHostedSession({
   function interruptSpeech() {
     speakEpoch += 1;
     speaking = null;
+    void Promise.resolve(playbackContext?.close?.()).catch(() => {});
+    playbackContext = null;
     try {
       globalThis.speechSynthesis?.cancel?.();
     } catch {
@@ -132,6 +135,7 @@ export function createSelfHostedSession({
       // Keep TTS off the mic analyser context. Sharing that context after
       // the first reply left the open-mic meter dead.
       const playback = new AudioContext();
+      playbackContext = playback;
       try {
         await playback.resume?.();
         const buffer = await playback.decodeAudioData(audio.slice(0));
@@ -146,7 +150,8 @@ export function createSelfHostedSession({
           8_000,
         );
       } finally {
-        void playback.close?.();
+        if (playbackContext === playback) playbackContext = null;
+        void Promise.resolve(playback.close?.()).catch(() => {});
       }
       return;
     }
@@ -209,6 +214,7 @@ export function createSelfHostedSession({
       queuedUtterance = spoken;
       return;
     }
+    let failureDetail = '';
     const turnEpoch = sessionEpoch;
     const isCurrent = () =>
       live && !signal?.aborted && turnEpoch === sessionEpoch;
@@ -272,6 +278,7 @@ export function createSelfHostedSession({
       })().catch(() => {});
       emit({ type: 'completion', status: 'completed' });
     } catch (error) {
+      failureDetail = error?.message || 'Command failed. Please try again.';
       if (isCurrent()) {
         emit({
           type: 'transcript',
@@ -292,7 +299,11 @@ export function createSelfHostedSession({
       } else if (live) {
         // Open the mic now. Waiting for TTS left LISTENING on a dead
         // capture, so the second spoken command never reached ASR.
-        resumeListening();
+        resumeListening(
+          failureDetail
+            ? `${failureDetail} — listening for your next command`
+            : undefined,
+        );
         const reply = speaking;
         void Promise.resolve(reply)
           .catch(() => {})
@@ -577,7 +588,7 @@ export function createSelfHostedSession({
     }
   }
 
-  function resumeListening() {
+  function resumeListening(detail = 'Listening — speak now') {
     if (!live || busy) return;
     heardSpeech = false;
     lastSpeechAt = 0;
@@ -588,7 +599,7 @@ export function createSelfHostedSession({
     emit({
       type: 'state',
       state: 'listening',
-      detail: 'Listening — speak now',
+      detail,
     });
     if (preferRecorder || mediaStream) {
       if (mediaStream && micTracksLive()) {
@@ -773,10 +784,15 @@ export function createSelfHostedSession({
       });
       return Promise.resolve(null);
     }
+    const micEpoch = sessionEpoch;
     micPromise = globalThis.navigator.mediaDevices
       .getUserMedia({ audio: { ...OPEN_MIC_CONSTRAINTS } })
       .then((stream) => adoptPreferredMic(stream))
       .then((stream) => {
+        if (micEpoch !== sessionEpoch || signal?.aborted) {
+          stream.getTracks?.().forEach((track) => track.stop());
+          return null;
+        }
         if (live) attachMic(stream, { record: holding || preferRecorder });
         else pendingStream = stream;
         return stream;

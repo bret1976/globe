@@ -87,6 +87,19 @@ const PLACE_ALIASES = Object.freeze({
 });
 
 const LAYER_ALIASES = Object.freeze([
+  ['military flights', 'military'],
+  ['mapped alpr cameras', 'alpr-cameras'],
+  ['alpr cameras', 'alpr-cameras'],
+  ['mapped installations', 'military-installations'],
+  ['military installations', 'military-installations'],
+  ['data centers', 'local-datacenters'],
+  ['dams', 'local-dams'],
+  ['space missions', 'rocket-launches'],
+  ['rocket launches', 'rocket-launches'],
+  ['bike share', 'bikeshare'],
+  ['transit', 'transit'],
+  ['directions', 'directions'],
+  ['radio', 'radio'],
   ['street traffic', 'traffic'],
   ['road traffic', 'traffic'],
   ['live traffic', 'traffic'],
@@ -133,14 +146,22 @@ export function normalizeVoiceUtterance(text) {
 }
 
 function matchLayer(normalized) {
-  for (const [alias, layerId] of LAYER_ALIASES) {
-    if (normalized.includes(alias)) return layerId;
+  for (const [alias, layerId] of [...LAYER_ALIASES].sort(
+    (a, b) => b[0].length - a[0].length,
+  )) {
+    if (new RegExp(`\\b${alias}\\b`).test(normalized)) return layerId;
   }
   return null;
 }
 
 function stripLayerWords(normalized) {
-  return String(normalized || '')
+  let text = String(normalized || '');
+  for (const [alias] of [...LAYER_ALIASES].sort(
+    (a, b) => b[0].length - a[0].length,
+  )) {
+    text = text.replace(new RegExp(`\\b${alias}\\b`, 'g'), ' ');
+  }
+  return text
     .replace(LAYER_FILLER, ' ')
     .replace(
       /\b(take me to|fly me to|fly to|go to|navigate to|show me|turn on|enable|open)\b/g,
@@ -269,7 +290,11 @@ export function planSelfHostedVoiceTurn(text, context = {}) {
   if (layerId) {
     calls.push({
       name: 'set_layer_visibility',
-      arguments: { layerId, enabled: true },
+      arguments: {
+        layerId,
+        enabled: true,
+        ...(spokenPlace ? { focus: false } : {}),
+      },
     });
     if (layerId === 'cctv') {
       calls.push({

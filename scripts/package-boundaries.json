@@ -20,7 +20,11 @@
   },
   "viewer": {
     "exports": ["./application/viewer"],
-    "modules": ["src/app/viewer.js"],
+    "modules": [
+      "src/app/viewer.js",
+      "src/app/globeFraming.js",
+      "src/app/viewerPresentation.js"
+    ],
     "external": ["cesium"]
   },
   "vite-build": {
@@ -260,6 +264,8 @@
     "modules": [
       "server/providers/voice.js",
       "server/providers/voice/inference.js",
+      "server/providers/voice/hostedAsr.js",
+      "server/providers/voice/hostedTts.js",
       "server/providers/voice/routes.js",
       "server/providers/common/request.js",
       "src/voice/selfHostedIntent.js"
@@ -594,7 +600,11 @@
       "src/ui/aircraftDisplay.js",
       "src/ui/layerBindings.js",
       "src/ui/displayBindings.js",
-      "src/ui/shellFacade.js"
+      "src/ui/shellFacade.js",
+      "src/data/operatorLocation.js",
+      "src/data/shortsPack.js",
+      "src/app/layerFocusPlan.js",
+      "src/app/layerFocus.js"
     ],
     "external": ["cesium"]
   },
@@ -714,6 +724,7 @@
   "civil-flights": {
     "exports": ["./layers/flights"],
     "modules": [
+      "src/data/adsbLolFallback.js",
       "src/data/aircraftClass.js",
       "src/data/aircraftIcons.js",
       "src/data/aircraftMeta.js",
@@ -1015,6 +1026,8 @@
   "cctv-layer": {
     "exports": ["./layers/cctv"],
     "modules": [
+      "src/app/layerFocusPlan.js",
+      "src/data/operatorLocation.js",
       "src/data/cctvCards.js",
       "src/data/cctvGizmo.js",
       "src/data/cctvLod.js",
@@ -1054,6 +1067,8 @@
   "alpr-cameras": {
     "exports": ["./layers/alpr"],
     "modules": [
+      "src/data/operatorLocation.js",
+      "src/app/layerFocusPlan.js",
       "src/layers/alpr/index.js",
       "src/layers/alpr/model.js",
       "src/layers/alpr/policy.js",
@@ -1170,6 +1185,8 @@
       "./voice/realtime-session"
     ],
     "modules": [
+      "src/voice/micDevices.js",
+      "src/voice/speechVoices.js",
       "src/voice/realtimeController.js",
       "src/voice/realtimeBackend.js",
       "src/voice/control.js",
@@ -1217,6 +1234,15 @@
       "./standalone/catalog"
     ],
     "modules": [
+      "src/data/adsbLolFallback.js",
+      "src/voice/micDevices.js",
+      "src/voice/speechVoices.js",
+      "src/app/viewerPresentation.js",
+      "src/app/globeFraming.js",
+      "src/data/shortsPack.js",
+      "src/data/operatorLocation.js",
+      "src/app/layerFocus.js",
+      "src/app/layerFocusPlan.js",
       "src/scenes/nepalEvidencePack.js",
       "src/data/bhoteKoshiEvent.js",
       "src/data/bhoteKoshiEmbeddedMedia.js",
@@ -1854,6 +1880,9 @@
   "application-layer-construction": {
     "exports": ["./application/layers"],
     "modules": [
+      "src/data/operatorLocation.js",
+      "src/app/layerFocusPlan.js",
+      "src/data/adsbLolFallback.js",
       "src/data/bhoteKoshiEvent.js",
       "src/data/bhoteKoshiEmbeddedMedia.js",
       "src/data/bhoteKoshiLocator.js",

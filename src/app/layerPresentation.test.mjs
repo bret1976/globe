@@ -64,3 +64,38 @@ test('user Data Layer enable with focus flies after the layer is on', async () =
   presentation.destroy();
   await manager.destroyAll();
 });
+
+test('a slow layer enable cannot move the camera after a newer layer click', async () => {
+  let finishFirst;
+  const enabled = new Set(),
+    focused = [];
+  const manager = {
+    subscribeActivity: () => () => {},
+    getAll: () => [],
+    isEnabled: (id) => enabled.has(id),
+    async setEnabled(id) {
+      if (id === 'first')
+        await new Promise((resolve) => {
+          finishFirst = resolve;
+        });
+      enabled.add(id);
+      return true;
+    },
+  };
+  const presentation = new LayerPresentation(manager, {
+    onUserLayerEnabled: (id) => focused.push(id),
+  });
+  const first = presentation.panel.setEnabled('first', true, {
+    origin: 'user',
+    focus: true,
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+  await presentation.panel.setEnabled('second', true, {
+    origin: 'user',
+    focus: true,
+  });
+  finishFirst();
+  await first;
+  assert.deepEqual(focused, ['second']);
+  presentation.destroy();
+});

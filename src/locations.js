@@ -78,7 +78,7 @@ export const CITY_POIS = {
     groundElevation: 1360,
     viewBounds: {
       southwest: { lat: 37.15, lng: -116.05 },
-      northeast: { lat: 37.35, lng: -115.65 },
+      northeast: { lat: 37.35, lng: -115.3 },
     },
     pois: [
       {

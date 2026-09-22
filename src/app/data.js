@@ -29,6 +29,12 @@ export function createApplicationData({
         if (result?.ok === false)
           throw new Error(result.error || 'Could not leave cockpit');
       }
+      const context = styleManager.getContextModeState?.();
+      if (context?.active || context?.changing) {
+        const result = await styleManager.setContextMode('off');
+        if (result?.ok === false)
+          throw new Error(result.error || 'Could not leave current view');
+      }
       // Release Context, follow, orbit and deferred navigation before moving.
       styleManager.runImmediateNavigation?.('data layer', () => true);
       const { prepareEnabledLayerFocus } = await import('./layerFocus.js');

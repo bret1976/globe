@@ -171,10 +171,8 @@ function collectFocusObjects(module) {
  * Snap to the layer's live destination BEFORE enable. Do not wait on GPS —
  * the permission dialog was leaving every Data Layer button stuck/disabled.
  */
-export async function prepareEnabledLayerFocus({
-  viewer,
-  layerId,
-} = {}) {
+export async function prepareEnabledLayerFocus({ viewer, layerId } = {}) {
+  ++layerFocusEpoch;
   if (!viewer?.camera) return { ok: false, reason: 'no-viewer' };
   if (
     typeof document !== 'undefined' &&
@@ -249,7 +247,12 @@ export function focusCctvLiveDestination(viewer, module) {
       lon: dest.lon,
     });
   }
-  return { ok: true, mode: 'venue', id: nearest?.id || null, destination: dest };
+  return {
+    ok: true,
+    mode: 'venue',
+    id: nearest?.id || null,
+    destination: dest,
+  };
 }
 
 async function refineLiveVesselFocus({ viewer, module, venue, epoch }) {
@@ -283,11 +286,7 @@ async function refineLiveVesselFocus({ viewer, module, venue, epoch }) {
  * After a Data Layers row enable, fly to that layer's live data immediately.
  * Cache-only location — never await the geolocation prompt.
  */
-export async function focusEnabledLayer({
-  viewer,
-  layerId,
-  module,
-} = {}) {
+export async function focusEnabledLayer({ viewer, layerId, module } = {}) {
   const epoch = ++layerFocusEpoch;
   if (!viewer?.camera) return { ok: false, reason: 'no-viewer' };
   if (
@@ -309,7 +308,10 @@ export async function focusEnabledLayer({
 
   let nearestCameraId = null;
   let nearestCameraDistKm = null;
-  if (layerId === 'cctv' && typeof module?.nearestCameraToLatLon === 'function') {
+  if (
+    layerId === 'cctv' &&
+    typeof module?.nearestCameraToLatLon === 'function'
+  ) {
     const probe = location || layerLiveDestination('cctv');
     const nearest = probe
       ? module.nearestCameraToLatLon(probe.lat, probe.lon)
@@ -454,10 +456,7 @@ export async function focusEnabledLayer({
         excludeId: currentId,
       });
       const selected = module.getSelectedInfo?.();
-      if (
-        selected &&
-        isFiniteLatLon(selected.latitude, selected.longitude)
-      ) {
+      if (selected && isFiniteLatLon(selected.latitude, selected.longitude)) {
         flyToLatLon(
           viewer,
           selected.latitude,
