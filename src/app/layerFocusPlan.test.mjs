@@ -227,3 +227,13 @@ test('focus objects prefer a full position list over culled detectables', () => 
     [{ id: 'ONLY' }],
   );
 });
+
+test('US fire perimeters focus their coverage even from another continent', () => {
+  const plan = planEnabledLayerFocus({
+    layerId: 'fire-perimeters',
+    location: { lat: 37.5, lon: 141 },
+  });
+  assert.equal(plan.lat, 39);
+  assert.equal(plan.lon, -112);
+  assert.equal(plan.heightM, 1500000);
+});

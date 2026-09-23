@@ -21,6 +21,7 @@ export const LAYER_FOCUS_HEIGHT_M = Object.freeze({
   earthquakes: 1_200_000,
   'rocket-launches': 800_000,
   'local-firms': 80_000,
+  'fire-perimeters': 1_500_000,
   'au-fire': 800_000,
   'local-datacenters': 40_000,
   'local-dams': 40_000,
@@ -141,6 +142,12 @@ export const LAYER_LIVE_DESTINATIONS = Object.freeze({
     heightM: 80_000,
     label: 'California fires',
   }),
+  'fire-perimeters': Object.freeze({
+    lat: 39,
+    lon: -112,
+    heightM: 1_500_000,
+    label: 'US fire perimeters',
+  }),
   'au-fire': Object.freeze({
     lat: -35.3,
     lon: 148.0,
@@ -205,6 +212,7 @@ export const FEATURED_DESTINATION_LAYER_IDS = Object.freeze([
   'rocket-launches',
   'earthquakes',
   'local-firms',
+  'fire-perimeters',
   'au-fire',
   'local-datacenters',
   'local-dams',
@@ -308,7 +316,10 @@ export function pickLayerFocusAnchor({
 /** Inland operators must search from the coast, not the desert. */
 export const INLAND_VESSEL_ANCHOR_KM = 150;
 
-export function pickVesselFocusAnchor(location, venue = LAYER_VENUE_FALLBACK['ais-live-vessels']) {
+export function pickVesselFocusAnchor(
+  location,
+  venue = LAYER_VENUE_FALLBACK['ais-live-vessels'],
+) {
   if (!venue) return location || null;
   if (
     !location ||
@@ -479,6 +490,7 @@ export function planEnabledLayerFocus({
       heightM: layerFocusHeightM(layerId),
     };
   }
-  if (location) return { mode: 'operator', heightM: layerFocusHeightM(layerId) };
+  if (location)
+    return { mode: 'operator', heightM: layerFocusHeightM(layerId) };
   return { mode: 'skip' };
 }
