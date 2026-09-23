@@ -39,10 +39,14 @@ test('catalogs construct distinct layers and classification from their supplied 
     signal: b.signal,
     surface: fixtureSurface(b.signal),
   });
-  assert.equal(first.layers.length, 23);
+  assert.equal(first.layers.length, 27);
   assert.ok(first.get('fire-perimeters'));
   assert.ok(first.get('au-fire'));
   assert.ok(first.get('transit'));
+  assert.ok(first.get('recent-imagery'));
+  assert.ok(first.get('weather'));
+  assert.ok(first.get('wind'));
+  assert.ok(first.get('weather-cyclones'));
   const order = first.layers.map(({ id }) => id);
   assert.deepEqual(
     order.slice(order.indexOf('traffic'), order.indexOf('directions') + 1),

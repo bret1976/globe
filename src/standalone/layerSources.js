@@ -13,6 +13,8 @@ import { createSatelliteSource } from '../layers/satellites/source.js';
 import { createLaunchSource } from '../layers/launches/source.js';
 import { createOverpassAlprSource } from '../layers/alpr/source.js';
 import { createFirmsSource } from '../layers/firms/source.js';
+import { createWindSource } from '../layers/wind/source.js';
+import { createCycloneSource } from '../layers/cyclones/source.js';
 import { createReferenceSources } from '../sources/reference.js';
 export { createReferenceSources as createStandaloneReferenceSources } from '../sources/reference.js';
 
@@ -35,5 +37,7 @@ export function createStandaloneLayerSources() {
     launches: createLaunchSource(),
     alpr: createOverpassAlprSource(),
     firms: createFirmsSource(),
+    wind: createWindSource(),
+    cyclones: createCycloneSource(),
   };
 }

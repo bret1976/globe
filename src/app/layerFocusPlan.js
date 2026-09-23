@@ -22,6 +22,10 @@ export const LAYER_FOCUS_HEIGHT_M = Object.freeze({
   'rocket-launches': 800_000,
   'local-firms': 80_000,
   'au-fire': 800_000,
+  'recent-imagery': 400_000,
+  weather: 2_000_000,
+  wind: 4_000_000,
+  'weather-cyclones': 2_000_000,
   'local-datacenters': 40_000,
   'local-dams': 40_000,
   // computeViewRectangle at 80 km / -42° hits the horizon and exceeds the
@@ -147,6 +151,24 @@ export const LAYER_LIVE_DESTINATIONS = Object.freeze({
     heightM: 800_000,
     label: 'NSW / VIC fires',
   }),
+  weather: Object.freeze({
+    lat: 24.2,
+    lon: 138.5,
+    heightM: 2_000_000,
+    label: 'Western Pacific IR',
+  }),
+  wind: Object.freeze({
+    lat: 20,
+    lon: 0,
+    heightM: 4_000_000,
+    label: 'Global wind',
+  }),
+  'weather-cyclones': Object.freeze({
+    lat: 24.2,
+    lon: 138.5,
+    heightM: 2_000_000,
+    label: 'Western Pacific storms',
+  }),
   'military-installations': Object.freeze({
     lat: 36.236,
     lon: -115.034,
@@ -206,6 +228,9 @@ export const FEATURED_DESTINATION_LAYER_IDS = Object.freeze([
   'earthquakes',
   'local-firms',
   'au-fire',
+  'weather',
+  'wind',
+  'weather-cyclones',
   'local-datacenters',
   'local-dams',
 ]);

@@ -1,5 +1,6 @@
 import { layerFeedState } from '../data/feedState.js';
 export { layerFeedState } from '../data/feedState.js';
+import { createWeatherPanel } from './weatherPanel.js';
 import { GUIDANCE_STATUSES } from '../loadingFeedback.js';
 import { keySetupRequirement } from '../keySetupCore.mjs';
 const FEED_STATE_LABELS = Object.freeze({
@@ -28,7 +29,7 @@ const PANEL_GROUPS = [
   },
   {
     label: 'Cameras',
-    ids: ['cctv', 'alpr-cameras'],
+    ids: ['cctv', 'recent-imagery'],
   },
   {
     label: 'Infrastructure',
@@ -37,7 +38,12 @@ const PANEL_GROUPS = [
       'local-datacenters',
       'telegeography-submarine-cables',
       'local-dams',
+      'alpr-cameras',
     ],
+  },
+  {
+    label: 'Weather',
+    ids: ['weather', 'wind', 'weather-cyclones'],
   },
   {
     label: 'Events',
@@ -68,6 +74,10 @@ const PANEL_LABELS = {
   'local-datacenters': 'Data Centers',
   'local-firms': 'Active Fires',
   'au-fire': 'AU Fire Incidents',
+  'recent-imagery': 'Recent Imagery',
+  weather: 'Observed Weather',
+  wind: 'Wind',
+  'weather-cyclones': 'Cyclones',
 };
 
 function panelLabel(layer) {
@@ -119,12 +129,50 @@ export class LayerPanel {
     this._generation = 0;
     this._removers = [];
     this._destroyed = false;
+    this._recentImageryFactory = null;
+    this._recentImageryPanel = null;
+    this._weatherPanel = null;
   }
   mount(container) {
     if (this._destroyed) return;
     this._releaseBindings();
     this._toggleContainer = container;
+    this._mountWeatherPanel();
+    this._mountRecentImagery();
     this._renderToggles();
+  }
+  /**
+   * Host the Recent Imagery readout in its rail body. The application
+   * supplies the factory once the layer, viewer and box tool exist.
+   * @param {((container: HTMLElement) => { destroy: () => void } | null) | null} factory
+   */
+  attachRecentImagery(factory) {
+    if (this._destroyed) return;
+    this._recentImageryFactory = typeof factory === 'function' ? factory : null;
+    this._mountRecentImagery();
+  }
+  _mountRecentImagery() {
+    this._recentImageryPanel?.destroy();
+    this._recentImageryPanel = null;
+    const container = this._toggleContainer?.ownerDocument?.getElementById?.(
+      'recent-imagery-panel-body',
+    );
+    if (container && this._recentImageryFactory)
+      this._recentImageryPanel = this._recentImageryFactory(container) || null;
+  }
+  _mountWeatherPanel() {
+    this._weatherPanel?.destroy();
+    this._weatherPanel = null;
+    const container =
+      this._toggleContainer?.ownerDocument?.getElementById?.(
+        'weather-panel-body',
+      );
+    if (!container) return;
+    // Lazy import avoided: the panel module is small and catalog-owned.
+    this._weatherPanel = createWeatherPanel({
+      container,
+      setLayerParams: this.setLayerParams,
+    });
   }
   _bind(element, type, listener) {
     element.addEventListener(type, listener);
@@ -138,6 +186,11 @@ export class LayerPanel {
     if (this._destroyed) return;
     this._destroyed = true;
     this._releaseBindings();
+    this._weatherPanel?.destroy();
+    this._weatherPanel = null;
+    this._recentImageryPanel?.destroy();
+    this._recentImageryPanel = null;
+    this._recentImageryFactory = null;
     this._toggleContainer = null;
   }
   _renderToggles() {
@@ -498,6 +551,26 @@ export class LayerPanel {
         row.querySelector('.data-row-list'),
       );
     }
+    this._refreshWeatherPanel();
+  }
+
+  _refreshWeatherPanel() {
+    this._weatherPanel?.update(
+      this.getAll()
+        .filter(
+          (layer) =>
+            layer.enabled &&
+            ['weather', 'wind', 'weather-cyclones'].includes(layer.id),
+        )
+        .map((layer) => ({
+          id: layer.id,
+          name: panelLabel(layer),
+          icon: layer.icon,
+          source: layer.source,
+          stats: layer.stats,
+          ...this._rowControlsFor(layer.id),
+        })),
+    );
   }
 
   _buildMetaText(layer) {
