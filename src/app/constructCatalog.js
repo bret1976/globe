@@ -20,6 +20,10 @@ import { createApplicationEarthquakes } from './layers/earthquakes.js';
 import { createApplicationFirePerimeters } from './layers/perimeters.js';
 import { createApplicationAuFire } from './layers/auFire.js';
 import { createApplicationCables } from './layers/submarineCables.js';
+import { createApplicationRecentImagery } from './layers/recentImagery.js';
+import { createApplicationWeather } from './layers/weather.js';
+import { createApplicationWind } from './layers/wind.js';
+import { createApplicationCyclones } from './layers/cyclones.js';
 import { createInfrastructureLayers } from '../data/infrastructure.js';
 import { localGeoJsonServices } from './localGeojsonServices.js';
 import { createBhoteKoshiEventLayer } from '../data/bhoteKoshiEvent.js';
@@ -48,6 +52,8 @@ const SOURCE_METHODS = Object.freeze({
   'fire-perimeters': ['getSnapshot'],
   auFire: ['getSnapshot'],
   cables: ['fetch'],
+  cyclones: ['getSnapshot'],
+  wind: ['getSnapshot'],
 });
 
 /** Construct the current catalog without choosing any source provider.
@@ -138,6 +144,10 @@ export function createApplicationCatalog({
         }),
         ...createInfrastructureLayers(localGeoJsonServices),
         createApplicationCables({ source: sources.cables }),
+        createApplicationRecentImagery(),
+        createApplicationWeather(),
+        createApplicationWind({ source: sources.wind }),
+        createApplicationCyclones({ source: sources.cyclones }),
         createApplicationFirms({
           surface,
           id: 'local-firms',

@@ -297,7 +297,8 @@ test('typhoon pack enables weather layers and hops W. Pacific → Japan', async 
     assert.equal(pack, 'typhoon');
     assert.deepEqual(enabled, [
       { id: 'weather', on: true, origin: 'programmatic' },
-      { id: 'weather-effects', on: true, origin: 'programmatic' },
+      { id: 'wind', on: true, origin: 'programmatic' },
+      { id: 'weather-cyclones', on: true, origin: 'programmatic' },
     ]);
     assert.equal(hops.length, 2);
     const [wpac, japan] = hops.map((hop) =>

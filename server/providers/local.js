@@ -22,6 +22,8 @@ import { selfHostedVoiceProxy } from './voice.js';
 import { googlePlacesContextProxy } from './places.js';
 import { keySetupEndpoint } from '../standalone/key-setup.js';
 import { auFireProxy } from './auFire.js';
+import { windProxy } from './wind.js';
+import { cyclonesProxy } from './cyclones.js';
 
 /** Construct the local provider plugins in their established order. */
 function localProviderPlugins() {
@@ -49,6 +51,8 @@ function localProviderPlugins() {
     selfHostedVoiceProxy(),
     googlePlacesContextProxy(),
     auFireProxy(),
+    windProxy(),
+    cyclonesProxy(),
     keySetupEndpoint(),
   ];
 }

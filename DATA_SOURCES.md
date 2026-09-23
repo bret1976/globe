@@ -151,6 +151,33 @@ Overpass hosting capacity and usage policies are separate from the data license.
 
 The OSM-derived datasets are under the **Open Database License**. ODbL's share-alike applies to the **data / derived database, not this MIT-licensed code** — the two coexist (exactly how Open Infrastructure Map ships: MIT software + ODbL data). If you publicly distribute a _modified_ version of these databases, you must offer it under ODbL. Keep the "© OpenStreetMap contributors" notice (link: https://www.openstreetmap.org/copyright).
 
+### NASA GIBS / Worldview (Recent Imagery + observed weather IR)
+
+Keyless browser-direct imagery. Recent Imagery queries NASA CMR for HLS / VIIRS
+granules over a selected box and drapes GIBS WMTS tiles; Worldview Snapshots
+supplies the day-strip thumbnails. Observed Weather drapes VIIRS NOAA-21 Band I5
+brightness temperature globally and Himawari AHI Band 13 clean IR over the
+Asia–Pacific basin (typhoon cloud tops). No provider API key.
+
+> We acknowledge the use of imagery from NASA's Global Imagery Browse Services
+> (GIBS) (https://earthdata.nasa.gov/gibs) and Worldview Snapshots, part of
+> NASA's Earth Observing System Data and Information System (EOSDIS). HLS is a
+> NASA / USGS joint product.
+
+### NOAA NHC + NASA EONET cyclones
+
+`/api/cyclones` (TTL 3 min) merges NOAA National Hurricane Center
+`CurrentStorms.json` (Atlantic, East and Central Pacific) with NASA EONET
+`severeStorms` so Western Pacific typhoons appear for the typhoon Shorts pack.
+Browser-direct fallback hits both URLs when the proxy is absent.
+
+### Open-Meteo GFS wind overlay
+
+`/api/wind` (TTL 20 min) fetches a coarse Open-Meteo GFS 10 m wind grid
+(https://open-meteo.com/) and serves it to the Wind layer. Linked Open-Meteo
+credit already ships with cockpit weather; the globe overlay reuses that
+acknowledgement.
+
 ### NASA FIRMS acknowledgement
 
 > We acknowledge the use of data and/or imagery from NASA's Fire Information for Resource Management System (FIRMS) (https://earthdata.nasa.gov/firms), part of NASA's Earth Observing System Data and Information System (EOSDIS).

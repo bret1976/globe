@@ -116,10 +116,18 @@ const LAYER_ALIASES = Object.freeze([
   ['australia fire', 'au-fire'],
   ['earthquakes', 'earthquakes'],
   ['satellites', 'satellites'],
+  ['recent imagery', 'recent-imagery'],
+  ['satellite imagery', 'recent-imagery'],
+  ['weather', 'weather'],
+  ['observed weather', 'weather'],
+  ['wind', 'wind'],
+  ['cyclones', 'weather-cyclones'],
+  ['hurricanes', 'weather-cyclones'],
+  ['typhoons', 'weather-cyclones'],
 ]);
 
 const LAYER_FILLER =
-  /\b(street traffic|road traffic|live traffic|traffic|live vessels|live ships|live boats|vessels|ships|ais|submarine cables|undersea cables|sea cables|cable seas|cables|live cameras|street cameras|cctv|cameras|fire perimeters|wildfire perimeters|perimeters|zip code|zip|cockpit view|data layers?|layer)\b/g;
+  /\b(street traffic|road traffic|live traffic|traffic|live vessels|live ships|live boats|vessels|ships|ais|submarine cables|undersea cables|sea cables|cable seas|cables|live cameras|street cameras|cctv|cameras|fire perimeters|wildfire perimeters|perimeters|recent imagery|satellite imagery|observed weather|weather|wind overlay|wind|cyclones|hurricanes|typhoons|zip code|zip|cockpit view|data layers?|layer)\b/g;
 
 const PLACE_ALIAS_KEYS = Object.keys(PLACE_ALIASES).sort(
   (a, b) => b.length - a.length,
@@ -344,6 +352,10 @@ export function composeSelfHostedSpeech(calls, originalText) {
         'au-fire': 'AU fire incidents',
         earthquakes: 'earthquakes',
         satellites: 'satellites',
+        'recent-imagery': 'recent imagery',
+        weather: 'observed weather',
+        wind: 'wind',
+        'weather-cyclones': 'cyclones',
       };
       parts.push(
         `I'll turn on ${labels[call.arguments.layerId] || call.arguments.layerId}.`,
@@ -408,6 +420,10 @@ export function qwenToolDefinitions() {
                 'au-fire',
                 'earthquakes',
                 'satellites',
+                'recent-imagery',
+                'weather',
+                'weather-cyclones',
+                'wind',
               ],
             },
             enabled: { type: 'boolean' },

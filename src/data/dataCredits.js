@@ -242,6 +242,22 @@ export const DATA_CREDITS = [
       'part of NASA’s Earth Observing System Data and Information System (EOSDIS)',
   },
   {
+    key: 'nasa-gibs',
+    html:
+      'Recent Imagery and observed weather IR: NASA GIBS / Worldview — we acknowledge ' +
+      'the use of imagery from NASA’s Global Imagery Browse Services ' +
+      '(<a href="https://earthdata.nasa.gov/gibs" target="_blank" rel="noopener">earthdata.nasa.gov/gibs</a>) ' +
+      'and Worldview Snapshots, part of EOSDIS. HLS is a NASA / USGS joint product.',
+  },
+  {
+    key: 'nhc-eonet',
+    html:
+      'Cyclones: NOAA National Hurricane Center current storms ' +
+      '(<a href="https://www.nhc.noaa.gov/" target="_blank" rel="noopener">nhc.noaa.gov</a>) ' +
+      'and NASA EONET severe storms ' +
+      '(<a href="https://eonet.gsfc.nasa.gov/" target="_blank" rel="noopener">eonet.gsfc.nasa.gov</a>)',
+  },
+  {
     key: 'drivebc-cctv',
     html:
       'CCTV cameras &amp; frames (British Columbia): ' +

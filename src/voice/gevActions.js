@@ -44,6 +44,10 @@ const VOICE_LAYER_FOCUS_IDS = new Set([
   'local-firms',
   'fire-perimeters',
   'au-fire',
+  'recent-imagery',
+  'weather',
+  'weather-cyclones',
+  'wind',
 ]);
 
 async function leaveCockpitForGlobeNav(styleManager) {
@@ -249,6 +253,18 @@ const LAYER_ALIASES = new Map([
   ['license plate readers', 'alpr-cameras'],
   ['license plate cameras', 'alpr-cameras'],
   ['plate readers', 'alpr-cameras'],
+  ['recent imagery', 'recent-imagery'],
+  ['satellite imagery', 'recent-imagery'],
+  ['nasa imagery', 'recent-imagery'],
+  ['gibs', 'recent-imagery'],
+  ['weather', 'weather'],
+  ['observed weather', 'weather'],
+  ['infrared', 'weather'],
+  ['wind', 'wind'],
+  ['wind overlay', 'wind'],
+  ['cyclones', 'weather-cyclones'],
+  ['hurricanes', 'weather-cyclones'],
+  ['typhoons', 'weather-cyclones'],
 ]);
 
 const CITY_ALIASES = new Map([

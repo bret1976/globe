@@ -1,6 +1,13 @@
 import { indexMapSources } from './registry.js';
 import * as Cesium from 'cesium';
 import { createMapCredits } from './credits.js';
+import { acquireImageryComparison } from './imageryComparison.js';
+
+/**
+ * Private `setStack` option marking a switch the controller issues itself
+ * (a tile-failure fallback); outside callers cannot forge it.
+ */
+const AUTOMATIC = Symbol('automatic switch');
 
 /** Coordinate source lifetimes and scene changes; the registry owns provider choices. */
 export class MapSourceController {
@@ -33,7 +40,10 @@ export class MapSourceController {
     this._ownedTilesets = new Set();
     this._disposed = new WeakSet();
     this._switchGen = 0;
+    /** Who chose the current generation's stack: 'manual' | 'automatic'. */
+    this._switchOrigin = 'manual';
     this._isSwitching = false;
+    this._subscribers = new Set();
     this._lastError = null;
     this._imageryLayer = null;
     this._activeImageryProvider = null;
@@ -75,6 +85,16 @@ export class MapSourceController {
   getSwitchGeneration() {
     return this._switchGen;
   }
+  /**
+   * Who chose the stack of the current switch generation: 'manual' for a
+   * `setStack` issued from outside (the operator, a scene, a lease),
+   * 'automatic' when the controller replaced it itself (a construction or
+   * tile-failure fallback, or a recovery after a failed activation).
+   * @returns {'manual' | 'automatic'}
+   */
+  getSwitchOrigin() {
+    return this._switchOrigin;
+  }
   getState(status = this._isSwitching ? 'switching' : 'ready') {
     return {
       activeId: this._activeId,
@@ -82,6 +102,7 @@ export class MapSourceController {
       stacks: this.getStacks(),
       status,
       lastError: this._lastError,
+      switchOrigin: this._switchOrigin,
       ...this._registry.state,
     };
   }
@@ -89,7 +110,41 @@ export class MapSourceController {
     this._onChange?.(this.getState(status));
   }
 
-  async setStack(id, { silent = false } = {}) {
+  /**
+   * Hear every settled activation so draped layers can rebind after a
+   * stack switch, including silent fallbacks.
+   * @param {(state: object) => void} listener
+   * @returns {() => void}
+   */
+  subscribe(listener) {
+    if (typeof listener !== 'function') return () => {};
+    this._subscribers.add(listener);
+    return () => {
+      this._subscribers.delete(listener);
+    };
+  }
+
+  _notifySubscribers() {
+    if (this._destroyed || !this._subscribers.size) return;
+    const state = this.getState();
+    for (const listener of [...this._subscribers]) {
+      try {
+        listener(state);
+      } catch (error) {
+        console.warn('[MapSourceController] subscriber failed:', error);
+      }
+    }
+  }
+
+  /**
+   * Lease the map for an imagery comparison. switchPolicy: 'preserve' |
+   * 'esri' | 'esri-if-photoreal'.
+   */
+  acquireImageryComparison(options) {
+    return acquireImageryComparison(this, options);
+  }
+
+  async setStack(id, { silent = false, [AUTOMATIC]: automatic = false } = {}) {
     if (this._destroyed) return this.getState();
     const stack = this.getStack(id) || this.getStack(this._registry.unknownId);
     if (!stack) return null;
@@ -100,6 +155,7 @@ export class MapSourceController {
       return this.getState();
     }
     const gen = ++this._switchGen;
+    this._switchOrigin = automatic ? 'automatic' : 'manual';
     this._isSwitching = true;
     this._lastError = null;
     if (!silent) this._emitChange('switching');
@@ -107,6 +163,7 @@ export class MapSourceController {
       const activation = await this._activate(stack, gen);
       if (gen !== this._switchGen) return this.getState();
       this._activeId = activation?.effectiveStackId || stack.id;
+      if (this._activeId !== stack.id) this._switchOrigin = 'automatic';
       if (activation?.fallbackMessage) {
         this._lastError = activation.fallbackMessage;
         this._onError?.(activation.fallbackMessage, stack);
@@ -124,6 +181,7 @@ export class MapSourceController {
         recovery.id !== stack.id &&
         this.isStackAvailable(recovery.id)
       ) {
+        this._switchOrigin = 'automatic';
         try {
           const activation = await this._activate(recovery, gen);
           if (gen !== this._switchGen) return this.getState();
@@ -136,7 +194,10 @@ export class MapSourceController {
       }
       if (!silent) this._emitChange('error');
     } finally {
-      if (gen === this._switchGen) this._isSwitching = false;
+      if (gen === this._switchGen) {
+        this._isSwitching = false;
+        this._notifySubscribers();
+      }
     }
     return this.getState();
   }
@@ -281,7 +342,7 @@ export class MapSourceController {
         this.getStack(resolution.effectiveStackId),
       );
       const expectedGen = this._switchGen + 1;
-      void this.setStack(fallback.id, { silent: true })
+      void this.setStack(fallback.id, { silent: true, [AUTOMATIC]: true })
         .then((state) => {
           if (
             !this._destroyed &&
@@ -343,6 +404,7 @@ export class MapSourceController {
     this._terrainProviders.clear();
     this._tilesets.clear();
     this._ownedTilesets.clear();
+    this._subscribers.clear();
     this._onChange = null;
     this._onError = null;
   }
