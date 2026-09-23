@@ -20,14 +20,19 @@ test('a hidden globe hands imagery to the tileset collection', () => {
   assert.deepEqual(host, { collection: imageryLayers, kind: 'tileset' });
 });
 
+test('photoreal (hidden globe, no tileset imagery) still drapes on the viewer', () => {
+  const imageryLayers = { id: 'globe' };
+  const globe = { show: false, translucency: { enabled: false } };
+  const host = resolveImageryHost({
+    viewer: { scene: { globe }, imageryLayers },
+    tileset: null,
+  });
+  assert.deepEqual(host, { collection: imageryLayers, kind: 'globe' });
+  assert.equal(globe.show, true);
+  assert.equal(globe.translucency.enabled, true);
+});
+
 test('no globe and no tileset means nowhere to drape', () => {
-  assert.deepEqual(
-    resolveImageryHost({
-      viewer: { scene: { globe: { show: false } }, imageryLayers: {} },
-      tileset: null,
-    }),
-    { collection: null, kind: 'none' },
-  );
   assert.deepEqual(resolveImageryHost({}), { collection: null, kind: 'none' });
   assert.deepEqual(
     resolveImageryHost({

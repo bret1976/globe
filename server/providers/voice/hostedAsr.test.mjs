@@ -67,6 +67,31 @@ test('hosted ASR reads the Gemini transcript text', async () => {
   assert.equal(result.text, 'Take me to the Pentagon');
 });
 
+test('hosted ASR falls back when the preferred Gemini model rejects', async () => {
+  const models = [];
+  const result = await transcribeWithHostedAsr(
+    { audio: 'Zg==', mimeType: 'audio/webm' },
+    {
+      env: { GEMINI_API_KEY: 'test-key', GEMINI_ASR_MODEL: 'gemini-3.6-flash' },
+      fetchImpl: async (url) => {
+        models.push(String(url));
+        if (String(url).includes('gemini-3.6-flash')) {
+          return Response.json(
+            { error: { message: 'model not found' } },
+            { status: 404 },
+          );
+        }
+        return Response.json({
+          candidates: [{ content: { parts: [{ text: 'Show earthquakes' }] } }],
+        });
+      },
+    },
+  );
+  assert.equal(result.text, 'Show earthquakes');
+  assert.match(models[0], /gemini-3\.6-flash/);
+  assert.match(models[1], /gemini-2\.5-flash/);
+});
+
 test('voice ASR uses hosted Gemini when the GPU box is offline', async () => {
   const previousInference = process.env.VOICE_INFERENCE_URL;
   const previousKey = process.env.GEMINI_API_KEY;

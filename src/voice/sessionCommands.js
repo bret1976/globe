@@ -50,13 +50,26 @@ export function createVoiceCommands({
   // Retain the existing controller's inspection surface for browser tools.
   const controls = adapter.controller || session;
   controls.session = session;
+  void fetch('/api/voice/status', { cache: 'no-store' })
+    .then((response) => (response.ok ? response.json() : null))
+    .then((data) => {
+      if (!data || session.isActive()) return;
+      if (data.asr || data.planner) {
+        ui.status.textContent = 'READY';
+        ui.detail.textContent = 'Tap the mic and speak, or type a command';
+      }
+    })
+    .catch(() => {});
   const updateStatus = session.subscribe((event) => {
     if (event.type !== 'state') return;
     ui.root.dataset.status = event.state;
     ui.status.textContent =
-      event.state === 'idle' ? 'OFF' : event.state.toUpperCase();
+      event.state === 'idle' ? 'READY' : event.state.toUpperCase();
     ui.detail.textContent =
-      event.detail || (event.state === 'idle' ? 'Voice off' : 'Voice active');
+      event.detail ||
+      (event.state === 'idle'
+        ? 'Tap the mic and speak, or type a command'
+        : 'Voice active');
     ui.button.setAttribute('aria-pressed', String(session.isActive()));
     if (ui.errorDetail)
       ui.errorDetail.textContent =

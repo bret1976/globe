@@ -7,6 +7,8 @@
  *
  * @returns {import('vite').Plugin}
  */
+import path from 'node:path';
+import { promises as fsp } from 'node:fs';
 import {
   WIND_GRID_STEP_DEG,
   WIND_LAT_MAX,
@@ -15,20 +17,57 @@ import {
   parseGrid,
 } from '../../src/layers/wind/source.js';
 
-const CHUNK = 24;
+const CHUNK = 80;
 const TTL_MS = 20 * 60_000;
-const STALE_MS = 60 * 60_000;
+const STALE_MS = 6 * 60 * 60_000;
+const CACHE_DIR = path.join(process.cwd(), '.gev-cache');
+const CACHE_PATH = path.join(CACHE_DIR, 'wind.json');
+
+const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export function windProxy() {
   /** @type {?{at: number, payload: object}} */
   let mem = null;
   /** @type {?Promise<object>} */
   let inflight = null;
+  let diskChecked = false;
+
+  async function readDiskOnce() {
+    if (diskChecked) return;
+    diskChecked = true;
+    try {
+      const parsed = JSON.parse(await fsp.readFile(CACHE_PATH, 'utf8'));
+      if (Number.isFinite(parsed?.at) && parsed?.payload?.samples)
+        mem = parsed;
+    } catch {
+      /* first run */
+    }
+  }
+
+  async function writeDisk(entry) {
+    try {
+      await fsp.mkdir(CACHE_DIR, { recursive: true });
+      await fsp.writeFile(CACHE_PATH, JSON.stringify(entry));
+    } catch (err) {
+      console.warn('[wind-proxy] cache write failed:', err?.message || err);
+    }
+  }
+
+  async function fetchChunk(params, attempt = 0) {
+    const response = await fetch(`https://api.open-meteo.com/v1/gfs?${params}`);
+    if (response.status === 429 && attempt < 5) {
+      await delay(2000 * 2 ** attempt);
+      return fetchChunk(params, attempt + 1);
+    }
+    if (!response.ok) throw new Error(`Open-Meteo ${response.status}`);
+    return response.json();
+  }
 
   async function refresh() {
     const points = buildPoints();
     const rows = [];
     for (let i = 0; i < points.length; i += CHUNK) {
+      if (i) await delay(400);
       const chunk = points.slice(i, i + CHUNK);
       const params = new URLSearchParams({
         latitude: chunk.map((p) => p.lat.toFixed(2)).join(','),
@@ -36,11 +75,7 @@ export function windProxy() {
         current: 'wind_speed_10m,wind_direction_10m',
         wind_speed_unit: 'kmh',
       });
-      const response = await fetch(
-        `https://api.open-meteo.com/v1/gfs?${params}`,
-      );
-      if (!response.ok) throw new Error(`Open-Meteo ${response.status}`);
-      const body = await response.json();
+      const body = await fetchChunk(params);
       if (Array.isArray(body)) rows.push(...body);
       else rows.push(body);
     }
@@ -54,12 +89,14 @@ export function windProxy() {
       },
     });
     mem = { at: Date.now(), payload };
+    void writeDisk(mem);
     return payload;
   }
 
   function installMiddleware(server) {
-    server.middlewares.use('/api/wind', (req, res, next) => {
+    server.middlewares.use('/api/wind', async (req, res, next) => {
       if (req.method !== 'GET') return next();
+      await readDiskOnce();
       const now = Date.now();
       if (mem && now - mem.at < TTL_MS) {
         res.setHeader('Content-Type', 'application/json');

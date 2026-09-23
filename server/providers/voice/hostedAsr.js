@@ -4,6 +4,10 @@
  */
 
 const DEFAULT_GEMINI_ASR_MODEL = 'gemini-3.6-flash';
+const FALLBACK_GEMINI_ASR_MODELS = Object.freeze([
+  'gemini-2.5-flash',
+  'gemini-2.0-flash',
+]);
 
 export function hostedAsrConfigured(env = process.env) {
   return Boolean(String(env.GEMINI_API_KEY || '').trim());
@@ -13,6 +17,11 @@ export function hostedAsrModel(env = process.env) {
   return String(env.GEMINI_ASR_MODEL || DEFAULT_GEMINI_ASR_MODEL).trim();
 }
 
+export function hostedAsrModels(env = process.env) {
+  const preferred = hostedAsrModel(env);
+  return [...new Set([preferred, ...FALLBACK_GEMINI_ASR_MODELS].filter(Boolean))];
+}
+
 export async function transcribeWithHostedAsr(
   { audio, mimeType = 'audio/webm' } = {},
   { fetchImpl = (...args) => fetch(...args), env = process.env } = {},
@@ -20,44 +29,51 @@ export async function transcribeWithHostedAsr(
   const apiKey = String(env.GEMINI_API_KEY || '').trim();
   if (!apiKey) throw new Error('Hosted ASR is not configured');
   if (!audio) throw new TypeError('ASR requires audio');
-  const model = hostedAsrModel(env);
-  const response = await fetchImpl(
-    `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-goog-api-key': apiKey,
-      },
-      body: JSON.stringify({
-        contents: [
-          {
-            parts: [
-              {
-                text: 'Transcribe this spoken English command verbatim. Return only the transcript, no quotes or extra words.',
-              },
-              {
-                inline_data: {
-                  mime_type: normalizeMime(mimeType),
-                  data: audio,
+  let lastError = null;
+  for (const model of hostedAsrModels(env)) {
+    const response = await fetchImpl(
+      `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': apiKey,
+        },
+        body: JSON.stringify({
+          contents: [
+            {
+              parts: [
+                {
+                  text: 'Transcribe this spoken English command verbatim. Return only the transcript, no quotes or extra words.',
                 },
-              },
-            ],
-          },
-        ],
-        generationConfig: { temperature: 0 },
-      }),
-    },
-  );
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(
-      data?.error?.message || `Hosted ASR HTTP ${response.status}`,
+                {
+                  inline_data: {
+                    mime_type: normalizeMime(mimeType),
+                    data: audio,
+                  },
+                },
+              ],
+            },
+          ],
+          generationConfig: { temperature: 0 },
+        }),
+      },
     );
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      lastError = new Error(
+        data?.error?.message || `Hosted ASR HTTP ${response.status}`,
+      );
+      continue;
+    }
+    const text = extractGeminiText(data);
+    if (!text) {
+      lastError = new Error('Hosted ASR returned no transcript');
+      continue;
+    }
+    return { text, model };
   }
-  const text = extractGeminiText(data);
-  if (!text) throw new Error('Hosted ASR returned no transcript');
-  return { text, model };
+  throw lastError || new Error('Hosted ASR failed');
 }
 
 function normalizeMime(mimeType) {
