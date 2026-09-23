@@ -265,8 +265,6 @@
     "modules": [
       "server/providers/voice.js",
       "server/providers/voice/inference.js",
-      "server/providers/voice/hostedAsr.js",
-      "server/providers/voice/hostedTts.js",
       "server/providers/voice/routes.js",
       "server/providers/common/request.js",
       "src/voice/selfHostedIntent.js"
@@ -1199,6 +1197,8 @@
       "src/voice/voiceCost.js",
       "src/voice/commands.js",
       "src/voice/selfHostedSession.js",
+      "src/voice/audioWav.js",
+      "src/voice/browserVoice.js",
       "src/voice/openMicPolicy.js",
       "src/voice/selfHostedBackend.js",
       "src/voice/session.js",
@@ -1217,7 +1217,7 @@
       "src/voice/realtimeTurns.js",
       "src/voice/realtimeConnection.js"
     ],
-    "external": []
+    "external": ["@huggingface/transformers", "kokoro-js"]
   },
   "application-components": {
     "exports": [
@@ -1743,6 +1743,8 @@
       "src/ui/visualSettings.js",
       "src/voice/commands.js",
       "src/voice/selfHostedSession.js",
+      "src/voice/audioWav.js",
+      "src/voice/browserVoice.js",
       "src/voice/openMicPolicy.js",
       "src/voice/selfHostedBackend.js",
       "src/voice/control.js",
@@ -1898,9 +1900,11 @@
       "src/ui/weatherPanel.js"
     ],
     "external": [
+      "@huggingface/transformers",
       "@mapbox/vector-tile",
       "cesium",
       "egm96-universal",
+      "kokoro-js",
       "mgrs",
       "pbf",
       "satellite.js"

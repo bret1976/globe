@@ -6,7 +6,7 @@
 
 ### A spy-satellite simulator in your browser — then you realize the sources are public and the data is real.
 
-Photorealistic 3D globe. Live aircraft, ships, satellites, earthquakes, traffic, and public cameras. Hands-free voice control powered by self-hosted Qwen3 + Kokoro.
+Photorealistic 3D globe. Live aircraft, ships, satellites, earthquakes, traffic, and public cameras. Hands-free voice control powered by Whisper + Kokoro in the browser.
 
 _No place left behind._
 
@@ -200,7 +200,7 @@ Choose a first-run mission, or try these in order. The GIFs show Google Photorea
 
 ![Cycling a dense live globe through CRT, FLIR, and NVG in one continuous view](docs/media/01-style-sweep.gif)
 
-7. **Talk to it** _(needs an OpenAI key)_: _"Take me to LAX and select the nearest airborne aircraft."_
+7. **Talk to it**: _"Take me to LAX and select the nearest airborne aircraft."_
 8. **Come home.** Hit **Reset Globe** — or just say _"zoom out to a globe view."_
 
 **Keyboard:** `1`–`7` visual styles · `H` HUD · `D` detection · `C` cockpit · `Esc` out.
@@ -225,7 +225,7 @@ _Why cockpit mode exists: you're riding a real aircraft over real terrain — an
 
 ## 🎙️ Talk to It
 
-> Voice is **self-hosted by default** — Qwen3-ASR-0.6B listens, Qwen3-8B (or the shipped JS planner) understands, Kokoro-82M speaks. No OpenAI key. Point `VOICE_INFERENCE_URL` at the GPU box in `voice-inference/` for mic + spoken replies; without it, type a command or use browser speech. Try _“Take me to the Pentagon”_ → _“Find the nearest flight”_ → _“Enter cockpit”_. An optional OpenAI key still drives the **AI HUD summary**.
+> Voice is **in the browser by default** — [Transformers.js](https://github.com/huggingface/transformers.js) Whisper (`onnx-community/whisper-tiny.en`) listens, the shipped JS planner understands, and [Kokoro](https://github.com/hexgrad/kokoro) (`kokoro-js`, `onnx-community/Kokoro-82M-v1.0-ONNX`) speaks. No Gemini. No OpenAI key. The first TALK click downloads the models from Hugging Face and caches them locally. Point `VOICE_INFERENCE_URL` at the GPU box in `voice-inference/` if you have one (Qwen3-ASR + Qwen3-8B + Kokoro). Try _“Take me to the Pentagon”_ → _“Find the nearest flight”_ → _“Enter cockpit”_. An optional OpenAI key still drives the **AI HUD summary**.
 
 Click **GEV MIC**, grant the microphone, and just talk. This is more than a voice-controlled remote:
 
@@ -355,7 +355,7 @@ How the globe handles live data:
 - **Sits on the real ground.** Entity heights are aligned to work with Google 3D tiles, so aircraft park on aprons and cameras stand on street corners instead of floating.
 - **Caching and request budgets.** An OpenSky credit governor, a TomTom daily tile budget, and disk-cached TLEs reduce repeated requests. These controls do not replace provider quotas or billing controls.
 - **Server-side credentials.** Every API that touches a private key (OpenAI, AISStream, OpenSky OAuth, camera frames) is brokered through a hardened server-side proxy with SSRF protection, response caps, and sanitized errors. The only keys the browser sees are Google Maps and Cesium ion (restrict both at the provider).
-- **No framework.** Vanilla JavaScript, **CesiumJS**, and **Vite** — plus **Google Photorealistic 3D Tiles** for the planet and self-hosted **Qwen3 + Kokoro** for voice. Fast to read, fast to hack on.
+- **No framework.** Vanilla JavaScript, **CesiumJS**, and **Vite** — plus **Google Photorealistic 3D Tiles** for the planet and in-browser **Whisper + Kokoro** for voice. Fast to read, fast to hack on.
 
 ```
 src/
@@ -364,7 +364,7 @@ src/
 ├── hud.js                  # Intelligence HUD + AI scene summary
 ├── keySetup.js             # POWER UP panel — in-app provider keys (dev server only)
 ├── mapStackController.js   # Basemap switching — Google 3D / Esri / OSM / ion stacks
-├── voice/                  # Self-hosted Qwen/Kokoro session + 28 voice tools
+├── voice/                  # Whisper/Kokoro session + 28 voice tools
 ├── data/                   # One module per layer + orchestration + context store
 │   ├── iconOrientation.js  # Screen-projected headings + horizon cull
 │   └── local_data/         # Bundled datasets (per-folder provenance)
@@ -392,7 +392,7 @@ Six keys. Four have a free tier, and the two 🔴 ones are metered:
 | --- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 🟡  | **Cesium ion**  | 🗺️ Google Photorealistic 3D, world terrain, and additional ion-hosted imagery stacks. The free Community plan is for eligible individual, personal/non-commercial use and has quotas | [cesium.com/ion](https://cesium.com/ion) — use a public `assets:read` token and check current [pricing/eligibility](https://cesium.com/platform/cesium-ion/pricing/) |
 | 🔴  | **Google Maps** | Direct Google Photorealistic 3D + Google place search ([Map Tiles API](https://developers.google.com/maps/documentation/tile))                                                       | [Google Cloud Console](https://console.cloud.google.com/) — URL-restrict it                                                                                          |
-| 🔴  | **OpenAI**      | 🎙️ The voice experience + AI HUD summary. The mini model works; the standard model is noticeably smarter. Want Gemini or another provider behind the mic? PRs welcome                | [platform.openai.com](https://platform.openai.com) — metered, see costs below                                                                                        |
+| 🔴  | **OpenAI**      | Optional **AI HUD summary** and the unused Realtime path. Mic + spoken replies use in-browser Whisper + Kokoro — no OpenAI or Gemini key.                                            | [platform.openai.com](https://platform.openai.com) — metered, see costs below                                                                                        |
 | 🟡  | **AISStream**   | 🚢 Live global ships                                                                                                                                                                 | [aisstream.io](https://aisstream.io) — free signup                                                                                                                   |
 | 🟡  | **NASA FIRMS**  | 🔥 Live active fires                                                                                                                                                                 | [firms.modaps.eosdis.nasa.gov](https://firms.modaps.eosdis.nasa.gov/api/map_key/) — free                                                                             |
 | 🟡  | **TomTom**      | 🚦 Live flow speeds and congestion colors for the simulated traffic layer                                                                                                            | [developer.tomtom.com](https://developer.tomtom.com) — free tier available                                                                                           |

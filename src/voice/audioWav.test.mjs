@@ -1,8 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  GEMINI_WAV_RATE,
+  WHISPER_SAMPLE_RATE,
   audioBlobToWavBytes,
+  decodePcm16Wav,
   encodePcm16Wav,
   mixToMono,
   resampleMono,
@@ -10,7 +11,7 @@ import {
 
 test('PCM WAV header is 16 kHz mono 16-bit', () => {
   const samples = new Float32Array([0, 0.5, -0.5, 1]);
-  const bytes = new Uint8Array(encodePcm16Wav(samples, GEMINI_WAV_RATE));
+  const bytes = new Uint8Array(encodePcm16Wav(samples, WHISPER_SAMPLE_RATE));
   const ascii = (start, n) =>
     String.fromCharCode(...bytes.subarray(start, start + n));
   assert.equal(ascii(0, 4), 'RIFF');
@@ -54,4 +55,13 @@ test('audioBlobToWavBytes decodes through the supplied decoder', async () => {
   assert.equal(String.fromCharCode(...bytes.subarray(0, 4)), 'RIFF');
   const view = new DataView(bytes.buffer);
   assert.equal(view.getUint32(24, true), 16_000);
+});
+
+test('decodePcm16Wav round-trips encodePcm16Wav', () => {
+  const original = new Float32Array([0, 0.5, -0.5, 1]);
+  const decoded = decodePcm16Wav(encodePcm16Wav(original, 16_000));
+  assert.equal(decoded.sampleRate, 16_000);
+  assert.equal(decoded.samples.length, 4);
+  assert.ok(Math.abs(decoded.samples[1] - 0.5) < 0.01);
+  assert.ok(Math.abs(decoded.samples[2] + 0.5) < 0.01);
 });

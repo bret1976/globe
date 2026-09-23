@@ -1072,3 +1072,109 @@ test('a planner response after stop cannot execute or restart microphone capture
   await turn;
   assert.deepEqual(actions, []);
 });
+
+test('open-mic prefers in-browser Whisper over the hosted ASR endpoint', async () => {
+  const mic = installMicRecorder();
+  const backend = backendFixture({
+    calls: [
+      {
+        name: 'fly_to_location',
+        arguments: { query: 'Pentagon', waitForArrival: true },
+      },
+    ],
+    speech: 'Flying to Pentagon.',
+    locationQuery: 'Pentagon',
+    place: { query: 'Pentagon' },
+    source: 'planner',
+  });
+  backend.transcribe = async () => {
+    backend.calls.push(['transcribe']);
+    return { text: 'should not run' };
+  };
+  const browserVoice = {
+    asrReady: () => true,
+    ttsReady: () => false,
+    warmup() {},
+    async transcribe() {
+      backend.calls.push(['whisper']);
+      return {
+        text: 'Take me to the Pentagon',
+        model: 'onnx-community/whisper-tiny.en',
+      };
+    },
+    async speak({ text }) {
+      return { text, audio: null };
+    },
+  };
+  const actions = [];
+  try {
+    const session = createVoiceSession({
+      runner: async (name, args) => {
+        actions.push([name, args]);
+        return { ok: true, name };
+      },
+      createAdapter: (hooks) =>
+        createSelfHostedSession({
+          ...hooks,
+          backend,
+          browserVoice,
+        }),
+    });
+    session.adapter.primeMic();
+    await session.start();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await session.adapter.releaseTalk();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.ok(backend.calls.some(([kind]) => kind === 'whisper'));
+    assert.ok(!backend.calls.some(([kind]) => kind === 'transcribe'));
+    assert.deepEqual(
+      actions.map(([name]) => name),
+      ['fly_to_location'],
+    );
+    session.stop();
+  } finally {
+    mic.restore();
+  }
+});
+
+test('spoken replies use in-browser Kokoro before the hosted TTS endpoint', async () => {
+  const spoken = [];
+  const backend = backendFixture({
+    calls: [
+      {
+        name: 'fly_to_location',
+        arguments: { query: 'Pentagon', waitForArrival: true },
+      },
+    ],
+    speech: 'Flying to Pentagon.',
+    source: 'planner',
+  });
+  backend.speak = async ({ text }) => {
+    backend.calls.push(['speak', text]);
+    return { text, audio: null };
+  };
+  const browserVoice = {
+    asrReady: () => false,
+    ttsReady: () => true,
+    warmup() {},
+    async speak({ text }) {
+      spoken.push(text);
+      return { text, audio: null };
+    },
+  };
+  const session = createVoiceSession({
+    runner: async () => ({ ok: true }),
+    createAdapter: (hooks) =>
+      createSelfHostedSession({
+        ...hooks,
+        backend,
+        browserVoice,
+      }),
+  });
+  await session.start();
+  assert.equal(await session.sendText('Take me to the Pentagon'), true);
+  assert.deepEqual(spoken, ['Flying to Pentagon.']);
+  assert.ok(!backend.calls.some(([kind]) => kind === 'speak'));
+  session.stop();
+});

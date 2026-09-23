@@ -19,13 +19,15 @@ const MIC_SPEECH_THRESHOLD = 0.012;
 const MIN_RECORDING_BYTES = 250;
 
 /**
- * Mic → browser speech or hosted ASR → planner → gevActions → speak.
- * Clicking the mic starts listening in the same user gesture. No OpenAI key.
+ * Mic → in-browser Whisper (or optional GPU ASR) → planner → gevActions →
+ * Kokoro (or speechSynthesis). Clicking the mic starts listening in the
+ * same user gesture. No Gemini. No OpenAI key.
  */
 export function createSelfHostedSession({
   emit,
   runAction,
   backend = createSelfHostedBackend(),
+  browserVoice = null,
   signal,
   ui = null,
   silenceMs = 900,
@@ -265,15 +267,7 @@ export function createSelfHostedSession({
       const epoch = ++speakEpoch;
       speaking = (async () => {
         if (epoch !== speakEpoch) return;
-        const spokenAudio = await withDeadline(
-          Promise.resolve(backend.speak({ text: speech, signal })).catch(
-            () => ({
-              text: speech,
-              audio: null,
-            }),
-          ),
-          5_000,
-        );
+        const spokenAudio = await speakReply(speech);
         if (epoch !== speakEpoch) return;
         await playSpeech(spokenAudio?.text || speech, spokenAudio?.audio);
       })().catch(() => {});
@@ -318,6 +312,29 @@ export function createSelfHostedSession({
           });
       }
     }
+  }
+
+  async function speakReply(speech) {
+    if (browserVoice?.ttsReady?.()) {
+      try {
+        const local = await withDeadline(
+          Promise.resolve(browserVoice.speak({ text: speech, signal })),
+          12_000,
+        );
+        if (local) return local;
+      } catch {
+        /* Fall through to GPU Kokoro or speechSynthesis. */
+      }
+    } else {
+      void browserVoice?.warmup?.();
+    }
+    return withDeadline(
+      Promise.resolve(backend.speak({ text: speech, signal })).catch(() => ({
+        text: speech,
+        audio: null,
+      })),
+      5_000,
+    );
   }
 
   function stopBrowserRecognition() {
@@ -532,7 +549,11 @@ export function createSelfHostedSession({
       emit({
         type: 'state',
         state: 'executing',
-        detail: 'Hearing you…',
+        detail: browserVoice?.asrReady?.()
+          ? 'Hearing you…'
+          : browserVoice
+            ? 'Loading Whisper…'
+            : 'Hearing you…',
       });
       let mimeType = blob.type || 'audio/webm';
       let bytes = new Uint8Array(await blob.arrayBuffer());
@@ -540,15 +561,33 @@ export function createSelfHostedSession({
         bytes = new Uint8Array(await audioBlobToWavBytes(blob));
         mimeType = 'audio/wav';
       } catch {
-        /* Gemini still gets the original clip if decode fails */
+        /* Whisper can still decode the original clip via AudioContext. */
       }
-      const result = await backend.transcribe({
-        audio: bytes,
-        mimeType,
-        signal: AbortSignal.any(
-          [signal, AbortSignal.timeout(30_000)].filter(Boolean),
-        ),
-      });
+      const transcribeSignal = AbortSignal.any(
+        [signal, AbortSignal.timeout(60_000)].filter(Boolean),
+      );
+      let result = null;
+      let usedBrowser = false;
+      if (browserVoice) {
+        try {
+          result = await browserVoice.transcribe({
+            blob,
+            audio: bytes,
+            mimeType,
+            signal: transcribeSignal,
+          });
+          usedBrowser = true;
+        } catch {
+          usedBrowser = false;
+        }
+      }
+      if (!usedBrowser && typeof backend.transcribe === 'function') {
+        result = await backend.transcribe({
+          audio: bytes,
+          mimeType,
+          signal: transcribeSignal,
+        });
+      }
       if (!live || clipEpoch !== sessionEpoch) return;
       const spoken = String(result?.text || '').trim();
       if (!spoken) {
@@ -844,6 +883,7 @@ export function createSelfHostedSession({
     ignoreButtonClick: () => spaceHeld || holding,
     primeMic() {
       unlockPlayback();
+      void browserVoice?.warmup?.();
       preferRecorder = canUseRecorder();
       if (preferRecorder) requestMic();
       return true;
@@ -893,15 +933,18 @@ export function createSelfHostedSession({
       listenArmedAt = 0;
       flushing = false;
       unlockPlayback();
+      void browserVoice?.warmup?.();
       preferRecorder = canUseRecorder() || Boolean(options.pushToTalk);
       emit({
         type: 'state',
         state: 'connecting',
-        detail: 'Starting voice',
+        detail: browserVoice
+          ? 'Loading Whisper — then speak'
+          : 'Starting voice',
       });
-      // Hosted Gemini ASR on the real getUserMedia stream is the open-mic
-      // path. Chrome SpeechRecognition is a fallback when the browser
-      // cannot record, because it often never sees a connected desk mic.
+      // In-browser Whisper on the real getUserMedia stream is the open-mic
+      // path. Chrome SpeechRecognition is a last-ditch fallback when the
+      // browser cannot record, because it often never sees a desk mic.
       let listening = false;
       if (preferRecorder) {
         listening = consumePendingStream({ record: true });

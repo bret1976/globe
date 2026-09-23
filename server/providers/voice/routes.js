@@ -15,21 +15,14 @@ import {
   QWEN_LLM_MODEL,
   voiceInferenceConfigured,
 } from './inference.js';
-import {
-  hostedAsrConfigured,
-  hostedAsrModel,
-  transcribeWithHostedAsr,
-} from './hostedAsr.js';
-import {
-  hostedTtsConfigured,
-  hostedTtsModel,
-  synthesizeWithHostedTts,
-} from './hostedTts.js';
 
 const JSON_HEADERS = {
   'Content-Type': 'application/json; charset=utf-8',
   'Cache-Control': 'no-store',
 };
+
+const BROWSER_ASR_MODEL = 'onnx-community/whisper-tiny.en';
+const BROWSER_TTS_MODEL = 'onnx-community/Kokoro-82M-v1.0-ONNX';
 
 function sendJson(res, status, payload) {
   res.statusCode = status;
@@ -58,29 +51,19 @@ export async function handleVoiceStatus(req, res, { fetchImpl } = {}) {
     llm: false,
     tts: false,
   }));
-  const hostedAsr = hostedAsrConfigured();
-  const hostedTts = hostedTtsConfigured();
   sendJson(res, 200, {
     protocol: 'self-hosted-qwen',
     planner: true,
-    asr: Boolean(health.asr) || hostedAsr,
+    asr: Boolean(health.asr),
     llm: true,
-    tts: Boolean(health.tts) || hostedTts || true,
+    tts: Boolean(health.tts) || true,
     inference: Boolean(health.configured),
-    hostedAsr,
-    hostedTts,
+    browserAsr: true,
+    browserTts: true,
     models: {
-      asr: health.asr
-        ? QWEN_ASR_MODEL
-        : hostedAsr
-          ? hostedAsrModel()
-          : QWEN_ASR_MODEL,
+      asr: health.asr ? QWEN_ASR_MODEL : BROWSER_ASR_MODEL,
       llm: QWEN_LLM_MODEL,
-      tts: hostedTts
-        ? hostedTtsModel()
-        : health.tts
-          ? KOKORO_TTS_MODEL
-          : 'speechSynthesis',
+      tts: health.tts ? KOKORO_TTS_MODEL : BROWSER_TTS_MODEL,
       ...(health.models || {}),
     },
   });
@@ -113,31 +96,14 @@ export async function handleVoiceAsr(req, res, { fetchImpl } = {}) {
       sendJson(res, 200, { text: data.text.trim(), model: QWEN_ASR_MODEL });
       return;
     } catch (error) {
-      if (!hostedAsrConfigured()) {
-        sendJson(res, 502, { error: error?.message || 'ASR failed' });
-        return;
-      }
+      sendJson(res, 502, { error: error?.message || 'ASR failed' });
+      return;
     }
   }
-  if (!hostedAsrConfigured()) {
-    sendJson(res, 503, {
-      error:
-        'Speech-to-text is offline. Allow the browser microphone, or type the command.',
-    });
-    return;
-  }
-  try {
-    const data = await transcribeWithHostedAsr(
-      {
-        audio: payload.audio,
-        mimeType: payload.mimeType || 'audio/webm',
-      },
-      { fetchImpl },
-    );
-    sendJson(res, 200, { text: data.text, model: data.model });
-  } catch (error) {
-    sendJson(res, 502, { error: error?.message || 'ASR failed' });
-  }
+  sendJson(res, 503, {
+    error:
+      'Speech-to-text runs in the browser with Whisper. Optional GPU ASR is unset.',
+  });
 }
 
 export async function resolveVoiceAct(payload, { fetchImpl } = {}) {
@@ -214,18 +180,6 @@ export async function handleVoiceTts(req, res, { fetchImpl } = {}) {
     sendJson(res, 400, { error: 'TTS requires text' });
     return;
   }
-  if (hostedTtsConfigured()) {
-    try {
-      const audio = await synthesizeWithHostedTts({ text }, { fetchImpl });
-      res.statusCode = 200;
-      res.setHeader('Content-Type', audio.contentType || 'audio/wav');
-      res.setHeader('Cache-Control', 'no-store');
-      res.end(audio.bytes);
-      return;
-    } catch {
-      /* Fall through to Kokoro or the browser voice. */
-    }
-  }
   if (voiceInferenceConfigured()) {
     try {
       const audio = await inferenceAudio(
@@ -239,7 +193,7 @@ export async function handleVoiceTts(req, res, { fetchImpl } = {}) {
       res.end(audio.bytes);
       return;
     } catch {
-      /* Browser speechSynthesis remains the last resort. */
+      /* Browser Kokoro / speechSynthesis remains the last resort. */
     }
   }
   sendJson(res, 200, { speech: text, audio: null, model: 'speechSynthesis' });

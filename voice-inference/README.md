@@ -6,10 +6,11 @@ Separate GPU box for:
 - understand/act: `Qwen/Qwen3-8B` (Apache 2.0)
 - speak: `hexgrad/Kokoro-82M` (Apache 2.0)
 
-The globe site stays up when this machine is off. Typed commands and the
-JavaScript planner still fly to the Pentagon, find the nearest flight, and
-enter the cockpit. Set `VOICE_INFERENCE_URL` on the globe host when this
-service is reachable.
+The globe site stays up when this machine is off. Spoken commands use
+in-browser Whisper + Kokoro (`huggingface/transformers.js` + `hexgrad/kokoro`).
+Typed commands and the JavaScript planner still fly to the Pentagon, find
+the nearest flight, and enter the cockpit. Set `VOICE_INFERENCE_URL` on the
+globe host when this service is reachable.
 
 ## Run
 

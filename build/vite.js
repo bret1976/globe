@@ -34,5 +34,10 @@ export function createBrowserViteConfig({
       'import.meta.env.CESIUM_ION_TOKEN': JSON.stringify(cesiumToken),
     },
     build: { chunkSizeWarningLimit: 1500 },
+    // Keep Transformers.js / Kokoro on their own WASM build. Do not set
+    // COOP/COEP — that would block Cesium ion tiles on other origins.
+    optimizeDeps: {
+      exclude: ['@huggingface/transformers', 'kokoro-js'],
+    },
   };
 }

@@ -1,4 +1,4 @@
-/** Same-origin self-hosted voice endpoints. No OpenAI key. */
+/** Same-origin self-hosted voice endpoints. No Gemini. No OpenAI key. */
 
 export function createSelfHostedBackend({
   statusEndpoint = '/api/voice/status',

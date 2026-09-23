@@ -51,7 +51,10 @@ test('voice status reports the planner without a GPU box', async () => {
     assert.equal(res.body.planner, true);
     assert.equal(res.body.llm, true);
     assert.equal(res.body.asr, false);
+    assert.equal(res.body.browserAsr, true);
+    assert.equal(res.body.browserTts, true);
     assert.equal(res.body.inference, false);
+    assert.equal(res.body.models.asr, 'onnx-community/whisper-tiny.en');
   } finally {
     if (previous === undefined) delete process.env.VOICE_INFERENCE_URL;
     else process.env.VOICE_INFERENCE_URL = previous;
@@ -109,11 +112,11 @@ test('voice act prefers parsed Qwen tool calls when the GPU box answers', async 
   }
 });
 
-test('voice TTS returns spoken text when Kokoro and Gemini are offline', async () => {
+test('voice TTS returns spoken text when the GPU Kokoro box is offline', async () => {
   const previous = process.env.VOICE_INFERENCE_URL;
   const previousGemini = process.env.GEMINI_API_KEY;
   delete process.env.VOICE_INFERENCE_URL;
-  delete process.env.GEMINI_API_KEY;
+  process.env.GEMINI_API_KEY = 'must-not-be-used';
   try {
     const routes = install(selfHostedVoiceProxy());
     const res = await request(routes.get('/api/voice/tts'), {
@@ -122,6 +125,31 @@ test('voice TTS returns spoken text when Kokoro and Gemini are offline', async (
     });
     assert.equal(res.status, 200);
     assert.equal(res.body.speech, 'On my way to the Pentagon.');
+    assert.equal(res.body.audio, null);
+  } finally {
+    if (previous === undefined) delete process.env.VOICE_INFERENCE_URL;
+    else process.env.VOICE_INFERENCE_URL = previous;
+    if (previousGemini === undefined) delete process.env.GEMINI_API_KEY;
+    else process.env.GEMINI_API_KEY = previousGemini;
+  }
+});
+
+test('voice ASR ignores GEMINI_API_KEY and stays in the browser', async () => {
+  const previous = process.env.VOICE_INFERENCE_URL;
+  const previousGemini = process.env.GEMINI_API_KEY;
+  delete process.env.VOICE_INFERENCE_URL;
+  process.env.GEMINI_API_KEY = 'must-not-be-used';
+  try {
+    const routes = install(selfHostedVoiceProxy());
+    const status = await request(routes.get('/api/voice/status'));
+    assert.equal(status.body.asr, false);
+    assert.equal(status.body.hostedAsr, undefined);
+    const res = await request(routes.get('/api/voice/asr'), {
+      method: 'POST',
+      body: JSON.stringify({ audio: 'Zg==', mimeType: 'audio/webm' }),
+    });
+    assert.equal(res.status, 503);
+    assert.match(res.body.error, /Whisper/i);
   } finally {
     if (previous === undefined) delete process.env.VOICE_INFERENCE_URL;
     else process.env.VOICE_INFERENCE_URL = previous;
