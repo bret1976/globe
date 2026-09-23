@@ -57,39 +57,42 @@ export function windProxy() {
     return payload;
   }
 
+  function installMiddleware(server) {
+    server.middlewares.use('/api/wind', (req, res, next) => {
+      if (req.method !== 'GET') return next();
+      const now = Date.now();
+      if (mem && now - mem.at < TTL_MS) {
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify(mem.payload));
+        return;
+      }
+      const run = inflight || (inflight = refresh().finally(() => {
+        inflight = null;
+      }));
+      run
+        .then((payload) => {
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify(payload));
+        })
+        .catch((error) => {
+          if (mem && now - mem.at < STALE_MS) {
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify({ ...mem.payload, stale: true }));
+            return;
+          }
+          res.statusCode = 502;
+          res.setHeader('Content-Type', 'application/json');
+          res.end(
+            JSON.stringify({ error: error?.message || 'Wind unavailable' }),
+          );
+        });
+    });
+  }
+
   return {
     name: 'local-wind-proxy',
-    configureServer(server) {
-      server.middlewares.use('/api/wind', (req, res, next) => {
-        if (req.method !== 'GET') return next();
-        const now = Date.now();
-        if (mem && now - mem.at < TTL_MS) {
-          res.setHeader('Content-Type', 'application/json');
-          res.end(JSON.stringify(mem.payload));
-          return;
-        }
-        const run = inflight || (inflight = refresh().finally(() => {
-          inflight = null;
-        }));
-        run
-          .then((payload) => {
-            res.setHeader('Content-Type', 'application/json');
-            res.end(JSON.stringify(payload));
-          })
-          .catch((error) => {
-            if (mem && now - mem.at < STALE_MS) {
-              res.setHeader('Content-Type', 'application/json');
-              res.end(JSON.stringify({ ...mem.payload, stale: true }));
-              return;
-            }
-            res.statusCode = 502;
-            res.setHeader('Content-Type', 'application/json');
-            res.end(
-              JSON.stringify({ error: error?.message || 'Wind unavailable' }),
-            );
-          });
-      });
-    },
+    configureServer: installMiddleware,
+    configurePreviewServer: installMiddleware,
   };
 }
 
