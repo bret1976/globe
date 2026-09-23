@@ -325,8 +325,6 @@ export function createSelfHostedSession({
       } catch {
         /* Fall through to GPU Kokoro or speechSynthesis. */
       }
-    } else {
-      void browserVoice?.warmup?.();
     }
     return withDeadline(
       Promise.resolve(backend.speak({ text: speech, signal })).catch(() => ({
@@ -883,7 +881,6 @@ export function createSelfHostedSession({
     ignoreButtonClick: () => spaceHeld || holding,
     primeMic() {
       unlockPlayback();
-      void browserVoice?.warmup?.();
       preferRecorder = canUseRecorder();
       if (preferRecorder) requestMic();
       return true;
@@ -933,14 +930,11 @@ export function createSelfHostedSession({
       listenArmedAt = 0;
       flushing = false;
       unlockPlayback();
-      void browserVoice?.warmup?.();
       preferRecorder = canUseRecorder() || Boolean(options.pushToTalk);
       emit({
         type: 'state',
         state: 'connecting',
-        detail: browserVoice
-          ? 'Loading Whisper — then speak'
-          : 'Starting voice',
+        detail: browserVoice ? 'Voice ready — speak or type' : 'Starting voice',
       });
       // In-browser Whisper on the real getUserMedia stream is the open-mic
       // path. Chrome SpeechRecognition is a last-ditch fallback when the

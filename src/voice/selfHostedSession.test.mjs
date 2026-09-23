@@ -184,6 +184,58 @@ test('typed sendText activates an idle session and runs the planner', async () =
   session.stop();
 });
 
+test('starting TALK or typing a command does not compile Whisper or Kokoro', async () => {
+  const loads = [];
+  const backend = backendFixture({
+    calls: [
+      {
+        name: 'set_layer_visibility',
+        arguments: { layerId: 'earthquakes', enabled: true },
+      },
+    ],
+    speech: "I'll turn on earthquakes.",
+    source: 'planner',
+  });
+  const browserVoice = {
+    asrReady: () => false,
+    ttsReady: () => false,
+    warmup() {
+      loads.push('warmup');
+    },
+    async transcribe() {
+      loads.push('transcribe');
+      return { text: 'show earthquakes' };
+    },
+    async speak() {
+      loads.push('speak');
+      return { text: "I'll turn on earthquakes.", audio: null };
+    },
+  };
+  const actions = [];
+  const session = createVoiceSession({
+    runner: async (name, args) => {
+      actions.push([name, args]);
+      return { ok: true, name };
+    },
+    createAdapter: (hooks) =>
+      createSelfHostedSession({
+        ...hooks,
+        backend,
+        browserVoice,
+      }),
+  });
+  session.adapter.primeMic();
+  await session.start();
+  assert.equal(await session.sendText('show earthquakes'), true);
+  assert.deepEqual(
+    actions.map(([name, args]) => [name, args.layerId, args.enabled]),
+    [['set_layer_visibility', 'earthquakes', true]],
+  );
+  assert.deepEqual(loads, []);
+  assert.ok(backend.calls.some(([kind]) => kind === 'speak'));
+  session.stop();
+});
+
 test('interim speech is finalized after a short silence', async () => {
   let recognition;
   const previousRecognition = globalThis.SpeechRecognition;

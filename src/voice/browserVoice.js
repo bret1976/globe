@@ -18,11 +18,12 @@ export const KOKORO_VOICE = 'af_heart';
 function configureTransformersEnv(env) {
   env.allowLocalModels = false;
   env.useBrowserCache = true;
-  // Single-thread WASM so we never need SharedArrayBuffer / COOP+COEP,
-  // which would block Cesium ion tiles on other origins.
+  // Single-thread WASM. Use the ORT proxy worker so compile does not freeze
+  // Cesium; do not enable multi-thread (that needs COOP/COEP and would
+  // block ion tiles).
   if (env.backends?.onnx?.wasm) {
     env.backends.onnx.wasm.numThreads = 1;
-    env.backends.onnx.wasm.proxy = false;
+    env.backends.onnx.wasm.proxy = true;
   }
 }
 
