@@ -39,8 +39,9 @@ test('catalogs construct distinct layers and classification from their supplied 
     signal: b.signal,
     surface: fixtureSurface(b.signal),
   });
-  assert.equal(first.layers.length, 22);
+  assert.equal(first.layers.length, 23);
   assert.ok(first.get('fire-perimeters'));
+  assert.ok(first.get('au-fire'));
   assert.ok(first.get('transit'));
   const order = first.layers.map(({ id }) => id);
   assert.deepEqual(

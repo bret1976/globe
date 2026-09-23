@@ -167,6 +167,7 @@
       "server/providers/cctv/sources.js",
       "server/providers/cctv/mdchart.js",
       "server/providers/cctv/ddot.js",
+      "server/providers/cctv/colorado.js",
       "server/providers/common/http.js",
       "src/data/directionText.js",
       "server/providers/common/geo.js",
@@ -1268,6 +1269,7 @@
       "src/app/layers/bikeshare.js",
       "src/app/layers/cctv.js",
       "src/app/layers/earthquakes.js",
+      "src/app/layers/auFire.js",
       "src/app/layers/firms.js",
       "src/app/layers/flights.js",
       "src/app/layers/militaryAwareness.js",
@@ -1781,6 +1783,9 @@
       "src/layers/perimeters/records.js",
       "src/layers/perimeters/cards.js",
       "src/layers/perimeters/inciweb.js",
+      "src/app/layers/auFire.js",
+      "src/layers/auFire/index.js",
+      "src/layers/auFire/source.js",
       "src/layers/cctv/sourcePolicy.js",
       "src/sources/reference.js",
       "src/search/nominatim.js",
@@ -1898,6 +1903,7 @@
       "src/app/layers/bikeshare.js",
       "src/app/layers/cctv.js",
       "src/app/layers/earthquakes.js",
+      "src/app/layers/auFire.js",
       "src/app/layers/firms.js",
       "src/app/layers/flights.js",
       "src/app/layers/militaryAwareness.js",
@@ -2228,6 +2234,9 @@
       "src/layers/perimeters/records.js",
       "src/layers/perimeters/cards.js",
       "src/layers/perimeters/inciweb.js",
+      "src/app/layers/auFire.js",
+      "src/layers/auFire/index.js",
+      "src/layers/auFire/source.js",
       "src/layers/cctv/sourcePolicy.js",
       "src/search/nominatim.js",
       "src/nominatimGeocode.js",
@@ -2562,6 +2571,7 @@
       "src/layers/earthquakes/records.js",
       "src/layers/perimeters/source.js",
       "src/layers/perimeters/records.js",
+      "src/layers/auFire/source.js",
       "src/layers/submarineCables/bundledSource.js"
     ],
     "external": []
@@ -2775,6 +2785,19 @@
       "src/layers/perimeters/records.js",
       "src/layers/perimeters/source.js"
     ],
+    "external": []
+  },
+  "au-fire": {
+    "exports": ["./layers/au-fire"],
+    "modules": [
+      "src/layers/auFire/index.js",
+      "src/layers/auFire/source.js"
+    ],
+    "external": ["cesium"]
+  },
+  "au-fire-source": {
+    "exports": ["./layers/au-fire/source"],
+    "modules": ["src/layers/auFire/source.js"],
     "external": []
   }
 }

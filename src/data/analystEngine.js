@@ -66,6 +66,11 @@ export const ANALYST_LAYERS = {
     text: ['name', 'state', 'county', 'cause', 'behavior', 'complexity'],
     flags: [],
   },
+  'au-fire': {
+    numeric: ['sizeHa'],
+    text: ['title', 'state', 'alertLevel', 'status', 'type', 'location'],
+    flags: ['fireActive'],
+  },
 };
 
 const EARTH_R_KM = 6371;

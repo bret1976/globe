@@ -55,6 +55,7 @@ const VOICE_LAYER_FOCUS_IDS = new Set([
   'directions',
   'radio',
   'telegeography-submarine-cables',
+  'au-fire',
 ]);
 
 async function leaveCockpitForGlobeNav(styleManager) {
@@ -247,6 +248,10 @@ const LAYER_ALIASES = new Map([
   ['fire perimeters', 'fire-perimeters'],
   ['perimeters', 'fire-perimeters'],
   ['wildfire perimeters', 'fire-perimeters'],
+  ['au fire', 'au-fire'],
+  ['australia fire', 'au-fire'],
+  ['nsw rfs', 'au-fire'],
+  ['vic fire', 'au-fire'],
   ['firms', 'local-firms'],
   ['fires', 'local-firms'],
   ['active fires', 'local-firms'],
