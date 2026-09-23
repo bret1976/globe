@@ -99,3 +99,32 @@ test('a slow layer enable cannot move the camera after a newer layer click', asy
   assert.deepEqual(focused, ['second']);
   presentation.destroy();
 });
+
+test('focusing an enabled cockpit layer re-enables it after context restoration', async () => {
+  let enabled = true;
+  const events = [];
+  const manager = {
+    subscribeActivity: () => () => {},
+    getAll: () => [],
+    isEnabled: () => enabled,
+    async setEnabled(id, value) {
+      enabled = value;
+      events.push(['enable', id, value]);
+    },
+  };
+  const presentation = new LayerPresentation(manager, {
+    onUserLayerEnablePrepare: () => {
+      enabled = false;
+      events.push(['leave-context']);
+    },
+    onUserLayerEnabled: (id) => events.push(['focus', id]),
+  });
+  await presentation.panel.focusLayer('ais-live-vessels');
+  assert.equal(enabled, true);
+  assert.deepEqual(events, [
+    ['leave-context'],
+    ['enable', 'ais-live-vessels', true],
+    ['focus', 'ais-live-vessels'],
+  ]);
+  presentation.destroy();
+});

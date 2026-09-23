@@ -70,6 +70,12 @@ export class LayerPresentation {
           const focusGeneration = ++this._focusGeneration;
           try {
             await this._onUserLayerEnablePrepare?.(id);
+            if (focusGeneration !== this._focusGeneration) return;
+            // Leaving cockpit/context restores its saved layer selection. The
+            // operator's explicit layer click must survive that restoration.
+            if (!this.manager.isEnabled(id)) {
+              await this.manager.setEnabled(id, true, { origin: 'user' });
+            }
             if (
               focusGeneration === this._focusGeneration &&
               this.manager.isEnabled(id)
