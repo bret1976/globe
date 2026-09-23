@@ -6,7 +6,9 @@
 import * as Cesium from 'cesium';
 
 export const WIND_LAYER_ID = 'wind';
-const HIDE_BELOW_M = 180_000;
+export const HIDE_BELOW_M = 180_000;
+export const WIND_ZOOM_OUT_MESSAGE =
+  'Zoom out above 180 km to see global wind';
 
 function speedColor(speedKmh) {
   if (speedKmh < 20) return Cesium.Color.fromCssColorString('#7ec8ff');
@@ -118,7 +120,17 @@ export function createWindLayer({ source } = {}) {
       viewer = null;
     },
     getStats() {
-      return { count, lastUpdate, error };
+      const height =
+        viewer?.camera?.positionCartographic?.height ??
+        Number.POSITIVE_INFINITY;
+      const hidden = Boolean(enabled && !error && height < HIDE_BELOW_M);
+      return {
+        count,
+        lastUpdate,
+        error,
+        status: hidden ? 'zoom-out' : error ? 'error' : undefined,
+        statusMessage: hidden ? WIND_ZOOM_OUT_MESSAGE : undefined,
+      };
     },
   };
 }

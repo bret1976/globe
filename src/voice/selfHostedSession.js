@@ -13,6 +13,7 @@ import {
   shouldRearmAfterReply,
   shouldWatchdogFlush,
 } from './openMicPolicy.js';
+import { audioBlobToWavBytes } from './audioWav.js';
 
 const MIC_SPEECH_THRESHOLD = 0.012;
 const MIN_RECORDING_BYTES = 250;
@@ -533,10 +534,17 @@ export function createSelfHostedSession({
         state: 'executing',
         detail: 'Hearing you…',
       });
-      const bytes = new Uint8Array(await blob.arrayBuffer());
+      let mimeType = blob.type || 'audio/webm';
+      let bytes = new Uint8Array(await blob.arrayBuffer());
+      try {
+        bytes = new Uint8Array(await audioBlobToWavBytes(blob));
+        mimeType = 'audio/wav';
+      } catch {
+        /* Gemini still gets the original clip if decode fails */
+      }
       const result = await backend.transcribe({
         audio: bytes,
-        mimeType: blob.type || 'audio/webm',
+        mimeType,
         signal: AbortSignal.any(
           [signal, AbortSignal.timeout(30_000)].filter(Boolean),
         ),
