@@ -30,7 +30,7 @@ export function createVoiceControl({ reset = false } = {}) {
         <div id="gev-voice-detail">Tap the mic and speak, or type a command</div>
       </div>
       <form id="gev-voice-command-form" class="gev-voice-command-form">
-        <input id="gev-voice-command" type="text" autocomplete="off" spellcheck="false" placeholder="Take me to the Pentagon" aria-label="Type a voice command" />
+        <input id="gev-voice-command" type="text" autocomplete="off" spellcheck="false" placeholder="Type show earthquakes" aria-label="Type a voice command" />
       </form>
       <div id="gev-voice-help" class="gev-voice-help-tray" role="tooltip">
         <span class="gev-voice-help-kicker">VOICE CONTROL</span>

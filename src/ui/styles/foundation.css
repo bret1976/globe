@@ -456,13 +456,14 @@ body:has(.data-toggle-row[data-layer-id='alpr-cameras'] .data-toggle-btn.active)
   width: 100%;
   min-width: 132px;
   max-width: 220px;
-  padding: 4px 6px;
-  border: 1px solid rgba(0, 212, 255, 0.28);
+  padding: 6px 8px;
+  border: 1px solid rgba(0, 212, 255, 0.45);
   border-radius: 4px;
-  background: rgba(0, 12, 24, 0.72);
+  background: rgba(0, 12, 24, 0.88);
   color: var(--text-primary, #d7f6ff);
   font: inherit;
-  font-size: 10px;
+  font-size: 12px;
+  pointer-events: auto;
 }
 
 #gev-voice-command:focus {

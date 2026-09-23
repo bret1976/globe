@@ -151,11 +151,17 @@ export function createVoiceCommands({
       if (sent && ui.commandInput) ui.commandInput.value = '';
     })();
   };
+  const keepCommandFocus = (event) => {
+    event.stopPropagation();
+    ui.commandInput?.focus?.();
+  };
   ui.button.addEventListener('pointerdown', startPress);
   ui.button.addEventListener('pointerup', endPress);
   ui.button.addEventListener('pointercancel', endPress);
   ui.button.addEventListener('click', buttonHandler);
   ui.commandForm?.addEventListener?.('submit', formHandler);
+  ui.commandInput?.addEventListener?.('pointerdown', keepCommandFocus);
+  ui.commandForm?.addEventListener?.('pointerdown', keepCommandFocus);
   session.signal.addEventListener(
     'abort',
     () => {
@@ -168,6 +174,8 @@ export function createVoiceCommands({
       ui.button.removeEventListener('pointercancel', endPress);
       ui.button.removeEventListener('click', buttonHandler);
       ui.commandForm?.removeEventListener?.('submit', formHandler);
+      ui.commandInput?.removeEventListener?.('pointerdown', keepCommandFocus);
+      ui.commandForm?.removeEventListener?.('pointerdown', keepCommandFocus);
       annotationUnsubscribe?.();
       updateStatus();
       ui.root.remove();
