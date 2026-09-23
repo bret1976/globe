@@ -12,7 +12,9 @@ Share / smoke hashes (append to live URL):
 - `#shorts=area51` — Area 51 / Groom Lake + TR-3B tip
 - `#shorts=nepal` — Nepal floods reconstruction
 - `#shorts=traffic` — Traffic & CCTV God's Eye (Austin → London → SF; aliases: streets, tomtom, spy)
-- `#shorts=typhoon` — Typhoon Dujuan → Japan (2026-09-21; aliases: dujuan, storm, himawari, japan-storm). Uses in-repo Open-Meteo / weather-effects — no proprietary sat tiles.
+- `#shorts=typhoon` — Typhoon Dujuan → Japan (2026-09-21; aliases: dujuan, storm, himawari, japan-storm). Enables Observed Weather (GIBS IR), Wind, and Cyclones.
+- `#l=1` — Recent Imagery layer (draw a box, day strip, IMAGE drape)
+- `#l=o.2.v` — Observed Weather + Wind + Cyclones
 
 Vessel feed **PARTIAL vs STALE** comes from upstream #626 (layer panel).
 
