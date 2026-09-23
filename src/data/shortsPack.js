@@ -8,7 +8,7 @@
  *  4) Area 51 TR-3B easter egg (fly Groom Lake + surface TR-3B toggle tip)
  *  5) Nepal floods reconstruction (enables upstream Bhote Koshi scene layers)
  *  6) Traffic & CCTV God's Eye (Austin → London → SF; TomTom / camera layers)
- *  7) Typhoon Dujuan → Japan (W. Pacific hop; in-repo Open-Meteo / weather-effects)
+ *  7) Typhoon Dujuan → Japan (W. Pacific hop; GIBS IR + wind + cyclone cards)
  *
  * Cable geometry: OSM ODbL free extract already in this fork. TeleGeography dump
  * is not shipped and must not be reintroduced.
@@ -347,8 +347,8 @@ export async function runShortsPack(input = {}) {
   }
 
   if (pack === 'typhoon') {
-    toast('SHORTS · Typhoon Dujuan → Japan (Open-Meteo weather)');
-    await enableLayers(dataManager, ['weather', 'weather-effects']);
+    toast('SHORTS · Typhoon Dujuan → Japan (GIBS IR + cyclones)');
+    await enableLayers(dataManager, ['weather', 'wind', 'weather-cyclones']);
     document.getElementById?.('wx-on')?.click?.();
     document.querySelector?.('[data-weather="on"]')?.click?.();
     document.querySelector?.('[data-wx="on"]')?.click?.();

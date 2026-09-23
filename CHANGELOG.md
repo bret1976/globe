@@ -1,5 +1,17 @@
 # Changelog
 
+- Add Recent Imagery (share token `1`): keyless NASA GIBS / CMR / Worldview
+  Snapshots for a selected box, with day strip, IMAGE / VS BASEMAP / A-B
+  compare, and share-link box/pin/mode state. Ported to this fork from
+  upstream gods-eye-view #716 — not a force-merge of upstream main.
+
+- Add a usable weather subset for Bret's typhoon Shorts pack: Observed Weather
+  (`weather`, token `o`) drapes GIBS VIIRS + Himawari IR; Wind (`wind`, token
+  `2`) draws Open-Meteo GFS arrows; Cyclones (`weather-cyclones`, token `v`)
+  merge NOAA NHC advisories with NASA EONET severe storms (Western Pacific
+  coverage). Full upstream weather PR #617 (GRIB/eccodes, radar/lightning
+  shells) is deferred. `#shorts=typhoon` now enables these three layers.
+
 - Add `#shorts=typhoon` (aliases: dujuan, storm, himawari, japan-storm): fly
   the western Pacific then southern Honshu for Typhoon Dujuan (2026-09-21),
   enable in-repo Open-Meteo / weather-effects if present, and show the SHORTS

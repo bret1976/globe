@@ -1,6 +1,8 @@
 import { SceneDirector } from '../scenes/director.js';
 import { initAnnotations } from '../annotations/index.js';
 import { initDrawTool } from '../annotations/drawTool.js';
+import { initImageryBoxTool } from '../ui/imageryBoxTool.js';
+import { createRecentImageryPanel } from '../ui/recentImagery.js';
 import { initGevVoiceCommands } from '../voice/gevRealtime.js';
 import { installScopeMask, destroyScopeMask } from '../scopeMask.js';
 import {
@@ -53,6 +55,35 @@ export function createApplicationTools({
   // lifetime rather than to whoever last pressed the button.
   const drawTool = initDrawTool({ viewer, annotations });
   defer(() => drawTool?.destroy());
+  const recentImagery = dataManager.layers.get('recent-imagery')?.module;
+  if (recentImagery) {
+    recentImagery.attachTileset(tileset);
+    const imageryBoxTool = initImageryBoxTool({
+      viewer,
+      onBox: (box) => recentImagery.setBox(box),
+      onCancel: (reason, message, box) => {
+        if (message) recentImagery.reportBoxRefusal(message, box);
+      },
+      onActive: (active) => recentImagery.setToolActive(active),
+      onEscape: () => recentImagery.clearPreview(),
+    });
+    data.presentation.attachRecentImagery((container) =>
+      createRecentImageryPanel({
+        container,
+        viewer,
+        layer: recentImagery,
+        tool: imageryBoxTool,
+      }),
+    );
+    const recentImageryHandle = { layer: recentImagery, tool: imageryBoxTool };
+    window.__gevRecentImagery = recentImageryHandle;
+    defer(() => {
+      if (window.__gevRecentImagery === recentImageryHandle)
+        delete window.__gevRecentImagery;
+      data.presentation.attachRecentImagery(null);
+      imageryBoxTool?.destroy();
+    });
+  }
   if (startChrome)
     defer(startChrome({ loadingScreen, styleManager, dataManager, signal }));
   // Idle render governor: flips the scene into requestRenderMode whenever

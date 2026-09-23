@@ -110,6 +110,10 @@ export class LayerPresentation {
       });
     return this._panel;
   }
+  attachRecentImagery(factory) {
+    if (factory) this.panel.attachRecentImagery(factory);
+    else this._panel?.attachRecentImagery(null);
+  }
   mount(container) {
     this.panel.mount(container);
   }
