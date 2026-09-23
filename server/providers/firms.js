@@ -216,9 +216,9 @@ export function firmsProxy() {
           sendJson(200, buildPayload(entry, false));
           return;
         }
-        // Stale or missing → refresh, single-flight (concurrent requests
-        // share one upstream pass). Capture the promise locally BEFORE
-        // awaiting: the .finally() nulls `inflight` the moment it settles.
+        // Stale or missing → refresh in the background. The first fill of
+        // three VIIRS world feeds is ~30s; blocking the HUD on that is why
+        // DATA LAYERS looked dead after a Railway cold start.
         if (!inflight) {
           inflight = refreshUpstream(key)
             .then(async (fresh) => {
@@ -236,26 +236,58 @@ export function firmsProxy() {
               inflight = null;
             });
         }
-        const pending = inflight;
-        const fresh = await pending;
-        if (fresh) {
-          sendJson(200, buildPayload(fresh, false));
-        } else if (entry) {
-          sendJson(200, buildPayload(entry, true)); // upstream down — stale beats empty
-        } else {
-          sendJson(502, {
-            error: 'firms fetch failed and no cache available',
-          });
+        if (entry) {
+          sendJson(200, buildPayload(entry, true));
+          return;
         }
+        sendJson(200, {
+          fetchedAt: null,
+          stale: false,
+          warming: true,
+          ttlMs: TTL_MS,
+          sources: [],
+          count: 0,
+          fires: [],
+        });
       } catch (err) {
         console.warn('[firms-proxy] error:', err?.message || err);
         sendJson(500, { error: 'firms proxy error' });
       }
     });
   };
+  function prefetch() {
+    const key = mapKey();
+    if (!key) return;
+    void readDiskOnce().then(() => {
+      if (mem && Date.now() - mem.at < TTL_MS) return;
+      if (inflight) return;
+      inflight = refreshUpstream(key)
+        .then(async (fresh) => {
+          mem = fresh;
+          await writeDisk(fresh);
+          return fresh;
+        })
+        .catch((err) => {
+          console.warn(
+            `[firms-proxy] prefetch failed (${err?.message || err})`,
+          );
+          return null;
+        })
+        .finally(() => {
+          inflight = null;
+        });
+    });
+  }
+
   return {
     name: 'firms-proxy',
-    configureServer: installMiddleware,
-    configurePreviewServer: installMiddleware,
+    configureServer(server) {
+      prefetch();
+      installMiddleware(server);
+    },
+    configurePreviewServer(server) {
+      prefetch();
+      installMiddleware(server);
+    },
   };
 }

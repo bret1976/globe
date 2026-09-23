@@ -62,6 +62,51 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
   /** Snapshot all camera health entries as an array. */
   const listHealth = () => Array.from(health.values());
 
+  const publicSource = (source) => ({
+    id: source.id,
+    name: source.name,
+    city: source.city,
+    cityId: source.cityId,
+    provider: source.provider,
+    lat: source.lat,
+    lon: source.lon,
+    headingDeg: source.headingDeg,
+    headingConfidence: source.headingConfidence || '',
+    pitchDeg: source.pitchDeg,
+    fovDeg: source.fovDeg,
+    rangeM: source.rangeM,
+    mountHeightM: source.mountHeightM,
+    groundElevationM: source.groundElevationM,
+    feedType: normalizeFeedType(source.feedType),
+    sourceKind: source.sourceKind || (source.url ? 'configured' : 'fallback'),
+    poseSource: source.poseSource,
+    license: source.license,
+    credit: source.credit || '',
+    code: source.code || '',
+    groundHeights: source.groundHeights || null,
+  });
+
+  const sendSources = (res, sources, warming = false) => {
+    res.writeHead(200, {
+      'Content-Type': 'application/json',
+      'Cache-Control': 'no-store',
+    });
+    res.end(JSON.stringify({ sources: sources.map(publicSource), warming }));
+  };
+
+  const settleCatalog = async (ms = 500) => {
+    getCctvSources.prefetch?.();
+    const cached = getCctvSources.snapshot?.() || [];
+    if (cached.length) return { sources: cached, warming: false };
+    const ready = getCctvSources();
+    const timedOut = new Promise((resolve) =>
+      setTimeout(() => resolve(null), ms),
+    );
+    const sources = await Promise.race([ready, timedOut]);
+    if (Array.isArray(sources)) return { sources, warming: false };
+    return { sources: getCctvSources.snapshot?.() || [], warming: true };
+  };
+
   /** Build a JSON payload describing stream info (feedType, URLs) for a camera. */
   const buildStreamPayload = (source, cameraId) => {
     const feedType = normalizeFeedType(source?.feedType || 'image');
@@ -127,48 +172,21 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
   };
 
   const installMiddleware = (server) => {
+    getCctvSources.prefetch?.();
     server.middlewares.use('/api/cctv', async (req, res) => {
       try {
+        const url = new URL(req.url || '/', 'http://localhost');
+
+        if (url.pathname === '/sources') {
+          const catalog = await settleCatalog();
+          sendSources(res, catalog.sources, catalog.warming);
+          return;
+        }
+
         const sources = await getCctvSources();
         const sourceById = new Map(
           sources.map((source) => [source.id, source]),
         );
-        const url = new URL(req.url || '/', 'http://localhost');
-
-        if (url.pathname === '/sources') {
-          const body = {
-            sources: sources.map((source) => ({
-              id: source.id,
-              name: source.name,
-              city: source.city,
-              cityId: source.cityId,
-              provider: source.provider,
-              lat: source.lat,
-              lon: source.lon,
-              headingDeg: source.headingDeg,
-              headingConfidence: source.headingConfidence || '',
-              pitchDeg: source.pitchDeg,
-              fovDeg: source.fovDeg,
-              rangeM: source.rangeM,
-              mountHeightM: source.mountHeightM,
-              groundElevationM: source.groundElevationM,
-              feedType: normalizeFeedType(source.feedType),
-              sourceKind:
-                source.sourceKind || (source.url ? 'configured' : 'fallback'),
-              poseSource: source.poseSource,
-              license: source.license,
-              credit: source.credit || '',
-              code: source.code || '',
-              groundHeights: source.groundHeights || null,
-            })),
-          };
-          res.writeHead(200, {
-            'Content-Type': 'application/json',
-            'Cache-Control': 'no-store',
-          });
-          res.end(JSON.stringify(body));
-          return;
-        }
 
         if (url.pathname === '/health') {
           res.writeHead(200, {

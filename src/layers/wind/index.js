@@ -7,8 +7,7 @@ import * as Cesium from 'cesium';
 
 export const WIND_LAYER_ID = 'wind';
 export const HIDE_BELOW_M = 180_000;
-export const WIND_ZOOM_OUT_MESSAGE =
-  'Zoom out above 180 km to see global wind';
+export const WIND_ZOOM_OUT_MESSAGE = 'Zoom out above 180 km to see global wind';
 
 function speedColor(speedKmh) {
   if (speedKmh < 20) return Cesium.Color.fromCssColorString('#7ec8ff');
@@ -30,6 +29,7 @@ export function createWindLayer({ source } = {}) {
   let lastUpdate = null;
   let error = null;
   let samples = [];
+  let warmRetry = null;
 
   function rebuild() {
     if (!dataSource) return;
@@ -61,7 +61,7 @@ export function createWindLayer({ source } = {}) {
     count = samples.length;
   }
 
-  return {
+  const layer = {
     id: WIND_LAYER_ID,
     name: 'Wind',
     icon: '🌬',
@@ -83,6 +83,10 @@ export function createWindLayer({ source } = {}) {
       request?.abort();
       request = null;
       enabled = false;
+      if (warmRetry) {
+        clearTimeout(warmRetry);
+        warmRetry = null;
+      }
       if (dataSource) dataSource.show = false;
     },
     async update() {
@@ -97,6 +101,17 @@ export function createWindLayer({ source } = {}) {
         samples = payload.samples || [];
         lastUpdate = Date.now();
         error = null;
+        if (payload.warming && enabled) {
+          if (!warmRetry) {
+            warmRetry = setTimeout(() => {
+              warmRetry = null;
+              if (enabled) void layer.update();
+            }, 2000);
+          }
+        } else if (warmRetry) {
+          clearTimeout(warmRetry);
+          warmRetry = null;
+        }
         rebuild();
         return true;
       } catch (err) {
@@ -113,6 +128,10 @@ export function createWindLayer({ source } = {}) {
       request = null;
       enabled = false;
       samples = [];
+      if (warmRetry) {
+        clearTimeout(warmRetry);
+        warmRetry = null;
+      }
       if (dataSource) {
         nextViewer?.dataSources?.remove(dataSource, true);
         dataSource = null;
@@ -133,6 +152,7 @@ export function createWindLayer({ source } = {}) {
       };
     },
   };
+  return layer;
 }
 
 export { createWindSource } from './source.js';

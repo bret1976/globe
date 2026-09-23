@@ -40,6 +40,8 @@
   "src/standalone/startupChrome.test.mjs",
   "src/standalone/tools.js",
   "build/vite.js",
+  "build/hostedAssets.js",
+  "src/tooling/hostedAssets.test.mjs",
   "server/standalone/vite.config.js",
   "vite.config.js",
   "src/tooling/viteBuild.test.mjs",

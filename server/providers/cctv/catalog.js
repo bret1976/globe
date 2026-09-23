@@ -183,6 +183,12 @@ export function createCctvCatalog({ sourceRoot = process.cwd() } = {}) {
     return _cctvSourceInflight;
   }
 
+  getCctvSources.snapshot = () => _cctvSourceCache;
+  getCctvSources.refreshing = () => Boolean(_cctvSourceInflight);
+  getCctvSources.prefetch = () => {
+    void getCctvSources();
+  };
+
   /**
    * Assemble and cache the merged CCTV source list from file/env + live packs.
    * Always resolves (loaders self-catch to []); on a fully-empty refresh with a

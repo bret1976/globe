@@ -30,7 +30,11 @@
   "vite-build": {
     "runtime": "node",
     "exports": ["./build/vite", "./build/html"],
-    "modules": ["build/vite.js", "build/application-html.js"],
+    "modules": [
+      "build/vite.js",
+      "build/application-html.js",
+      "build/hostedAssets.js"
+    ],
     "external": ["vite-plugin-cesium"]
   },
   "live-providers": {

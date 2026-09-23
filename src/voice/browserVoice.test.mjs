@@ -8,15 +8,16 @@ import {
 } from './browserVoice.js';
 import { encodePcm16Wav } from './audioWav.js';
 
-test('Whisper and Kokoro are loaded through runtime specifiers', () => {
+test('Whisper and Kokoro are loaded through Vite-bundled dynamic imports', () => {
   const source = readFileSync(
     new URL('./browserVoice.js', import.meta.url),
     'utf8',
   );
-  assert.equal(source.includes("import('@huggingface/transformers')"), false);
-  assert.equal(source.includes("import('kokoro-js')"), false);
-  assert.match(source, /import\(\/\* @vite-ignore \*\/ TRANSFORMERS_PKG\)/);
-  assert.match(source, /import\(\/\* @vite-ignore \*\/ KOKORO_PKG\)/);
+  assert.match(source, /import\('@huggingface\/transformers'\)/);
+  assert.match(source, /import\('kokoro-js'\)/);
+  assert.equal(/import\(\s*\/\*\s*@vite-ignore/.test(source), false);
+  assert.equal(source.includes('TRANSFORMERS_PKG'), false);
+  assert.equal(source.includes('KOKORO_PKG'), false);
 });
 
 test('createBrowserVoice does not load models until used', () => {

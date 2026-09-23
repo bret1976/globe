@@ -10,6 +10,7 @@ export function createIngestion({
 }) {
   const { clearSelectedEntityContextForLayer } = services.context;
   const { id } = config;
+  let warmRetry = null;
 
   /** Replace a validated snapshot while preserving source freshness and selection identity. */
 
@@ -33,6 +34,24 @@ export function createIngestion({
         layerState._error = null;
         layerState._stale = false;
         return;
+      }
+      if (payload?.warming) {
+        layerState._keyRequired = false;
+        layerState._error = null;
+        layerState._stale = false;
+        if (!warmRetry) {
+          warmRetry = setTimeout(() => {
+            warmRetry = null;
+            if (layerState._enabled && !layerState._destroyed) {
+              void loadHeatmap();
+            }
+          }, 2000);
+        }
+        return;
+      }
+      if (warmRetry) {
+        clearTimeout(warmRetry);
+        warmRetry = null;
       }
       layerState._keyRequired = false;
       layerState._error = null;

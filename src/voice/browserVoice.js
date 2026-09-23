@@ -26,13 +26,11 @@ function configureTransformersEnv(env) {
   }
 }
 
-const TRANSFORMERS_PKG = '@huggingface/transformers';
-const KOKORO_PKG = 'kokoro-js';
-
 async function defaultLoadAsr() {
-  // Variable specifier so Vite cannot fail the whole globe at transform time
-  // if the optional ML packages are still installing.
-  const { pipeline, env } = await import(/* @vite-ignore */ TRANSFORMERS_PKG);
+  // Literal specifiers so Vite emits real lazy chunks. A variable +
+  // `@vite-ignore` leaves a bare specifier the production browser cannot
+  // resolve, which is why TALK died after the Whisper deploy.
+  const { pipeline, env } = await import('@huggingface/transformers');
   configureTransformersEnv(env);
   return pipeline('automatic-speech-recognition', WHISPER_ASR_MODEL, {
     dtype: 'q8',
@@ -41,7 +39,7 @@ async function defaultLoadAsr() {
 }
 
 async function defaultLoadTts() {
-  const { KokoroTTS } = await import(/* @vite-ignore */ KOKORO_PKG);
+  const { KokoroTTS } = await import('kokoro-js');
   return KokoroTTS.from_pretrained(KOKORO_TTS_MODEL, {
     dtype: 'q8',
     device: 'wasm',

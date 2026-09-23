@@ -37,8 +37,7 @@ export function windProxy() {
     diskChecked = true;
     try {
       const parsed = JSON.parse(await fsp.readFile(CACHE_PATH, 'utf8'));
-      if (Number.isFinite(parsed?.at) && parsed?.payload?.samples)
-        mem = parsed;
+      if (Number.isFinite(parsed?.at) && parsed?.payload?.samples) mem = parsed;
     } catch {
       /* first run */
     }
@@ -98,38 +97,72 @@ export function windProxy() {
       if (req.method !== 'GET') return next();
       await readDiskOnce();
       const now = Date.now();
-      if (mem && now - mem.at < TTL_MS) {
+      const send = (payload) => {
         res.setHeader('Content-Type', 'application/json');
-        res.end(JSON.stringify(mem.payload));
+        res.end(JSON.stringify(payload));
+      };
+      if (mem && now - mem.at < TTL_MS) {
+        send(mem.payload);
         return;
       }
-      const run = inflight || (inflight = refresh().finally(() => {
-        inflight = null;
-      }));
-      run
-        .then((payload) => {
-          res.setHeader('Content-Type', 'application/json');
-          res.end(JSON.stringify(payload));
-        })
+      if (!inflight) {
+        inflight = refresh()
+          .catch((error) => {
+            console.warn(
+              '[wind-proxy] refresh failed:',
+              error?.message || error,
+            );
+            return null;
+          })
+          .finally(() => {
+            inflight = null;
+          });
+      }
+      // Never block the globe on Open-Meteo (first fill is ~40s). Serve stale
+      // immediately, or an empty warming payload while the grid fills.
+      if (mem && now - mem.at < STALE_MS) {
+        send({ ...mem.payload, stale: true });
+        return;
+      }
+      send({
+        fetchedAt: null,
+        model: 'gfs',
+        valid: null,
+        samples: [],
+        warming: true,
+      });
+    });
+  }
+
+  function prefetch() {
+    void readDiskOnce().then(() => {
+      const now = Date.now();
+      if (mem && now - mem.at < TTL_MS) return;
+      if (inflight) return;
+      inflight = refresh()
         .catch((error) => {
-          if (mem && now - mem.at < STALE_MS) {
-            res.setHeader('Content-Type', 'application/json');
-            res.end(JSON.stringify({ ...mem.payload, stale: true }));
-            return;
-          }
-          res.statusCode = 502;
-          res.setHeader('Content-Type', 'application/json');
-          res.end(
-            JSON.stringify({ error: error?.message || 'Wind unavailable' }),
+          console.warn(
+            '[wind-proxy] prefetch failed:',
+            error?.message || error,
           );
+          return null;
+        })
+        .finally(() => {
+          inflight = null;
         });
     });
   }
 
   return {
     name: 'local-wind-proxy',
-    configureServer: installMiddleware,
-    configurePreviewServer: installMiddleware,
+    configureServer(server) {
+      prefetch();
+      installMiddleware(server);
+    },
+    configurePreviewServer(server) {
+      prefetch();
+      installMiddleware(server);
+    },
   };
 }
 

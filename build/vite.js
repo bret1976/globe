@@ -1,4 +1,5 @@
 import { applicationHtmlPlugin } from './application-html.js';
+import { hostedAssetsPlugin } from './hostedAssets.js';
 import cesium from 'vite-plugin-cesium';
 
 /** Build browser assets with explicit inputs; never load environment or providers. */
@@ -11,7 +12,12 @@ export function createBrowserViteConfig({
   port = 4173,
 } = {}) {
   return {
-    plugins: [cesium(), applicationHtmlPlugin(), ...plugins],
+    plugins: [
+      cesium(),
+      applicationHtmlPlugin(),
+      hostedAssetsPlugin(),
+      ...plugins,
+    ],
     ...(publicDir === undefined ? {} : { publicDir }),
     server: {
       host: host || 'localhost',

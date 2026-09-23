@@ -83,10 +83,25 @@ export function createCatalog({ state: layerState, services, parts, source }) {
   async function loadCameraSources() {
     try {
       const signal = layerState._sourceAbort?.signal;
-      const data = await source.getCatalog({ signal });
-      signal?.throwIfAborted();
-      if (!Array.isArray(data?.sources)) return [];
-      return data.sources;
+      for (let attempt = 0; attempt < 12; attempt++) {
+        const data = await source.getCatalog({ signal });
+        signal?.throwIfAborted();
+        if (!Array.isArray(data?.sources)) return [];
+        if (data.sources.length || !data.warming) return data.sources;
+        await new Promise((resolve, reject) => {
+          const timer = setTimeout(resolve, 1000);
+          const onAbort = () => {
+            clearTimeout(timer);
+            reject(new DOMException('Aborted', 'AbortError'));
+          };
+          if (signal?.aborted) {
+            onAbort();
+            return;
+          }
+          signal?.addEventListener('abort', onAbort, { once: true });
+        });
+      }
+      return [];
     } catch (error) {
       if (error?.name === 'AbortError') throw error;
       return [];
