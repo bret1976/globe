@@ -808,5 +808,7 @@
   "src/ui/styles/weather.css",
   "server/providers/wind.js",
   "server/providers/cyclones.js",
+  "server/providers/firePerimeters.js",
+  "src/data/firePerimetersProxy.test.mjs",
   "src/ui/railTestFixture.mjs"
 ]

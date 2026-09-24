@@ -2633,6 +2633,7 @@
       "src/layers/earthquakes/records.js",
       "src/layers/perimeters/source.js",
       "src/layers/perimeters/records.js",
+      "src/sources/httpBody.js",
       "src/layers/auFire/source.js",
       "src/layers/submarineCables/bundledSource.js"
     ],
@@ -2834,6 +2835,7 @@
     "exports": ["./layers/perimeters"],
     "modules": [
       "src/layers/perimeters/index.js",
+      "src/sources/httpBody.js",
       "src/layers/perimeters/source.js",
       "src/layers/perimeters/records.js",
       "src/layers/perimeters/cards.js",
@@ -2845,6 +2847,7 @@
     "exports": ["./layers/perimeters/source"],
     "modules": [
       "src/layers/perimeters/records.js",
+      "src/sources/httpBody.js",
       "src/layers/perimeters/source.js"
     ],
     "external": []

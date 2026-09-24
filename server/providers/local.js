@@ -22,6 +22,7 @@ import { selfHostedVoiceProxy } from './voice.js';
 import { googlePlacesContextProxy } from './places.js';
 import { keySetupEndpoint } from '../standalone/key-setup.js';
 import { auFireProxy } from './auFire.js';
+import { firePerimetersProxy } from './firePerimeters.js';
 import { windProxy } from './wind.js';
 import { cyclonesProxy } from './cyclones.js';
 
@@ -53,6 +54,7 @@ function localProviderPlugins() {
     auFireProxy(),
     windProxy(),
     cyclonesProxy(),
+    firePerimetersProxy(),
     keySetupEndpoint(),
   ];
 }
