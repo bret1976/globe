@@ -1,5 +1,15 @@
 # Changelog
 
+- Serve Fire Perimeters through a capped, cached `/api/fire-perimeters`
+  proxy (WFIGS + InciWeb, same-origin, stale-on-error, per-client limits).
+  InciWeb publication-API retirement is handled by reading origin/update
+  times from the incident page. Share token stays `k`. Ported from
+  upstream gods-eye-view #737.
+
+- Add MODIS NRT (Terra+Aqua, ~1 km) to the FIRMS Active Fires merge
+  alongside the three VIIRS NRT sources, sharing `FIRMS_MAP_KEY` and the
+  30-minute cache. AU Fire (`au-fire`) is unchanged.
+
 - Add Recent Imagery (share token `1`): keyless NASA GIBS / CMR / Worldview
   Snapshots for a selected box, with day strip, IMAGE / VS BASEMAP / A-B
   compare, and share-link box/pin/mode state. Ported to this fork from
