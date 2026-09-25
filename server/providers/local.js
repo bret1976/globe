@@ -25,6 +25,7 @@ import { auFireProxy } from './auFire.js';
 import { firePerimetersProxy } from './firePerimeters.js';
 import { windProxy } from './wind.js';
 import { cyclonesProxy } from './cyclones.js';
+import { earthquakesProxy } from './earthquakes.js';
 
 /** Construct the local provider plugins in their established order. */
 function localProviderPlugins() {
@@ -55,6 +56,7 @@ function localProviderPlugins() {
     windProxy(),
     cyclonesProxy(),
     firePerimetersProxy(),
+    earthquakesProxy(),
     keySetupEndpoint(),
   ];
 }
