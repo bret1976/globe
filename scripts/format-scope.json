@@ -802,6 +802,8 @@
   "src/ui/styles/recent-imagery.css",
   "src/ui/styles/weather.css",
   "server/providers/wind.js",
+  "src/data/earthquakesProxy.test.mjs",
+  "server/providers/earthquakes.js",
   "server/providers/cyclones.js",
   "server/providers/firePerimeters.js",
   "src/data/firePerimetersProxy.test.mjs",

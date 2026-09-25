@@ -312,11 +312,11 @@ export const DATA_CREDITS = [
       '<a href="https://www.cotrip.org/" target="_blank" rel="noopener">Colorado Department of Transportation — COtrip</a> (courtesy)',
   },
   {
-    key: 'telegeography',
+    key: 'osm-submarine-cables',
     html:
-      'Submarine cables: © TeleGeography — ' +
-      '<a href="https://www.submarinecablemap.com" target="_blank" rel="noopener">submarinecablemap.com</a> ' +
-      '(CC BY-NC-SA 3.0; mirrored from gods-eye-view bundle)',
+      'Submarine cables: © OpenStreetMap contributors — ' +
+      '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">openstreetmap.org/copyright</a> ' +
+      '(ODbL 1.0; GodsEye OSS digital-nervous path, not TeleGeography)',
   },
 ];
 

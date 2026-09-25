@@ -1,13 +1,15 @@
-// This dataset is CC BY-NC-SA 3.0, not the project's MIT license.
-// Commercial users must remove it or obtain a TeleGeography license.
-// Geometry mirrored from bilawalsidhu/gods-eye-view (same open-source wiring).
-// See DATA_SOURCES.md and the bundled dataset's source.json.
+// OpenStreetMap submarine cables (ODbL 1.0) — legal OSS path for the
+// digital-nervous / cable layer. TeleGeography CC BY-NC-SA dumps stay in
+// tree under local_data/telegeography_submarine_cables/ for reference only
+// and are NOT loaded at runtime (Bret hard rule: no proprietary cable dumps).
+// Geometry shape matches the prior TeleGeography wiring so Cesium ingest
+// stays unchanged. Attribution: © OpenStreetMap contributors.
 const cableUrl = new URL(
-  '../../data/local_data/telegeography_submarine_cables/cable-geo.json',
+  '../../data/local_data/osm_submarine_cables/cable-geo.json',
   import.meta.url,
 ).href;
 const landingPointUrl = new URL(
-  '../../data/local_data/telegeography_submarine_cables/landing-point-geo.json',
+  '../../data/local_data/osm_submarine_cables/landing-point-geo.json',
   import.meta.url,
 ).href;
 
@@ -31,7 +33,7 @@ export function createBundledCableSource({
     return json;
   }
   return {
-    label: 'TeleGeography',
+    label: 'OpenStreetMap',
     async fetch(signal) {
       const [cables, landingPoints] = await Promise.all([
         read(cableUrl, signal),
