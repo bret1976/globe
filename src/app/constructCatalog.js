@@ -24,6 +24,7 @@ import { createApplicationRecentImagery } from './layers/recentImagery.js';
 import { createApplicationWeather } from './layers/weather.js';
 import { createApplicationWind } from './layers/wind.js';
 import { createApplicationCyclones } from './layers/cyclones.js';
+import { createApplicationGpsInterference } from './layers/gpsInterference.js';
 import { createInfrastructureLayers } from '../data/infrastructure.js';
 import { localGeoJsonServices } from './localGeojsonServices.js';
 import { createBhoteKoshiEventLayer } from '../data/bhoteKoshiEvent.js';
@@ -51,6 +52,7 @@ const SOURCE_METHODS = Object.freeze({
   earthquakes: ['getSnapshot'],
   'fire-perimeters': ['getSnapshot'],
   auFire: ['getSnapshot'],
+  gpsjam: ['getSnapshot'],
   cables: ['fetch'],
   cyclones: ['getSnapshot'],
   wind: ['getSnapshot'],
@@ -125,6 +127,7 @@ export function createApplicationCatalog({
           source: sources['fire-perimeters'],
         }),
         createApplicationAuFire({ source: sources.auFire }),
+        createApplicationGpsInterference({ source: sources.gpsjam }),
         createApplicationAlpr({ surface, source: sources.alpr }),
         satellites,
         createApplicationLaunches({ source: sources.launches, satellites }),

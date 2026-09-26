@@ -19,6 +19,7 @@ export const LAYER_FOCUS_HEIGHT_M = Object.freeze({
   satellites: 2_000_000,
   'telegeography-submarine-cables': 4_000_000,
   earthquakes: 1_200_000,
+  'gps-interference': 2_500_000,
   'rocket-launches': 800_000,
   'local-firms': 80_000,
   'fire-perimeters': 1_500_000,
@@ -140,6 +141,10 @@ export const LAYER_LIVE_DESTINATIONS = Object.freeze({
     heightM: 1_200_000,
     label: 'Pacific rim',
   }),
+  'gps-interference': Object.freeze({
+    kind: 'region',
+    preferredHeightM: 2_500_000,
+  }),
   'local-firms': Object.freeze({
     lat: 39.5,
     lon: -121.0,
@@ -233,6 +238,7 @@ export const FEATURED_DESTINATION_LAYER_IDS = Object.freeze([
   'telegeography-submarine-cables',
   'rocket-launches',
   'earthquakes',
+  'gps-interference',
   'local-firms',
   'fire-perimeters',
   'au-fire',

@@ -22,3 +22,5 @@ Vessel feed **PARTIAL vs STALE** comes from upstream #626 (layer panel).
 
 - TeleGeography dump removed; OSM ODbL submarine cable extract shipped instead.
 - Nepal event imagery remains under upstream CC BY-NC terms if used.
+
+- 2026-09-26: GPS Interference layer (`gps-interference`) via gpsjam.org open H3 CSV (original code; no AGPL copy).

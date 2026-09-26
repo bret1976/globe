@@ -188,6 +188,12 @@
 
 - Split application scene, controls, catalog, tools and HTML into reusable components; configure application request services and sources without changing global fetch. Preserve standalone markup and voice behavior. Explicit annotation navigation may resolve a distant named target.
 
+## 2026-09-26 — GPS Interference (gpsjam.org)
+
+- New `gps-interference` Data Layers toggle: medium/high GNSS interference hexes from the public [gpsjam.org](https://gpsjam.org/) daily H3 CSV (no key).
+- Same-origin `/api/gpsjam` proxy with hourly TTL + stale fallback; H3→lat/lon/ring via `h3-js` on the server only.
+- Original implementation (idea inspired by OSINT dashboards that use the same public feed; no AGPL code copied).
+
 ## Voice component boundaries
 
 - Separate voice controls, Realtime connection requests and the action runner.
