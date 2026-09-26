@@ -193,7 +193,19 @@ test('FIRMS retains a large successful source during partial failure and filters
   assert.equal(json(await request('/status')).hasKey, false);
   assert.equal(calls, 0);
   process.env.FIRMS_MAP_KEY = 'fixture-key';
-  const first = json(await request());
+  const warming = json(await request());
+  assert.equal(warming.warming, true);
+  assert.equal(warming.count, 0);
+  const started = Date.now();
+  while (calls < 3 && Date.now() - started < 10_000) {
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  let first = warming;
+  while (first.warming && Date.now() - started < 15_000) {
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    first = json(await request());
+  }
+  assert.equal(first.warming, undefined);
   assert.equal(first.count, 130001);
   assert.equal(first.sources.filter((s) => s.ok).length, 1);
   assert.equal(calls, 4);

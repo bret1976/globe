@@ -251,7 +251,7 @@ test('nearest-aircraft voice action serializes layer enable, arrival, refresh, a
   let trackedId = null;
   const flights = {
     source: 'adsb.lol fallback',
-    getStats: () => ({ count: 2, lastUpdate: Date.now() }),
+    getStats: () => ({ fallback: true, count: 2, lastUpdate: Date.now() }),
     getAnalystRecords: (maxCount = 2000) => {
       assert.ok(maxCount > 2000, 'the nearest search must inspect the complete loaded fleet');
       return [
@@ -369,7 +369,7 @@ test('fallback with zero airborne records reports enabled fallback without selec
   let enabled = false;
   const flights = {
     source: 'adsb.lol fallback',
-    getStats: () => ({ count: 1, lastUpdate: Date.now() }),
+    getStats: () => ({ fallback: true, count: 1, lastUpdate: Date.now() }),
     getAnalystRecords: () => [
       { id: 'GROUND2', icao24: 'ground-only', callsign: 'GROUND2', lat: 30.2673, lon: -97.7432, onGround: true },
     ],

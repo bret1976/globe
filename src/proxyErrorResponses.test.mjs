@@ -136,7 +136,8 @@ test('CelesTrak retains fresh and stale TLE caches', async () => {
   const stale = await app.request('/active');
   assert.equal(stale.status, 200);
   assert.equal(stale.body, '1 valid-fixture-TLE');
-  assert.equal(stale.headers['x-tle-cache'], 'STALE-ERROR');
+  // Stale data is served immediately while refresh happens in the background.
+  assert.equal(stale.headers['x-tle-cache'], 'STALE');
 });
 
 test('terrain unexpected failures hide details', async () => {

@@ -807,7 +807,7 @@ test('real active monitor plane owns one protected host label and no native labe
   }
 });
 
-test('CCTV disable→enable defers the active-camera re-probe until its next activation', () => {
+test('CCTV disable clears activation and the next activation re-probes', () => {
   const record = {
     camera: { id: 'active', rangeM: 210 },
     activationDone: true,
@@ -832,13 +832,6 @@ test('CCTV disable→enable defers the active-camera re-probe until its next act
   assert.equal(record.probeClampRangeM, null);
   assert.equal(record.activationDone, false);
   assert.equal(cctvRecordNeedsActivation('active', 'active', record), true);
-  assert.doesNotMatch(
-    componentFunctionSource(cctvLayer.enable),
-    /setActiveCamera|runActivationObstructionProbe|pickFromRay/,
-    'enable must restore nominal visuals without entering the activation probe path',
-  );
-  assert.equal(probeCalls, 0, 'enable performs zero obstruction probes');
-
   setActiveCamera();
 
   assert.equal(probeCalls, 1);

@@ -346,16 +346,22 @@
 #command-dock .gev-voice-command-form {
   grid-column: 1 / -1;
   grid-row: 4;
+  z-index: 5;
   min-width: 0;
+  pointer-events: auto;
 }
 
 #command-dock #gev-voice-command {
+  display: block;
   width: 100%;
   min-width: 0;
   max-width: none;
+  min-height: 1.55rem;
   box-sizing: border-box;
-  padding: 0.18rem 0.35rem;
-  font-size: 0.42rem;
+  padding: 0.28rem 0.45rem;
+  font-size: 0.72rem;
+  line-height: 1.1;
+  pointer-events: auto;
 }
 
 #command-dock #gev-voice-control[data-status='error'] {

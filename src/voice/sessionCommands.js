@@ -50,13 +50,26 @@ export function createVoiceCommands({
   // Retain the existing controller's inspection surface for browser tools.
   const controls = adapter.controller || session;
   controls.session = session;
+  void fetch('/api/voice/status', { cache: 'no-store' })
+    .then((response) => (response.ok ? response.json() : null))
+    .then((data) => {
+      if (!data || session.isActive()) return;
+      if (data.asr || data.planner) {
+        ui.status.textContent = 'READY';
+        ui.detail.textContent = 'Tap the mic and speak, or type a command';
+      }
+    })
+    .catch(() => {});
   const updateStatus = session.subscribe((event) => {
     if (event.type !== 'state') return;
     ui.root.dataset.status = event.state;
     ui.status.textContent =
-      event.state === 'idle' ? 'OFF' : event.state.toUpperCase();
+      event.state === 'idle' ? 'READY' : event.state.toUpperCase();
     ui.detail.textContent =
-      event.detail || (event.state === 'idle' ? 'Voice off' : 'Voice active');
+      event.detail ||
+      (event.state === 'idle'
+        ? 'Tap the mic and speak, or type a command'
+        : 'Voice active');
     ui.button.setAttribute('aria-pressed', String(session.isActive()));
     if (ui.errorDetail)
       ui.errorDetail.textContent =
@@ -138,11 +151,17 @@ export function createVoiceCommands({
       if (sent && ui.commandInput) ui.commandInput.value = '';
     })();
   };
+  const keepCommandFocus = (event) => {
+    event.stopPropagation();
+    ui.commandInput?.focus?.();
+  };
   ui.button.addEventListener('pointerdown', startPress);
   ui.button.addEventListener('pointerup', endPress);
   ui.button.addEventListener('pointercancel', endPress);
   ui.button.addEventListener('click', buttonHandler);
   ui.commandForm?.addEventListener?.('submit', formHandler);
+  ui.commandInput?.addEventListener?.('pointerdown', keepCommandFocus);
+  ui.commandForm?.addEventListener?.('pointerdown', keepCommandFocus);
   session.signal.addEventListener(
     'abort',
     () => {
@@ -155,6 +174,8 @@ export function createVoiceCommands({
       ui.button.removeEventListener('pointercancel', endPress);
       ui.button.removeEventListener('click', buttonHandler);
       ui.commandForm?.removeEventListener?.('submit', formHandler);
+      ui.commandInput?.removeEventListener?.('pointerdown', keepCommandFocus);
+      ui.commandForm?.removeEventListener?.('pointerdown', keepCommandFocus);
       annotationUnsubscribe?.();
       updateStatus();
       ui.root.remove();

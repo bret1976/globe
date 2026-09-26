@@ -108,7 +108,8 @@ test('exported CelesTrak plugin coalesces refreshes, retains stale TLEs, and rea
   t.mock.method(globalThis, 'fetch', async () => new Response('not a TLE'));
   const stale = await request('/api/celestrak', '/stations');
   assert.equal(stale.body, tle);
-  assert.equal(stale.headers['x-tle-cache'], 'STALE-ERROR');
+  // Cached TLEs are returned before the background refresh settles.
+  assert.equal(stale.headers['x-tle-cache'], 'STALE');
   t.mock.method(fsp, 'readFile', async () =>
     JSON.stringify({ at: now, body: tle }),
   );

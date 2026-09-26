@@ -13,7 +13,7 @@ export function createVoiceControl({ reset = false } = {}) {
     root.innerHTML = `
       <div class="gev-voice-heading">
         <div class="gev-voice-kicker">AI AGENT</div>
-        <div id="gev-voice-status">OFF</div>
+        <div id="gev-voice-status">READY</div>
         <div class="gev-voice-cost">
           <button id="gev-voice-tier" class="gev-voice-tier-btn" type="button" aria-pressed="false" title="Voice model tier — applies next session">STD</button>
           <span id="gev-voice-cost-value" class="gev-voice-cost-value" data-level="ok" title="Estimated session cost">~$0.00</span>
@@ -27,10 +27,10 @@ export function createVoiceControl({ reset = false } = {}) {
         ${Array.from({ length: 15 }, (_, index) => `<span style="--bar:${index}"></span>`).join('')}
       </div>
       <div class="gev-voice-readout">
-        <div id="gev-voice-detail">VOICE STANDBY</div>
+        <div id="gev-voice-detail">Tap the mic and speak, or type a command</div>
       </div>
       <form id="gev-voice-command-form" class="gev-voice-command-form">
-        <input id="gev-voice-command" type="text" autocomplete="off" spellcheck="false" placeholder="Take me to the Pentagon" aria-label="Type a voice command" />
+        <input id="gev-voice-command" type="text" autocomplete="off" spellcheck="false" placeholder="Type show earthquakes" aria-label="Type a voice command" />
       </form>
       <div id="gev-voice-help" class="gev-voice-help-tray" role="tooltip">
         <span class="gev-voice-help-kicker">VOICE CONTROL</span>

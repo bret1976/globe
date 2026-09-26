@@ -13,18 +13,21 @@ import {
   shouldRearmAfterReply,
   shouldWatchdogFlush,
 } from './openMicPolicy.js';
+import { audioBlobToWavBytes } from './audioWav.js';
 
 const MIC_SPEECH_THRESHOLD = 0.012;
 const MIN_RECORDING_BYTES = 250;
 
 /**
- * Mic → browser speech or hosted ASR → planner → gevActions → speak.
- * Clicking the mic starts listening in the same user gesture. No OpenAI key.
+ * Mic → in-browser Whisper (or optional GPU ASR) → planner → gevActions →
+ * Kokoro (or speechSynthesis). Clicking the mic starts listening in the
+ * same user gesture. No Gemini. No OpenAI key.
  */
 export function createSelfHostedSession({
   emit,
   runAction,
   backend = createSelfHostedBackend(),
+  browserVoice = null,
   signal,
   ui = null,
   silenceMs = 900,
@@ -45,6 +48,7 @@ export function createSelfHostedSession({
   let pendingTranscript = '';
   let silenceTimer = null;
   let audioContext = null;
+  let playbackContext = null;
   let analyser = null;
   let visualizerSource = null;
   let visualizerFrame = null;
@@ -57,6 +61,7 @@ export function createSelfHostedSession({
   let flushing = false;
   let queuedUtterance = '';
   let speakEpoch = 0;
+  let sessionEpoch = 0;
   let status = {
     asr: false,
     llm: true,
@@ -107,6 +112,8 @@ export function createSelfHostedSession({
   function interruptSpeech() {
     speakEpoch += 1;
     speaking = null;
+    void Promise.resolve(playbackContext?.close?.()).catch(() => {});
+    playbackContext = null;
     try {
       globalThis.speechSynthesis?.cancel?.();
     } catch {
@@ -131,6 +138,7 @@ export function createSelfHostedSession({
       // Keep TTS off the mic analyser context. Sharing that context after
       // the first reply left the open-mic meter dead.
       const playback = new AudioContext();
+      playbackContext = playback;
       try {
         await playback.resume?.();
         const buffer = await playback.decodeAudioData(audio.slice(0));
@@ -145,7 +153,8 @@ export function createSelfHostedSession({
           8_000,
         );
       } finally {
-        void playback.close?.();
+        if (playbackContext === playback) playbackContext = null;
+        void Promise.resolve(playback.close?.()).catch(() => {});
       }
       return;
     }
@@ -208,6 +217,10 @@ export function createSelfHostedSession({
       queuedUtterance = spoken;
       return;
     }
+    let failureDetail = '';
+    const turnEpoch = sessionEpoch;
+    const isCurrent = () =>
+      live && !signal?.aborted && turnEpoch === sessionEpoch;
     busy = true;
     queuedUtterance = '';
     clearSilenceTimer();
@@ -231,10 +244,15 @@ export function createSelfHostedSession({
         lastPlace,
         signal,
       });
+      if (!isCurrent()) return;
       if (plan.locationQuery) lastLocationQuery = plan.locationQuery;
       if (plan.place) lastPlace = plan.place;
       for (const call of plan.calls) {
-        await runAction(call.name, call.arguments || {});
+        if (!isCurrent()) return;
+        const result = await runAction(call.name, call.arguments || {});
+        if (!isCurrent()) return;
+        if (result?.ok === false)
+          throw new Error(result.error || `Could not complete ${call.name}`);
       }
       const speech =
         plan.speech ||
@@ -249,20 +267,24 @@ export function createSelfHostedSession({
       const epoch = ++speakEpoch;
       speaking = (async () => {
         if (epoch !== speakEpoch) return;
-        const spokenAudio = await withDeadline(
-          Promise.resolve(backend.speak({ text: speech, signal })).catch(
-            () => ({
-              text: speech,
-              audio: null,
-            }),
-          ),
-          5_000,
-        );
+        const spokenAudio = await speakReply(speech);
         if (epoch !== speakEpoch) return;
         await playSpeech(spokenAudio?.text || speech, spokenAudio?.audio);
       })().catch(() => {});
       emit({ type: 'completion', status: 'completed' });
+    } catch (error) {
+      failureDetail = error?.message || 'Command failed. Please try again.';
+      if (isCurrent()) {
+        emit({
+          type: 'transcript',
+          role: 'assistant',
+          text: error?.message || 'Command failed. Please try again.',
+          final: true,
+        });
+        emit({ type: 'completion', status: 'failed' });
+      }
     } finally {
+      if (turnEpoch !== sessionEpoch) return;
       busy = false;
       const next = queuedUtterance;
       queuedUtterance = '';
@@ -272,7 +294,11 @@ export function createSelfHostedSession({
       } else if (live) {
         // Open the mic now. Waiting for TTS left LISTENING on a dead
         // capture, so the second spoken command never reached ASR.
-        resumeListening();
+        resumeListening(
+          failureDetail
+            ? `${failureDetail} — listening for your next command`
+            : undefined,
+        );
         const reply = speaking;
         void Promise.resolve(reply)
           .catch(() => {})
@@ -286,6 +312,27 @@ export function createSelfHostedSession({
           });
       }
     }
+  }
+
+  async function speakReply(speech) {
+    if (browserVoice?.ttsReady?.()) {
+      try {
+        const local = await withDeadline(
+          Promise.resolve(browserVoice.speak({ text: speech, signal })),
+          12_000,
+        );
+        if (local) return local;
+      } catch {
+        /* Fall through to GPU Kokoro or speechSynthesis. */
+      }
+    }
+    return withDeadline(
+      Promise.resolve(backend.speak({ text: speech, signal })).catch(() => ({
+        text: speech,
+        audio: null,
+      })),
+      5_000,
+    );
   }
 
   function stopBrowserRecognition() {
@@ -415,8 +462,10 @@ export function createSelfHostedSession({
   }
 
   function bindRecorder(instance) {
+    // Capture each clip's buffer: late stop events must not corrupt the next clip.
+    const clipChunks = chunks;
     instance.ondataavailable = (event) => {
-      if (event?.data?.size) chunks.push(event.data);
+      if (event?.data?.size) clipChunks.push(event.data);
     };
     instance.start(200);
     if (instance.state === 'inactive') {
@@ -462,7 +511,10 @@ export function createSelfHostedSession({
     if (busy || flushing || pendingTranscript) return;
     const current = recorder;
     if (!current || !chunks.length) return;
+    const clipEpoch = sessionEpoch;
+    const clipChunks = chunks;
     flushing = true;
+    clearRecordWatch();
     let resumeAfter = false;
     const finished = new Promise((resolve) => {
       current.onstop = resolve;
@@ -477,7 +529,10 @@ export function createSelfHostedSession({
         finished,
         new Promise((resolve) => setTimeout(resolve, 3_000)),
       ]);
-      const blob = new Blob(chunks, { type: current.mimeType || 'audio/webm' });
+      if (!live || clipEpoch !== sessionEpoch) return;
+      const blob = new Blob(clipChunks, {
+        type: current.mimeType || 'audio/webm',
+      });
       chunks = [];
       recorder = null;
       if (blob.size < MIN_RECORDING_BYTES) {
@@ -492,19 +547,46 @@ export function createSelfHostedSession({
       emit({
         type: 'state',
         state: 'executing',
-        detail: 'Hearing you…',
+        detail: browserVoice?.asrReady?.()
+          ? 'Hearing you…'
+          : browserVoice
+            ? 'Loading Whisper…'
+            : 'Hearing you…',
       });
-      const bytes = new Uint8Array(await blob.arrayBuffer());
-      const result = await withDeadline(
-        Promise.resolve(
-          backend.transcribe({
-            audio: bytes,
-            mimeType: blob.type || 'audio/webm',
-            signal,
-          }),
-        ),
-        8_000,
+      let mimeType = blob.type || 'audio/webm';
+      let bytes = new Uint8Array(await blob.arrayBuffer());
+      try {
+        bytes = new Uint8Array(await audioBlobToWavBytes(blob));
+        mimeType = 'audio/wav';
+      } catch {
+        /* Whisper can still decode the original clip via AudioContext. */
+      }
+      const transcribeSignal = AbortSignal.any(
+        [signal, AbortSignal.timeout(60_000)].filter(Boolean),
       );
+      let result = null;
+      let usedBrowser = false;
+      if (browserVoice) {
+        try {
+          result = await browserVoice.transcribe({
+            blob,
+            audio: bytes,
+            mimeType,
+            signal: transcribeSignal,
+          });
+          usedBrowser = true;
+        } catch {
+          usedBrowser = false;
+        }
+      }
+      if (!usedBrowser && typeof backend.transcribe === 'function') {
+        result = await backend.transcribe({
+          audio: bytes,
+          mimeType,
+          signal: transcribeSignal,
+        });
+      }
+      if (!live || clipEpoch !== sessionEpoch) return;
       const spoken = String(result?.text || '').trim();
       if (!spoken) {
         emit({
@@ -525,6 +607,7 @@ export function createSelfHostedSession({
       });
       resumeAfter = live && !busy;
     } finally {
+      if (clipEpoch !== sessionEpoch) return;
       flushing = false;
       if (resumeAfter) resumeListening();
     }
@@ -550,7 +633,7 @@ export function createSelfHostedSession({
     }
   }
 
-  function resumeListening() {
+  function resumeListening(detail = 'Listening — speak now') {
     if (!live || busy) return;
     heardSpeech = false;
     lastSpeechAt = 0;
@@ -561,7 +644,7 @@ export function createSelfHostedSession({
     emit({
       type: 'state',
       state: 'listening',
-      detail: 'Listening — speak now',
+      detail,
     });
     if (preferRecorder || mediaStream) {
       if (mediaStream && micTracksLive()) {
@@ -717,7 +800,8 @@ export function createSelfHostedSession({
     } catch {
       devices = [];
     }
-    const currentId = stream.getAudioTracks?.()[0]?.getSettings?.().deviceId || '';
+    const currentId =
+      stream.getAudioTracks?.()[0]?.getSettings?.().deviceId || '';
     const preferredId = pickPreferredMicId(devices, currentId);
     if (!preferredId) return stream;
     try {
@@ -745,10 +829,15 @@ export function createSelfHostedSession({
       });
       return Promise.resolve(null);
     }
+    const micEpoch = sessionEpoch;
     micPromise = globalThis.navigator.mediaDevices
       .getUserMedia({ audio: { ...OPEN_MIC_CONSTRAINTS } })
       .then((stream) => adoptPreferredMic(stream))
       .then((stream) => {
+        if (micEpoch !== sessionEpoch || signal?.aborted) {
+          stream.getTracks?.().forEach((track) => track.stop());
+          return null;
+        }
         if (live) attachMic(stream, { record: holding || preferRecorder });
         else pendingStream = stream;
         return stream;
@@ -845,11 +934,11 @@ export function createSelfHostedSession({
       emit({
         type: 'state',
         state: 'connecting',
-        detail: 'Starting voice',
+        detail: browserVoice ? 'Voice ready — speak or type' : 'Starting voice',
       });
-      // Hosted Gemini ASR on the real getUserMedia stream is the open-mic
-      // path. Chrome SpeechRecognition is a fallback when the browser
-      // cannot record, because it often never sees a connected desk mic.
+      // In-browser Whisper on the real getUserMedia stream is the open-mic
+      // path. Chrome SpeechRecognition is a last-ditch fallback when the
+      // browser cannot record, because it often never sees a desk mic.
       let listening = false;
       if (preferRecorder) {
         listening = consumePendingStream({ record: true });
@@ -881,6 +970,8 @@ export function createSelfHostedSession({
         });
     },
     stop() {
+      sessionEpoch += 1;
+      interruptSpeech();
       live = false;
       busy = false;
       holding = false;

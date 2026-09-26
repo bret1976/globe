@@ -84,6 +84,15 @@ export const DATA_CREDITS = [
       '— public GeoJSON feeds',
   },
   {
+    key: 'gpsjam',
+    html:
+      'GPS / GNSS interference heatmap: ' +
+      '<a href="https://gpsjam.org/" target="_blank" rel="noopener">gpsjam.org</a> ' +
+      '(derived from <a href="https://airplanes.live/" target="_blank" rel="noopener">airplanes.live</a> ' +
+      'and <a href="https://adsbexchange.com/" target="_blank" rel="noopener">ADS-B Exchange</a> ' +
+      'aircraft navigation-accuracy reports; potential interference, not confirmed jamming)',
+  },
+  {
     key: 'overpass',
     html:
       'Road geometry (traffic): ' +

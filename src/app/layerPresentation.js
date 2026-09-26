@@ -17,6 +17,7 @@ export class LayerPresentation {
     this.manager = manager;
     this._panel = null;
     this.pendingVisible = false;
+    this._focusGeneration = 0;
     this._onUserLayerEnablePrepare = onUserLayerEnablePrepare;
     this._onUserLayerEnabled = onUserLayerEnabled;
     this._unsubscribe = manager.subscribeActivity((change) => {
@@ -43,6 +44,7 @@ export class LayerPresentation {
         getLayers: () => this.manager.getAll(),
         isEnabled: (id) => this.manager.isEnabled(id),
         setEnabled: async (id, enabled, options) => {
+          const focusGeneration = ++this._focusGeneration;
           if (shouldFocusUserEnabledLayer(enabled, options)) {
             try {
               await this._onUserLayerEnablePrepare?.(id);
@@ -53,7 +55,8 @@ export class LayerPresentation {
           const result = await this.manager.setEnabled(id, enabled, options);
           if (
             shouldFocusUserEnabledLayer(enabled, options) &&
-            this.manager.isEnabled(id)
+            this.manager.isEnabled(id) &&
+            focusGeneration === this._focusGeneration
           ) {
             try {
               await this._onUserLayerEnabled?.(id);
@@ -64,9 +67,20 @@ export class LayerPresentation {
           return result;
         },
         focusLayer: async (id) => {
+          const focusGeneration = ++this._focusGeneration;
           try {
             await this._onUserLayerEnablePrepare?.(id);
-            await this._onUserLayerEnabled?.(id);
+            if (focusGeneration !== this._focusGeneration) return;
+            // Leaving cockpit/context restores its saved layer selection. The
+            // operator's explicit layer click must survive that restoration.
+            if (!this.manager.isEnabled(id)) {
+              await this.manager.setEnabled(id, true, { origin: 'user' });
+            }
+            if (
+              focusGeneration === this._focusGeneration &&
+              this.manager.isEnabled(id)
+            )
+              await this._onUserLayerEnabled?.(id);
           } catch (error) {
             console.warn(`[Data] ${id} operator focus error:`, error);
           }

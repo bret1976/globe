@@ -2163,6 +2163,7 @@ test('feed state: guidance statuses are normal operation, not faults', () => {
   // The Military Installations wide-view prompt: zoom/search guidance must
   // never read DEGRADED — waiting for user action is instruction, not fault.
   assert.equal(layerFeedState({ status: 'zoom-in', error: 'zoom in to search', count: 12 }), 'nominal');
+  assert.equal(layerFeedState({ status: 'zoom-out', statusMessage: 'Zoom out above 180 km to see global wind' }), 'nominal');
   assert.equal(layerFeedState({ status: 'idle' }), 'nominal');
   assert.equal(layerFeedState({ status: 'empty', error: 'no records in view' }), 'nominal');
   // Honesty carve-out: rendered records from a genuinely stale cache still

@@ -50,6 +50,7 @@ const PANEL_GROUPS = [
     ids: [
       'rocket-launches',
       'earthquakes',
+      'gps-interference',
       'local-firms',
       'fire-perimeters',
       'au-fire',
@@ -74,6 +75,7 @@ const PANEL_LABELS = {
   'local-datacenters': 'Data Centers',
   'local-firms': 'Active Fires',
   'au-fire': 'AU Fire Incidents',
+  'gps-interference': 'GPS Interference',
   'recent-imagery': 'Recent Imagery',
   weather: 'Observed Weather',
   wind: 'Wind',
@@ -225,7 +227,9 @@ export class LayerPanel {
       const topRow = document.createElement('div');
       topRow.className = 'data-toggle-top';
 
-      const left = document.createElement('div');
+      const left = document.createElement('button');
+      left.type = 'button';
+      left.setAttribute('aria-label', `Show ${panelLabel(layer)} on map`);
       left.className = 'data-toggle-left';
       const icon = document.createElement('span');
       icon.className = 'data-icon';

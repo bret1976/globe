@@ -87,6 +87,19 @@ const PLACE_ALIASES = Object.freeze({
 });
 
 const LAYER_ALIASES = Object.freeze([
+  ['military flights', 'military'],
+  ['mapped alpr cameras', 'alpr-cameras'],
+  ['alpr cameras', 'alpr-cameras'],
+  ['mapped installations', 'military-installations'],
+  ['military installations', 'military-installations'],
+  ['data centers', 'local-datacenters'],
+  ['dams', 'local-dams'],
+  ['space missions', 'rocket-launches'],
+  ['rocket launches', 'rocket-launches'],
+  ['bike share', 'bikeshare'],
+  ['transit', 'transit'],
+  ['directions', 'directions'],
+  ['radio', 'radio'],
   ['street traffic', 'traffic'],
   ['road traffic', 'traffic'],
   ['live traffic', 'traffic'],
@@ -115,6 +128,9 @@ const LAYER_ALIASES = Object.freeze([
   ['au fire', 'au-fire'],
   ['australia fire', 'au-fire'],
   ['earthquakes', 'earthquakes'],
+  ['gps jam', 'gps-interference'],
+  ['gps jamming', 'gps-interference'],
+  ['gps interference', 'gps-interference'],
   ['satellites', 'satellites'],
   ['recent imagery', 'recent-imagery'],
   ['satellite imagery', 'recent-imagery'],
@@ -127,7 +143,7 @@ const LAYER_ALIASES = Object.freeze([
 ]);
 
 const LAYER_FILLER =
-  /\b(street traffic|road traffic|live traffic|traffic|live vessels|live ships|live boats|vessels|ships|ais|submarine cables|undersea cables|sea cables|cable seas|cables|live cameras|street cameras|cctv|cameras|fire perimeters|wildfire perimeters|perimeters|recent imagery|satellite imagery|observed weather|weather|wind overlay|wind|cyclones|hurricanes|typhoons|zip code|zip|cockpit view|data layers?|layer)\b/g;
+  /\b(street traffic|road traffic|live traffic|traffic|live vessels|live ships|live boats|vessels|ships|ais|submarine cables|undersea cables|sea cables|cable seas|cables|live cameras|street cameras|cctv|cameras|fire perimeters|wildfire perimeters|perimeters|recent imagery|satellite imagery|observed weather|weather|wind overlay|wind|cyclones|hurricanes|typhoons|zip code|zip|cockpit(?: view| mode)?|data layers?|layer)\b/g;
 
 const PLACE_ALIAS_KEYS = Object.keys(PLACE_ALIASES).sort(
   (a, b) => b.length - a.length,
@@ -143,14 +159,22 @@ export function normalizeVoiceUtterance(text) {
 }
 
 function matchLayer(normalized) {
-  for (const [alias, layerId] of LAYER_ALIASES) {
-    if (normalized.includes(alias)) return layerId;
+  for (const [alias, layerId] of [...LAYER_ALIASES].sort(
+    (a, b) => b[0].length - a[0].length,
+  )) {
+    if (new RegExp(`\\b${alias}\\b`).test(normalized)) return layerId;
   }
   return null;
 }
 
 function stripLayerWords(normalized) {
-  return String(normalized || '')
+  let text = String(normalized || '');
+  for (const [alias] of [...LAYER_ALIASES].sort(
+    (a, b) => b[0].length - a[0].length,
+  )) {
+    text = text.replace(new RegExp(`\\b${alias}\\b`, 'g'), ' ');
+  }
+  return text
     .replace(LAYER_FILLER, ' ')
     .replace(
       /\b(take me to|fly me to|fly to|go to|navigate to|show me|turn on|enable|open)\b/g,
@@ -211,7 +235,11 @@ function wantsNearestAircraft(normalized) {
 
 function wantsCockpitEnter(normalized) {
   if (wantsCockpitExit(normalized)) return false;
-  if (/\bcockpit view\b/.test(normalized)) return false;
+  if (
+    /\bcockpit(?: view| mode)?\b/.test(normalized) &&
+    !/\b(no|not|don't|do not)\b/.test(normalized)
+  )
+    return true;
   return (
     /\benter (the )?cockpit\b/.test(normalized) ||
     /\bgo into (the )?cockpit\b/.test(normalized) ||
@@ -275,7 +303,11 @@ export function planSelfHostedVoiceTurn(text, context = {}) {
   if (layerId) {
     calls.push({
       name: 'set_layer_visibility',
-      arguments: { layerId, enabled: true },
+      arguments: {
+        layerId,
+        enabled: true,
+        ...(spokenPlace ? { focus: false } : {}),
+      },
     });
     if (layerId === 'cctv') {
       calls.push({
@@ -285,7 +317,10 @@ export function planSelfHostedVoiceTurn(text, context = {}) {
     }
   }
 
-  if (wantsNearestAircraft(normalized)) {
+  if (
+    wantsNearestAircraft(normalized) ||
+    (wantsCockpitEnter(normalized) && spokenPlace)
+  ) {
     const args = { layerId: nearestLayerId(normalized) };
     if (place?.locationId) args.locationId = place.locationId;
     if (locationQuery) args.locationQuery = locationQuery;
@@ -351,6 +386,7 @@ export function composeSelfHostedSpeech(calls, originalText) {
         'fire-perimeters': 'fire perimeters',
         'au-fire': 'AU fire incidents',
         earthquakes: 'earthquakes',
+        'gps-interference': 'GPS interference',
         satellites: 'satellites',
         'recent-imagery': 'recent imagery',
         weather: 'observed weather',
@@ -419,6 +455,7 @@ export function qwenToolDefinitions() {
                 'fire-perimeters',
                 'au-fire',
                 'earthquakes',
+                'gps-interference',
                 'satellites',
                 'recent-imagery',
                 'weather',

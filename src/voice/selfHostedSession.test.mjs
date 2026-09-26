@@ -184,6 +184,58 @@ test('typed sendText activates an idle session and runs the planner', async () =
   session.stop();
 });
 
+test('starting TALK or typing a command does not compile Whisper or Kokoro', async () => {
+  const loads = [];
+  const backend = backendFixture({
+    calls: [
+      {
+        name: 'set_layer_visibility',
+        arguments: { layerId: 'earthquakes', enabled: true },
+      },
+    ],
+    speech: "I'll turn on earthquakes.",
+    source: 'planner',
+  });
+  const browserVoice = {
+    asrReady: () => false,
+    ttsReady: () => false,
+    warmup() {
+      loads.push('warmup');
+    },
+    async transcribe() {
+      loads.push('transcribe');
+      return { text: 'show earthquakes' };
+    },
+    async speak() {
+      loads.push('speak');
+      return { text: "I'll turn on earthquakes.", audio: null };
+    },
+  };
+  const actions = [];
+  const session = createVoiceSession({
+    runner: async (name, args) => {
+      actions.push([name, args]);
+      return { ok: true, name };
+    },
+    createAdapter: (hooks) =>
+      createSelfHostedSession({
+        ...hooks,
+        backend,
+        browserVoice,
+      }),
+  });
+  session.adapter.primeMic();
+  await session.start();
+  assert.equal(await session.sendText('show earthquakes'), true);
+  assert.deepEqual(
+    actions.map(([name, args]) => [name, args.layerId, args.enabled]),
+    [['set_layer_visibility', 'earthquakes', true]],
+  );
+  assert.deepEqual(loads, []);
+  assert.ok(backend.calls.some(([kind]) => kind === 'speak'));
+  session.stop();
+});
+
 test('interim speech is finalized after a short silence', async () => {
   let recognition;
   const previousRecognition = globalThis.SpeechRecognition;
@@ -316,9 +368,7 @@ function installMicRecorder({ chunkSize = 800 } = {}) {
       mediaDevices: {
         async getUserMedia() {
           return {
-            getTracks: () => [
-              { stop() {}, readyState: 'live', enabled: true },
-            ],
+            getTracks: () => [{ stop() {}, readyState: 'live', enabled: true }],
             getAudioTracks: () => [
               {
                 getSettings: () => ({ deviceId: 'default' }),
@@ -575,8 +625,7 @@ test('open-mic records a second command after the first reply', async () => {
     spokenTurn += 1;
     backend.calls.push(['transcribe', spokenTurn]);
     return {
-      text:
-        spokenTurn === 1 ? 'Take me to the Pentagon' : 'Take me to Miami',
+      text: spokenTurn === 1 ? 'Take me to the Pentagon' : 'Take me to Miami',
     };
   };
   const actions = [];
@@ -991,4 +1040,193 @@ test('open-mic is recording again before a hanging TTS reply ends', async () => 
   } finally {
     mic.restore();
   }
+});
+
+test('late chunks from a stopped recorder cannot corrupt ten successive commands', async () => {
+  const mic = installMicRecorder();
+  const audioSizes = [];
+  const actions = [];
+  const session = createSelfHostedSession({
+    emit() {},
+    runAction: async (name) => {
+      actions.push(name);
+      return { ok: true };
+    },
+    backend: {
+      ...backendFixture({
+        calls: [{ name: 'fly_to_location', arguments: {} }],
+        speech: 'Done.',
+      }),
+      async transcribe({ audio }) {
+        audioSizes.push(audio.length);
+        return { text: 'Take me to the Pentagon' };
+      },
+    },
+  });
+  try {
+    await session.start();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    for (let i = 0; i < 10; i++) {
+      const old = mic.recorders.at(-1);
+      await session.releaseTalk();
+      old.ondataavailable({ data: new Blob([new Uint8Array(999)]) });
+    }
+    assert.equal(actions.length, 10);
+    assert.deepEqual(audioSizes, Array(10).fill(800));
+  } finally {
+    session.stop();
+    mic.restore();
+  }
+});
+
+test('failed actions stop dependent cockpit entry and leave the next command usable', async () => {
+  const events = [],
+    actions = [];
+  const session = createSelfHostedSession({
+    emit: (e) => events.push(e),
+    backend: backendFixture({
+      calls: [{ name: 'select_nearest_aircraft' }, { name: 'control_cockpit' }],
+      speech: 'Entering cockpit.',
+    }),
+    runAction: async (name) => {
+      actions.push(name);
+      return { ok: false, error: 'No airborne aircraft nearby' };
+    },
+  });
+  await session.sendText('Cockpit view');
+  await session.sendText('Try again');
+  assert.deepEqual(actions, [
+    'select_nearest_aircraft',
+    'select_nearest_aircraft',
+  ]);
+  assert.equal(events.filter((e) => e.status === 'failed').length, 2);
+  assert.ok(!events.some((e) => e.text === 'Entering cockpit.'));
+  session.stop();
+});
+
+test('a planner response after stop cannot execute or restart microphone capture', async () => {
+  let resolve;
+  const actions = [];
+  const session = createSelfHostedSession({
+    emit() {},
+    runAction: async (name) => actions.push(name),
+    backend: {
+      ...backendFixture({}),
+      act: () =>
+        new Promise((r) => {
+          resolve = r;
+        }),
+    },
+  });
+  const turn = session.sendText('Pentagon');
+  session.stop();
+  resolve({ calls: [{ name: 'fly_to_location' }] });
+  await turn;
+  assert.deepEqual(actions, []);
+});
+
+test('open-mic prefers in-browser Whisper over the hosted ASR endpoint', async () => {
+  const mic = installMicRecorder();
+  const backend = backendFixture({
+    calls: [
+      {
+        name: 'fly_to_location',
+        arguments: { query: 'Pentagon', waitForArrival: true },
+      },
+    ],
+    speech: 'Flying to Pentagon.',
+    locationQuery: 'Pentagon',
+    place: { query: 'Pentagon' },
+    source: 'planner',
+  });
+  backend.transcribe = async () => {
+    backend.calls.push(['transcribe']);
+    return { text: 'should not run' };
+  };
+  const browserVoice = {
+    asrReady: () => true,
+    ttsReady: () => false,
+    warmup() {},
+    async transcribe() {
+      backend.calls.push(['whisper']);
+      return {
+        text: 'Take me to the Pentagon',
+        model: 'onnx-community/whisper-tiny.en',
+      };
+    },
+    async speak({ text }) {
+      return { text, audio: null };
+    },
+  };
+  const actions = [];
+  try {
+    const session = createVoiceSession({
+      runner: async (name, args) => {
+        actions.push([name, args]);
+        return { ok: true, name };
+      },
+      createAdapter: (hooks) =>
+        createSelfHostedSession({
+          ...hooks,
+          backend,
+          browserVoice,
+        }),
+    });
+    session.adapter.primeMic();
+    await session.start();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await session.adapter.releaseTalk();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.ok(backend.calls.some(([kind]) => kind === 'whisper'));
+    assert.ok(!backend.calls.some(([kind]) => kind === 'transcribe'));
+    assert.deepEqual(
+      actions.map(([name]) => name),
+      ['fly_to_location'],
+    );
+    session.stop();
+  } finally {
+    mic.restore();
+  }
+});
+
+test('spoken replies use in-browser Kokoro before the hosted TTS endpoint', async () => {
+  const spoken = [];
+  const backend = backendFixture({
+    calls: [
+      {
+        name: 'fly_to_location',
+        arguments: { query: 'Pentagon', waitForArrival: true },
+      },
+    ],
+    speech: 'Flying to Pentagon.',
+    source: 'planner',
+  });
+  backend.speak = async ({ text }) => {
+    backend.calls.push(['speak', text]);
+    return { text, audio: null };
+  };
+  const browserVoice = {
+    asrReady: () => false,
+    ttsReady: () => true,
+    warmup() {},
+    async speak({ text }) {
+      spoken.push(text);
+      return { text, audio: null };
+    },
+  };
+  const session = createVoiceSession({
+    runner: async () => ({ ok: true }),
+    createAdapter: (hooks) =>
+      createSelfHostedSession({
+        ...hooks,
+        backend,
+        browserVoice,
+      }),
+  });
+  await session.start();
+  assert.equal(await session.sendText('Take me to the Pentagon'), true);
+  assert.deepEqual(spoken, ['Flying to Pentagon.']);
+  assert.ok(!backend.calls.some(([kind]) => kind === 'speak'));
+  session.stop();
 });

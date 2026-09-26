@@ -68,7 +68,7 @@ test('89135 Las Vegas street traffic flies to the zip and turns traffic on', () 
   assert.equal(plan.calls[0].arguments.viewMode, 'close');
   assert.deepEqual(plan.calls[1], {
     name: 'set_layer_visibility',
-    arguments: { layerId: 'traffic', enabled: true },
+    arguments: { layerId: 'traffic', enabled: true, focus: false },
   });
   assert.match(plan.speech, /89135/);
   assert.match(plan.speech, /street traffic/);
@@ -83,6 +83,11 @@ test('live vessels in the Persian Gulf flies there and enables ships', () => {
   assert.equal(plan.calls[0].arguments.latitude, 26.6);
   assert.equal(plan.calls[1].name, 'set_layer_visibility');
   assert.equal(plan.calls[1].arguments.layerId, 'ais-live-vessels');
+  assert.equal(
+    plan.calls[1].arguments.focus,
+    false,
+    'preserve the explicitly requested Gulf destination',
+  );
   assert.match(plan.speech, /live vessels/);
 });
 
@@ -115,19 +120,19 @@ test('CCTV in Washington DC flies to DC and opens a camera', () => {
   assert.match(plan.speech, /CCTV/);
 });
 
-test('Las Vegas Airport cockpit view flies there without entering cockpit', () => {
-  const plan = planSelfHostedVoiceTurn(
+test('airport cockpit view navigates, selects a local flight, then enters cockpit', () => {
+  for (const text of [
+    'Take me to Cockpit View Las Vegas Airport',
     'Take me to Las Vegas Airport Cockpit View',
-  );
-  assert.equal(plan.calls[0].name, 'fly_to_location');
-  assert.match(plan.calls[0].arguments.query, /Harry Reid|Las Vegas/);
-  assert.ok(
-    !plan.calls.some(
-      (call) =>
-        call.name === 'control_cockpit' && call.arguments.action === 'enter',
-    ),
-    'cockpit view is a camera framing, not Enter Cockpit',
-  );
+  ]) {
+    const plan = planSelfHostedVoiceTurn(text);
+    assert.deepEqual(
+      plan.calls.map((call) => call.name),
+      ['fly_to_location', 'select_nearest_aircraft', 'control_cockpit'],
+    );
+    assert.equal(plan.calls[1].arguments.latitude, 36.084);
+    assert.equal(plan.calls[2].arguments.action, 'enter');
+  }
 });
 
 test('explicit enter cockpit still enters', () => {
@@ -158,5 +163,27 @@ test('Qwen tool-call payloads flatten into planner-shaped calls', () => {
     { name: 'control_cockpit', arguments: { action: 'exit' } },
   ]);
   assert.equal(parsed.speech, 'On it.');
-  assert.equal(composeSelfHostedSpeech(parsed.calls), 'Stepping out of the cockpit.');
+  assert.equal(
+    composeSelfHostedSpeech(parsed.calls),
+    'Stepping out of the cockpit.',
+  );
+});
+
+test('layer-only requests never geocode a layer name as a destination', () => {
+  for (const [label, layerId] of [
+    ['satellites', 'satellites'],
+    ['military flights', 'military'],
+    ['data centers', 'local-datacenters'],
+    ['mapped ALPR cameras', 'alpr-cameras'],
+    ['bike share', 'bikeshare'],
+    ['space missions', 'rocket-launches'],
+    ['earthquakes', 'earthquakes'],
+    ['transit', 'transit'],
+    ['dams', 'local-dams'],
+  ]) {
+    const plan = planSelfHostedVoiceTurn(`Show me ${label}`);
+    assert.deepEqual(plan.calls, [
+      { name: 'set_layer_visibility', arguments: { layerId, enabled: true } },
+    ]);
+  }
 });
