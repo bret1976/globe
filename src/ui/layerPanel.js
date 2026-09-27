@@ -50,6 +50,7 @@ const PANEL_GROUPS = [
     ids: [
       'rocket-launches',
       'earthquakes',
+      'volcanoes',
       'gps-interference',
       'local-firms',
       'fire-perimeters',
@@ -76,6 +77,7 @@ const PANEL_LABELS = {
   'local-firms': 'Active Fires',
   'au-fire': 'AU Fire Incidents',
   'gps-interference': 'GPS Interference',
+  volcanoes: 'Volcanoes (elevated)',
   'recent-imagery': 'Recent Imagery',
   weather: 'Observed Weather',
   wind: 'Wind',

@@ -67,6 +67,12 @@ export const DATA_CREDITS = [
     html: 'Earthquakes: Data courtesy of the U.S. Geological Survey',
   },
   {
+    key: 'usgs-volcanoes',
+    html:
+      'Elevated volcano alerts: ' +
+      '<a href="https://www.usgs.gov/programs/VHP" target="_blank" rel="noopener">U.S. Geological Survey Volcano Hazards Program</a>',
+  },
+  {
     key: 'wfigs',
     html:
       'Wildfire perimeters: ' +

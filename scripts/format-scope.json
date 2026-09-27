@@ -812,5 +812,11 @@
   "server/providers/cyclones.js",
   "server/providers/firePerimeters.js",
   "src/data/firePerimetersProxy.test.mjs",
-  "src/ui/railTestFixture.mjs"
+  "src/ui/railTestFixture.mjs",
+  "server/providers/volcanoes.js",
+  "src/layers/volcanoes/index.js",
+  "src/layers/volcanoes/parse.js",
+  "src/layers/volcanoes/parse.test.mjs",
+  "src/layers/volcanoes/source.js",
+  "src/app/layers/volcanoes.js"
 ]
