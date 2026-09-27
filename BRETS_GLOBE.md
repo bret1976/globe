@@ -24,3 +24,5 @@ Vessel feed **PARTIAL vs STALE** comes from upstream #626 (layer panel).
 - Nepal event imagery remains under upstream CC BY-NC terms if used.
 
 - 2026-09-26: GPS Interference layer (`gps-interference`) via gpsjam.org open H3 CSV (original code; no AGPL copy).
+
+- 2026-09-27: Elevated Volcanoes layer (`volcanoes`) via USGS Volcano Hazards `/vsc/api/volcanoApi/elevated` (public open data).

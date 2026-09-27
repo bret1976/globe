@@ -1,3 +1,9 @@
+## 2026-09-27 — Elevated Volcanoes (USGS)
+
+- New `volcanoes` layer: USGS Volcano Hazards elevated alerts (Yellow/Orange/Red) as ground-clamped discs.
+- Same-origin proxy `GET /api/volcanoes` with 15-minute TTL and stale fallback.
+- Public open data only; no TeleGeography / proprietary feeds.
+
 # Changelog
 
 - Serve Fire Perimeters through a capped, cached `/api/fire-perimeters`

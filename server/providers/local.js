@@ -27,6 +27,7 @@ import { windProxy } from './wind.js';
 import { cyclonesProxy } from './cyclones.js';
 import { earthquakesProxy } from './earthquakes.js';
 import { gpsjamProxy } from './gpsjam.js';
+import { volcanoesProxy } from './volcanoes.js';
 
 /** Construct the local provider plugins in their established order. */
 function localProviderPlugins() {
@@ -59,6 +60,7 @@ function localProviderPlugins() {
     firePerimetersProxy(),
     earthquakesProxy(),
     gpsjamProxy(),
+    volcanoesProxy(),
     keySetupEndpoint(),
   ];
 }
