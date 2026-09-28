@@ -67,6 +67,13 @@ export const DATA_CREDITS = [
     html: 'Earthquakes: Data courtesy of the U.S. Geological Survey',
   },
   {
+    key: 'noaa-ovation',
+    html:
+      'Aurora forecast: ' +
+      '<a href="https://www.swpc.noaa.gov/products/aurora-30-minute-forecast" target="_blank" rel="noopener">NOAA SWPC OVATION</a> ' +
+      '(U.S. government public domain)',
+  },
+  {
     key: 'usgs-volcanoes',
     html:
       'Elevated volcano alerts: ' +
