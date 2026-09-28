@@ -1,3 +1,9 @@
+## 2026-09-28 — Aurora (NOAA SWPC OVATION)
+
+- New `aurora` Data Layers toggle: NOAA SWPC OVATION 30-minute aurora forecast as intensity-colored ground discs (green → cyan → magenta).
+- Same-origin proxy `GET /api/aurora` with 10-minute TTL and stale fallback; downsamples the ~65k-cell public grid (2° max-pool, intensity floor) for Cesium performance.
+- Public US government open data — no API key. Original Bret/GodsEye code.
+
 ## 2026-09-27 — Elevated Volcanoes (USGS)
 
 - New `volcanoes` layer: USGS Volcano Hazards elevated alerts (Yellow/Orange/Red) as ground-clamped discs.

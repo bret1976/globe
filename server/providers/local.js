@@ -28,6 +28,7 @@ import { cyclonesProxy } from './cyclones.js';
 import { earthquakesProxy } from './earthquakes.js';
 import { gpsjamProxy } from './gpsjam.js';
 import { volcanoesProxy } from './volcanoes.js';
+import { auroraProxy } from './aurora.js';
 
 /** Construct the local provider plugins in their established order. */
 function localProviderPlugins() {
@@ -61,6 +62,7 @@ function localProviderPlugins() {
     earthquakesProxy(),
     gpsjamProxy(),
     volcanoesProxy(),
+    auroraProxy(),
     keySetupEndpoint(),
   ];
 }
