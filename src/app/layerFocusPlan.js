@@ -21,6 +21,7 @@ export const LAYER_FOCUS_HEIGHT_M = Object.freeze({
   earthquakes: 1_200_000,
   volcanoes: 2_000_000,
   aurora: 4_000_000,
+  radiation: 2_500_000,
   'gps-interference': 2_500_000,
   'rocket-launches': 800_000,
   'local-firms': 80_000,
@@ -155,6 +156,12 @@ export const LAYER_LIVE_DESTINATIONS = Object.freeze({
     heightM: 4_000_000,
     label: 'Auroral oval / Iceland',
   }),
+  radiation: Object.freeze({
+    lat: 37.5,
+    lon: 140.5,
+    heightM: 2_500_000,
+    label: 'Japan Safecast corridor',
+  }),
   'gps-interference': Object.freeze({
     kind: 'region',
     preferredHeightM: 2_500_000,
@@ -254,6 +261,7 @@ export const FEATURED_DESTINATION_LAYER_IDS = Object.freeze([
   'earthquakes',
   'volcanoes',
   'aurora',
+  'radiation',
   'gps-interference',
   'local-firms',
   'fire-perimeters',
