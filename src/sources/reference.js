@@ -5,6 +5,7 @@ import { createBundledCableSource } from '../layers/submarineCables/bundledSourc
 import { createGpsjamSource } from '../layers/gpsInterference/source.js';
 import { createUsgsVolcanoSource } from '../layers/volcanoes/source.js';
 import { createOvationAuroraSource } from '../layers/aurora/source.js';
+import { createSafecastRadiationSource } from '../layers/radiation/source.js';
 
 /** Construct the existing reference feeds independently of application setup. */
 export function createReferenceSources() {
@@ -16,5 +17,6 @@ export function createReferenceSources() {
     gpsjam: createGpsjamSource(),
     volcanoes: createUsgsVolcanoSource(),
     aurora: createOvationAuroraSource(),
+    radiation: createSafecastRadiationSource(),
   };
 }
