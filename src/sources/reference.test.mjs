@@ -21,6 +21,7 @@ test('reference factories retain compatibility without starting acquisition or s
     'volcanoes',
     'aurora',
     'radiation',
+    'floods',
   ]);
   assert.notEqual(first.earthquakes, second.earthquakes);
   assert.notEqual(first['fire-perimeters'], second['fire-perimeters']);
@@ -30,6 +31,7 @@ test('reference factories retain compatibility without starting acquisition or s
   assert.notEqual(first.volcanoes, second.volcanoes);
   assert.notEqual(first.aurora, second.aurora);
   assert.notEqual(first.radiation, second.radiation);
+  assert.notEqual(first.floods, second.floods);
   assert.equal(typeof first.earthquakes.getSnapshot, 'function');
   assert.equal(typeof first['fire-perimeters'].getSnapshot, 'function');
   assert.equal(typeof first.auFire.getSnapshot, 'function');
@@ -38,5 +40,6 @@ test('reference factories retain compatibility without starting acquisition or s
   assert.equal(typeof first.volcanoes.getSnapshot, 'function');
   assert.equal(typeof first.aurora.getSnapshot, 'function');
   assert.equal(typeof first.radiation.getSnapshot, 'function');
+  assert.equal(typeof first.floods.getSnapshot, 'function');
   assert.equal(requests, 0);
 });
