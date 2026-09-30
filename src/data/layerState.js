@@ -439,6 +439,7 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
     disposition: 'enabled+options',
     optionOwner: 'flights',
   }),
+  Object.freeze({ id: 'floods', token: '6', disposition: 'enabled-only' }),
   Object.freeze({
     id: 'gps-interference',
     token: 'l',
