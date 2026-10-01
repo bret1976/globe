@@ -43,7 +43,7 @@ const PANEL_GROUPS = [
   },
   {
     label: 'Weather',
-    ids: ['weather', 'wind', 'weather-cyclones'],
+    ids: ['weather', 'wind', 'weather-cyclones', 'nws-alerts'],
   },
   {
     label: 'Events',
@@ -84,6 +84,7 @@ const PANEL_LABELS = {
   aurora: 'Aurora (OVATION)',
   radiation: 'Radiation (Safecast)',
   floods: 'Floods & Droughts (GDACS)',
+  'nws-alerts': 'Weather Alerts (NWS)',
   'recent-imagery': 'Recent Imagery',
   weather: 'Observed Weather',
   wind: 'Wind',

@@ -67,6 +67,13 @@ export const DATA_CREDITS = [
     html: 'Earthquakes: Data courtesy of the U.S. Geological Survey',
   },
   {
+    key: 'nws-alerts',
+    html:
+      'U.S. weather alerts: ' +
+      '<a href="https://www.weather.gov/documentation/services-web-api" target="_blank" rel="noopener">National Weather Service</a> ' +
+      '(api.weather.gov; U.S. government public domain)',
+  },
+  {
     key: 'noaa-ovation',
     html:
       'Aurora forecast: ' +
