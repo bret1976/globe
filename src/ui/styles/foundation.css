@@ -91,6 +91,8 @@ body {
 
 #cesiumContainer canvas {
   image-rendering: auto;
+  /* Stop Safari/Chrome from stealing one-finger pans as page scrolls/zooms. */
+  touch-action: none;
 }
 
 /* Unified world-overlay host: detection uses one host-owned blend surface

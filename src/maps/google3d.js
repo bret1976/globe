@@ -1,7 +1,33 @@
+import { isConstrainedGlobeClient } from '../app/clientCapabilities.js';
 const clean = (value) => String(value || '').trim();
 
 /** Sharper than Cesium's default 16 so cockpit windshields stay readable. */
 export const PHOTOREAL_MAXIMUM_SCREEN_SPACE_ERROR = 4;
+/** Phones keep a coarser error so fewer tiles fight for GPU memory. */
+export const PHOTOREAL_MOBILE_SCREEN_SPACE_ERROR = 12;
+/** Desktop ion cache (bytes). Matches prior production budget. */
+export const PHOTOREAL_DESKTOP_CACHE_BYTES = 1536 * 1024 * 1024;
+export const PHOTOREAL_DESKTOP_CACHE_OVERFLOW_BYTES = 1024 * 1024 * 1024;
+/** Phone ion cache — large enough to orbit, small enough for Safari. */
+export const PHOTOREAL_MOBILE_CACHE_BYTES = 192 * 1024 * 1024;
+export const PHOTOREAL_MOBILE_CACHE_OVERFLOW_BYTES = 64 * 1024 * 1024;
+
+function photorealTilesetOptions({ constrained = false } = {}) {
+  if (constrained) {
+    return {
+      cacheBytes: PHOTOREAL_MOBILE_CACHE_BYTES,
+      maximumCacheOverflowBytes: PHOTOREAL_MOBILE_CACHE_OVERFLOW_BYTES,
+      enableCollision: true,
+      maximumScreenSpaceError: PHOTOREAL_MOBILE_SCREEN_SPACE_ERROR,
+    };
+  }
+  return {
+    cacheBytes: PHOTOREAL_DESKTOP_CACHE_BYTES,
+    maximumCacheOverflowBytes: PHOTOREAL_DESKTOP_CACHE_OVERFLOW_BYTES,
+    enableCollision: true,
+    maximumScreenSpaceError: PHOTOREAL_MAXIMUM_SCREEN_SPACE_ERROR,
+  };
+}
 
 /**
  * Decide which map provider can deliver the best startup experience.
@@ -38,11 +64,14 @@ export async function loadPhotorealisticTileset(
   if (googleKey) attempts.push({ route: 'google-direct', googleKey });
   if (ionToken) attempts.push({ route: 'google-ion', googleKey: undefined });
 
+  const constrained = isConstrainedGlobeClient();
   for (const attempt of attempts) {
     try {
       const tileset = attempt.googleKey
-        ? await createGoogleDirectTileset(Cesium, attempt.googleKey)
-        : await createGoogleIonTileset(Cesium, ionToken);
+        ? await createGoogleDirectTileset(Cesium, attempt.googleKey, {
+            constrained,
+          })
+        : await createGoogleIonTileset(Cesium, ionToken, { constrained });
       return { tileset, route: attempt.route, errors };
     } catch (error) {
       errors.push(error instanceof Error ? error : new Error(String(error)));
@@ -53,20 +82,23 @@ export async function loadPhotorealisticTileset(
 }
 
 /** Pass credentials to the source instead of changing SDK-wide defaults. */
-export function createGoogleDirectTileset(Cesium, key) {
+export function createGoogleDirectTileset(Cesium, key, { constrained } = {}) {
   key = clean(key);
   if (!key) throw new Error('Google 3D requires an explicit browser key');
+  const isConstrained = constrained ?? isConstrainedGlobeClient();
   return Cesium.createGooglePhotorealistic3DTileset({
     key,
     onlyUsingWithGoogleGeocoder: true,
-    maximumScreenSpaceError: PHOTOREAL_MAXIMUM_SCREEN_SPACE_ERROR,
+    maximumScreenSpaceError: isConstrained
+      ? PHOTOREAL_MOBILE_SCREEN_SPACE_ERROR
+      : PHOTOREAL_MAXIMUM_SCREEN_SPACE_ERROR,
   });
 }
 
 export async function createGoogleIonTileset(
   Cesium,
   accessToken,
-  { signal } = {},
+  { signal, constrained } = {},
 ) {
   accessToken = clean(accessToken);
   if (!accessToken)
@@ -76,11 +108,10 @@ export async function createGoogleIonTileset(
     accessToken,
   });
   signal?.throwIfAborted();
-  // Match the installed SDK's Google helper rendering/cache defaults.
-  return Cesium.Cesium3DTileset.fromUrl(resource, {
-    cacheBytes: 1536 * 1024 * 1024,
-    maximumCacheOverflowBytes: 1024 * 1024 * 1024,
-    enableCollision: true,
-    maximumScreenSpaceError: PHOTOREAL_MAXIMUM_SCREEN_SPACE_ERROR,
-  });
+  const isConstrained = constrained ?? isConstrainedGlobeClient();
+  // Desktop keeps the sharp multi-GB cache; phones get a Safari-safe budget.
+  return Cesium.Cesium3DTileset.fromUrl(
+    resource,
+    photorealTilesetOptions({ constrained: isConstrained }),
+  );
 }
