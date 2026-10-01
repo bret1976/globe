@@ -31,6 +31,7 @@ import { volcanoesProxy } from './volcanoes.js';
 import { auroraProxy } from './aurora.js';
 import { radiationProxy } from './radiation.js';
 import { floodsProxy } from './floods.js';
+import { nwsAlertsProxy } from './nwsAlerts.js';
 
 /** Construct the local provider plugins in their established order. */
 function localProviderPlugins() {
@@ -67,6 +68,7 @@ function localProviderPlugins() {
     auroraProxy(),
     radiationProxy(),
     floodsProxy(),
+    nwsAlertsProxy(),
     keySetupEndpoint(),
   ];
 }
