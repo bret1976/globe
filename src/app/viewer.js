@@ -6,6 +6,7 @@ export {
 } from './globeFraming.js';
 import { configureGlobeFraming } from './globeFraming.js';
 import { applyViewerPresentation } from './viewerPresentation.js';
+import { isConstrainedGlobeClient } from './clientCapabilities.js';
 
 const PINCH_ZOOM_MULTIPLIER = 8;
 const MAX_PINCH_PIXEL_DELTA = 120;
@@ -112,6 +113,7 @@ export function installTrackpadPinchZoom(
 export function createApplicationViewer({ container, creditContainer }) {
   if (!container || !creditContainer)
     throw new TypeError('Viewer and credit containers are required');
+  const constrained = isConstrainedGlobeClient();
   const viewer = new Cesium.Viewer(container, {
     timeline: false,
     animation: false,
@@ -126,9 +128,12 @@ export function createApplicationViewer({ container, creditContainer }) {
     infoBox: false,
     baseLayer: false,
     creditContainer,
-    msaaSamples: 8,
+    // Desktop keeps MSAA 8; phones drop to 1 so WebKit can keep the context.
+    msaaSamples: constrained ? 1 : 8,
     useBrowserRecommendedResolution: false,
-    contextOptions: { webgl: { preserveDrawingBuffer: true } },
+    // preserveDrawingBuffer doubles peak framebuffer memory — recording still
+    // works on desktop; phones need the headroom more than a still capture.
+    contextOptions: { webgl: { preserveDrawingBuffer: !constrained } },
   });
   try {
     viewer.targetFrameRate = 60;
