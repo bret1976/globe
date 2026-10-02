@@ -81,6 +81,13 @@ export const DATA_CREDITS = [
       '(latest_obs; U.S. government public domain)',
   },
   {
+    key: 'fz1073-2026',
+    html:
+      'FlyDubai FZ1073 reconstruction: curated Flightradar24 public ADS-B playback ' +
+      '(flightId 41e663ed; reconstruction estimate). Inspiration: ' +
+      '<a href="https://www.instagram.com/p/Dd-rUTuPFB1/" target="_blank" rel="noopener">Bilawal Sidhu / God\'s Eye View</a>',
+  },
+  {
     key: 'noaa-ovation',
     html:
       'Aurora forecast: ' +
@@ -400,6 +407,15 @@ export function transitFeedCredit(feed) {
       `<a href="${escape(feed.licenseUrl)}" target="_blank" rel="noopener">${escape(feed.license)}</a>`,
   };
 }
+
+/** Registered when the FZ1073 reconstruction layer activates. */
+export const FZ1073_CREDIT = {
+  key: 'fz1073-2026',
+  html:
+    'FlyDubai FZ1073 reconstruction: curated Flightradar24 public ADS-B playback ' +
+    '(flightId 41e663ed; reconstruction estimate). Inspiration: ' +
+    '<a href="https://www.instagram.com/p/Dd-rUTuPFB1/" target="_blank" rel="noopener">Bilawal Sidhu / God\'s Eye View</a>',
+};
 
 /** Registered when the Bhote Koshi event reconstruction activates. */
 export const BHOTE_KOSHI_CREDIT = {

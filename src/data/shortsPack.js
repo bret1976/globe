@@ -9,13 +9,21 @@
  *  5) Nepal floods reconstruction (enables upstream Bhote Koshi scene layers)
  *  6) Traffic & CCTV God's Eye (Austin → London → SF; TomTom / camera layers)
  *  7) Typhoon Dujuan → Japan (W. Pacific hop; GIBS IR + wind + cyclone cards)
+ *  8) FlyDubai FZ1073 FPV dive (FR24 ADS-B reconstruction; Saudi desert)
  *
  * Cable geometry: OSM ODbL free extract already in this fork. TeleGeography dump
  * is not shipped and must not be reintroduced.
  */
 import * as Cesium from 'cesium';
+import {
+  FZ1073_LAYER_ID,
+  FZ1073_OVERVIEW,
+  FZ1073_PEAK_VS_FPM,
+  FZ1073_TUU,
+  fz1073FpvShots,
+} from './fz1073Track.js';
 
-export const SHORTS_PACK_VERSION = '2026-09-22-typhoon';
+export const SHORTS_PACK_VERSION = '2026-10-02-flydubai';
 export const SHORTS_PARAM = 'shorts';
 
 let shortsAbortGeneration = 0;
@@ -55,6 +63,11 @@ export const SHORTS_ALIASES = Object.freeze({
   storm: 'typhoon',
   himawari: 'typhoon',
   'japan-storm': 'typhoon',
+  flydubai: 'flydubai',
+  fz1073: 'flydubai',
+  'flydubai-incident': 'flydubai',
+  fdb1073: 'flydubai',
+  'fz-1073': 'flydubai',
 });
 
 const BAY_VIEW = Object.freeze({
@@ -357,7 +370,23 @@ export async function runShortsPack(input = {}) {
     return pack;
   }
 
+
+  if (pack === 'flydubai') {
+    toast(
+      `SHORTS · FlyDubai FZ1073 · peak ${FZ1073_PEAK_VS_FPM} fpm · desert ~30s`,
+    );
+    await enableLayers(dataManager, ['flights', FZ1073_LAYER_ID]);
+    if (!(await hop(FZ1073_OVERVIEW))) return pack;
+    // First-person / chase along the curated FR24 dive — existing flyTo only.
+    for (const shot of fz1073FpvShots()) {
+      if (!(await hop(shot))) return pack;
+    }
+    await hop(FZ1073_TUU);
+    return pack;
+  }
+
   return null;
+
 }
 
 /**

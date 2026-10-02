@@ -71,7 +71,7 @@ function mockViewer() {
 }
 
 test('traffic aliases resolve from hash or search', () => {
-  assert.equal(SHORTS_PACK_VERSION, '2026-09-22-typhoon');
+  assert.equal(SHORTS_PACK_VERSION, '2026-10-02-flydubai');
   assert.equal(SHORTS_ALIASES.traffic, 'traffic');
   assert.equal(SHORTS_ALIASES.cctv, undefined);
   assert.equal(SHORTS_ALIASES.streets, 'traffic');
@@ -83,6 +83,10 @@ test('traffic aliases resolve from hash or search', () => {
   assert.equal(SHORTS_ALIASES.storm, 'typhoon');
   assert.equal(SHORTS_ALIASES.himawari, 'typhoon');
   assert.equal(SHORTS_ALIASES['japan-storm'], 'typhoon');
+  assert.equal(SHORTS_ALIASES.flydubai, 'flydubai');
+  assert.equal(SHORTS_ALIASES.fz1073, 'flydubai');
+  assert.equal(SHORTS_ALIASES['flydubai-incident'], 'flydubai');
+  assert.equal(SHORTS_ALIASES.fdb1073, 'flydubai');
   assert.equal(
     parseShortsPackFromLocation(loc({ hash: '#shorts=traffic' })),
     'traffic',
@@ -114,6 +118,14 @@ test('traffic aliases resolve from hash or search', () => {
   assert.equal(
     parseShortsPackFromLocation(loc({ search: '?shorts=japan-storm' })),
     'typhoon',
+  );
+  assert.equal(
+    parseShortsPackFromLocation(loc({ hash: '#shorts=flydubai' })),
+    'flydubai',
+  );
+  assert.equal(
+    parseShortsPackFromLocation(loc({ hash: '#shorts=fz1073' })),
+    'flydubai',
   );
   assert.equal(parseShortsPackFromLocation(loc()), null);
 });
@@ -160,7 +172,7 @@ test('traffic pack enables traffic + CCTV and hops Austin → London → SF', as
       Math.abs(Cesium.Math.toDegrees(sf.longitude) - -122.4028) < 0.001,
     );
     assert.match(dom.toast.textContent, /Traffic & CCTV/);
-    assert.match(dom.badge.textContent, /2026-09-22-typhoon/);
+    assert.match(dom.badge.textContent, /2026-10-02-flydubai/);
   } finally {
     dom.restore();
   }
@@ -310,7 +322,40 @@ test('typhoon pack enables weather layers and hops W. Pacific → Japan', async 
     assert.ok(Math.abs(Cesium.Math.toDegrees(japan.longitude) - 135.5) < 0.001);
     assert.ok(Math.abs(Cesium.Math.toDegrees(japan.latitude) - 34.4) < 0.001);
     assert.match(dom.toast.textContent, /Typhoon Dujuan/);
-    assert.match(dom.badge.textContent, /2026-09-22-typhoon/);
+    assert.match(dom.badge.textContent, /2026-10-02-flydubai/);
+  } finally {
+    dom.restore();
+  }
+});
+
+test('flydubai pack enables flights + FZ1073 and hops overview → dive FPV → TUU', async () => {
+  const dom = mockDom();
+  const enabled = [];
+  const { viewer, hops } = mockViewer();
+  try {
+    const pack = await runShortsPack({
+      pack: 'flydubai',
+      viewer,
+      dataManager: {
+        async setEnabled(id, on, options) {
+          enabled.push({ id, on, origin: options?.origin });
+          return true;
+        },
+      },
+    });
+    assert.equal(pack, 'flydubai');
+    assert.deepEqual(enabled, [
+      { id: 'flights', on: true, origin: 'programmatic' },
+      { id: 'fz1073-2026', on: true, origin: 'programmatic' },
+    ]);
+    assert.ok(hops.length >= 3);
+    const first = Cesium.Cartographic.fromCartesian(hops[0].destination);
+    assert.ok(Math.abs(Cesium.Math.toDegrees(first.latitude) - 29.78) < 0.01);
+    assert.ok(Math.abs(Cesium.Math.toDegrees(first.longitude) - 38.32) < 0.01);
+    const last = Cesium.Cartographic.fromCartesian(hops[hops.length - 1].destination);
+    assert.ok(Math.abs(Cesium.Math.toDegrees(last.latitude) - 28.365) < 0.01);
+    assert.match(dom.toast.textContent, /FlyDubai FZ1073/);
+    assert.match(dom.badge.textContent, /2026-10-02-flydubai/);
   } finally {
     dom.restore();
   }
