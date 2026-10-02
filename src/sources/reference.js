@@ -8,6 +8,7 @@ import { createOvationAuroraSource } from '../layers/aurora/source.js';
 import { createSafecastRadiationSource } from '../layers/radiation/source.js';
 import { createGdacsFloodsSource } from '../layers/floods/source.js';
 import { createNwsAlertsSource } from '../layers/nwsAlerts/source.js';
+import { createNdbcBuoysSource } from '../layers/ndbcBuoys/source.js';
 
 /** Construct the existing reference feeds independently of application setup. */
 export function createReferenceSources() {
@@ -22,5 +23,6 @@ export function createReferenceSources() {
     radiation: createSafecastRadiationSource(),
     floods: createGdacsFloodsSource(),
     nwsAlerts: createNwsAlertsSource(),
+    ndbcBuoys: createNdbcBuoysSource(),
   };
 }

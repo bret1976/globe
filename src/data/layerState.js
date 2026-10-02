@@ -469,6 +469,7 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
     disposition: 'enabled-only',
   }),
   Object.freeze({ id: 'nws-alerts', token: '7', disposition: 'enabled-only' }),
+  Object.freeze({ id: 'ndbc-buoys', token: '8', disposition: 'enabled-only' }),
   Object.freeze({ id: 'radiation', token: '5', disposition: 'enabled-only' }),
   Object.freeze({
     id: 'radio',

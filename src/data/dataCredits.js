@@ -74,6 +74,13 @@ export const DATA_CREDITS = [
       '(api.weather.gov; U.S. government public domain)',
   },
   {
+    key: 'ndbc-buoys',
+    html:
+      'Marine buoy observations: ' +
+      '<a href="https://www.ndbc.noaa.gov/" target="_blank" rel="noopener">NOAA National Data Buoy Center</a> ' +
+      '(latest_obs; U.S. government public domain)',
+  },
+  {
     key: 'noaa-ovation',
     html:
       'Aurora forecast: ' +
