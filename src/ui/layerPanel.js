@@ -49,6 +49,7 @@ const PANEL_GROUPS = [
     label: 'Events',
     ids: [
       'rocket-launches',
+      'fz1073-2026',
       'earthquakes',
       'volcanoes',
       'aurora',
@@ -86,6 +87,7 @@ const PANEL_LABELS = {
   floods: 'Floods & Droughts (GDACS)',
   'nws-alerts': 'Weather Alerts (NWS)',
   'ndbc-buoys': 'Marine Buoys (NDBC)',
+  'fz1073-2026': 'FlyDubai FZ1073',
   'recent-imagery': 'Recent Imagery',
   weather: 'Observed Weather',
   wind: 'Wind',

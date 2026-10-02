@@ -39,7 +39,7 @@ test('catalogs construct distinct layers and classification from their supplied 
     signal: b.signal,
     surface: fixtureSurface(b.signal),
   });
-  assert.equal(first.layers.length, 27);
+  assert.equal(first.layers.length, 35);
   assert.ok(first.get('fire-perimeters'));
   assert.ok(first.get('au-fire'));
   assert.ok(first.get('transit'));
@@ -54,6 +54,7 @@ test('catalogs construct distinct layers and classification from their supplied 
   );
   assert.ok(first.get('bhote-koshi-2026'));
   assert.ok(first.get('bhote-koshi-locator'));
+  assert.ok(first.get('fz1073-2026'));
   const lifecycle = new LayerLifecycle({});
   for (const layer of first.layers) lifecycle.register(layer);
   const rows = lifecycle.getAll();

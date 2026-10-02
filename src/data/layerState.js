@@ -441,6 +441,11 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
   }),
   Object.freeze({ id: 'floods', token: '6', disposition: 'enabled-only' }),
   Object.freeze({
+    id: 'fz1073-2026',
+    token: '9',
+    disposition: 'enabled-only',
+  }),
+  Object.freeze({
     id: 'gps-interference',
     token: 'l',
     disposition: 'enabled-only',
@@ -468,8 +473,8 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
     token: 'i',
     disposition: 'enabled-only',
   }),
-  Object.freeze({ id: 'nws-alerts', token: '7', disposition: 'enabled-only' }),
   Object.freeze({ id: 'ndbc-buoys', token: '8', disposition: 'enabled-only' }),
+  Object.freeze({ id: 'nws-alerts', token: '7', disposition: 'enabled-only' }),
   Object.freeze({ id: 'radiation', token: '5', disposition: 'enabled-only' }),
   Object.freeze({
     id: 'radio',

@@ -35,6 +35,7 @@ import { createInfrastructureLayers } from '../data/infrastructure.js';
 import { localGeoJsonServices } from './localGeojsonServices.js';
 import { createBhoteKoshiEventLayer } from '../data/bhoteKoshiEvent.js';
 import { createBhoteKoshiLocatorLayer } from '../data/bhoteKoshiLocator.js';
+import { createFz1073Layer } from '../data/fz1073Layer.js';
 
 const SOURCE_METHODS = Object.freeze({
   flights: ['getSnapshot'],
@@ -132,6 +133,7 @@ export function createApplicationCatalog({
         createBhoteKoshiLocatorLayer({
           boundaryResolver: nepalBoundaryResolver,
         }),
+        createFz1073Layer(),
         flights,
         military,
         createApplicationEarthquakes({ source: sources.earthquakes }),
