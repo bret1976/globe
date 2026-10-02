@@ -43,7 +43,7 @@ const PANEL_GROUPS = [
   },
   {
     label: 'Weather',
-    ids: ['weather', 'wind', 'weather-cyclones', 'nws-alerts'],
+    ids: ['weather', 'wind', 'weather-cyclones', 'nws-alerts', 'ndbc-buoys'],
   },
   {
     label: 'Events',
@@ -85,6 +85,7 @@ const PANEL_LABELS = {
   radiation: 'Radiation (Safecast)',
   floods: 'Floods & Droughts (GDACS)',
   'nws-alerts': 'Weather Alerts (NWS)',
+  'ndbc-buoys': 'Marine Buoys (NDBC)',
   'recent-imagery': 'Recent Imagery',
   weather: 'Observed Weather',
   wind: 'Wind',
