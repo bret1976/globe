@@ -81,6 +81,13 @@ export const DATA_CREDITS = [
       '(latest_obs; U.S. government public domain)',
   },
   {
+    key: 'usgs-gauges',
+    html:
+      'Streamflow gauges: ' +
+      '<a href="https://waterdata.usgs.gov/" target="_blank" rel="noopener">U.S. Geological Survey Water Data</a> ' +
+      '(latest-continuous parameter 00060; U.S. government public domain)',
+  },
+  {
     key: 'fz1073-2026',
     html:
       'FlyDubai FZ1073 reconstruction: curated Flightradar24 public ADS-B playback ' +

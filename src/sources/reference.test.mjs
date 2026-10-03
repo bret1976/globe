@@ -24,6 +24,7 @@ test('reference factories retain compatibility without starting acquisition or s
     'floods',
     'nwsAlerts',
     'ndbcBuoys',
+    'usgsGauges',
   ]);
   assert.notEqual(first.earthquakes, second.earthquakes);
   assert.notEqual(first['fire-perimeters'], second['fire-perimeters']);
@@ -36,6 +37,7 @@ test('reference factories retain compatibility without starting acquisition or s
   assert.notEqual(first.floods, second.floods);
   assert.notEqual(first.nwsAlerts, second.nwsAlerts);
   assert.notEqual(first.ndbcBuoys, second.ndbcBuoys);
+  assert.notEqual(first.usgsGauges, second.usgsGauges);
   assert.equal(typeof first.earthquakes.getSnapshot, 'function');
   assert.equal(typeof first['fire-perimeters'].getSnapshot, 'function');
   assert.equal(typeof first.auFire.getSnapshot, 'function');
@@ -47,5 +49,6 @@ test('reference factories retain compatibility without starting acquisition or s
   assert.equal(typeof first.floods.getSnapshot, 'function');
   assert.equal(typeof first.nwsAlerts.getSnapshot, 'function');
   assert.equal(typeof first.ndbcBuoys.getSnapshot, 'function');
+  assert.equal(typeof first.usgsGauges.getSnapshot, 'function');
   assert.equal(requests, 0);
 });
