@@ -31,6 +31,7 @@ import { createApplicationRadiation } from './layers/radiation.js';
 import { createApplicationFloods } from './layers/floods.js';
 import { createApplicationNwsAlerts } from './layers/nwsAlerts.js';
 import { createApplicationNdbcBuoys } from './layers/ndbcBuoys.js';
+import { createApplicationUsgsGauges } from './layers/usgsGauges.js';
 import { createInfrastructureLayers } from '../data/infrastructure.js';
 import { localGeoJsonServices } from './localGeojsonServices.js';
 import { createBhoteKoshiEventLayer } from '../data/bhoteKoshiEvent.js';
@@ -66,6 +67,7 @@ const SOURCE_METHODS = Object.freeze({
   floods: ['getSnapshot'],
   nwsAlerts: ['getSnapshot'],
   ndbcBuoys: ['getSnapshot'],
+  usgsGauges: ['getSnapshot'],
   cables: ['fetch'],
   cyclones: ['getSnapshot'],
   wind: ['getSnapshot'],
@@ -148,6 +150,7 @@ export function createApplicationCatalog({
         createApplicationFloods({ source: sources.floods }),
         createApplicationNwsAlerts({ source: sources.nwsAlerts }),
         createApplicationNdbcBuoys({ source: sources.ndbcBuoys }),
+        createApplicationUsgsGauges({ source: sources.usgsGauges }),
         createApplicationAlpr({ surface, source: sources.alpr }),
         satellites,
         createApplicationLaunches({ source: sources.launches, satellites }),

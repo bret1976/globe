@@ -25,6 +25,7 @@ export const LAYER_FOCUS_HEIGHT_M = Object.freeze({
   floods: 2_500_000,
   'nws-alerts': 2_000_000,
   'ndbc-buoys': 2_000_000,
+  'usgs-gauges': 2_000_000,
   'fz1073-2026': 120_000,
   'gps-interference': 2_500_000,
   'rocket-launches': 800_000,
@@ -184,6 +185,12 @@ export const LAYER_LIVE_DESTINATIONS = Object.freeze({
     heightM: 2_000_000,
     label: 'Gulf / Atlantic buoy corridor',
   }),
+  'usgs-gauges': Object.freeze({
+    lat: 39.0,
+    lon: -98.0,
+    heightM: 2_000_000,
+    label: 'CONUS stream gauges',
+  }),
   'fz1073-2026': Object.freeze({
     lat: 29.78,
     lon: 38.32,
@@ -294,6 +301,7 @@ export const FEATURED_DESTINATION_LAYER_IDS = Object.freeze([
   'floods',
   'nws-alerts',
   'ndbc-buoys',
+  'usgs-gauges',
   'gps-interference',
   'local-firms',
   'fire-perimeters',

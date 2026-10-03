@@ -171,6 +171,7 @@ test('production registry is exact, canonical, and rejects incomplete contracts'
   assert.ok(REGISTERED_LAYER_IDS.includes('floods'));
   assert.ok(REGISTERED_LAYER_IDS.includes('nws-alerts'));
   assert.ok(REGISTERED_LAYER_IDS.includes('ndbc-buoys'));
+  assert.ok(REGISTERED_LAYER_IDS.includes('usgs-gauges'));
   assert.ok(REGISTERED_LAYER_IDS.includes('fz1073-2026'));
   assert.deepEqual(REGISTERED_LAYER_IDS, [...REGISTERED_LAYER_IDS].sort());
   assert.throws(
