@@ -43,7 +43,7 @@ const PANEL_GROUPS = [
   },
   {
     label: 'Weather',
-    ids: ['weather', 'wind', 'weather-cyclones', 'nws-alerts', 'ndbc-buoys', 'usgs-gauges'],
+    ids: ['weather', 'wind', 'weather-cyclones', 'nws-alerts', 'ndbc-buoys', 'usgs-gauges', 'tide-gauges'],
   },
   {
     label: 'Events',
@@ -55,6 +55,7 @@ const PANEL_GROUPS = [
       'aurora',
       'radiation',
       'floods',
+      'usdm-drought',
       'gps-interference',
       'local-firms',
       'fire-perimeters',
@@ -88,6 +89,8 @@ const PANEL_LABELS = {
   'nws-alerts': 'Weather Alerts (NWS)',
   'ndbc-buoys': 'Marine Buoys (NDBC)',
   'usgs-gauges': 'Stream Gauges (USGS)',
+  'tide-gauges': 'Tide Gauges (NOAA)',
+  'usdm-drought': 'Drought Monitor (USDM)',
   'fz1073-2026': 'FlyDubai FZ1073',
   'recent-imagery': 'Recent Imagery',
   weather: 'Observed Weather',
