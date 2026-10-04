@@ -18,11 +18,11 @@ const PENDING_TRACKING_POLL_MS = 1_000;
 const TRACKING_ID_GRAMMAR = /^[0-9a-z~_-]{1,16}$/;
 /**
  * Ceilings for the untrusted v2 layer fields. Both are far above any legitimate
- * payload (16 one-character tokens; a dozen short option assignments), so a
+ * payload (enabled-layer tokens joined by "."; a dozen short option assignments), so a
  * value past them is malformed or hostile. Reject the WHOLE payload, matching
  * the unknown-token rule — never salvage a prefix.
  */
-const MAX_ENABLED_LAYERS_CHARS = 64;
+const MAX_ENABLED_LAYERS_CHARS = 160;
 const MAX_LAYER_OPTIONS_CHARS = 512;
 export const LAYER_STATE_STORAGE_KEY = 'gev:layer-state:v2';
 export const LAYER_RESTORE_ORIGINS = Object.freeze({
@@ -506,7 +506,9 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
   }),
   Object.freeze({ id: 'traffic', token: 't', disposition: 'enabled-only' }),
   Object.freeze({ id: 'transit', token: 'j', disposition: 'enabled-only' }),
+  Object.freeze({ id: 'tide-gauges', token: 'tg', disposition: 'enabled-only' }),
   Object.freeze({ id: 'usgs-gauges', token: '0', disposition: 'enabled-only' }),
+  Object.freeze({ id: 'usdm-drought', token: 'ud', disposition: 'enabled-only' }),
   Object.freeze({ id: 'volcanoes', token: '3', disposition: 'enabled-only' }),
   Object.freeze({
     id: 'weather',
@@ -579,7 +581,7 @@ export function validateLayerStateRegistry(registry = LAYER_STATE_REGISTRY) {
     if (ids.has(entry.id))
       throw new Error(`Duplicate layer-state id: ${entry.id}`);
     ids.add(entry.id);
-    if (!/^[a-z0-9]$/.test(entry.token || ''))
+    if (!/^[a-z0-9]{1,2}$/.test(entry.token || ''))
       throw new Error(`Invalid layer-state token: ${entry.id}`);
     if (tokens.has(entry.token))
       throw new Error(`Duplicate layer-state token: ${entry.token}`);

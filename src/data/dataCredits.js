@@ -88,6 +88,20 @@ export const DATA_CREDITS = [
       '(latest-continuous parameter 00060; U.S. government public domain)',
   },
   {
+    key: 'tide-gauges',
+    html:
+      'Tide gauges: ' +
+      '<a href="https://tidesandcurrents.noaa.gov/" target="_blank" rel="noopener">NOAA CO-OPS</a> ' +
+      '(stations + latest water_level MLLW; U.S. government public domain)',
+  },
+  {
+    key: 'usdm-drought',
+    html:
+      'U.S. Drought Monitor: ' +
+      '<a href="https://droughtmonitor.unl.edu/" target="_blank" rel="noopener">NDMC / USDA / NOAA</a> ' +
+      '(current GeoJSON intensity categories D0–D4)',
+  },
+  {
     key: 'fz1073-2026',
     html:
       'FlyDubai FZ1073 reconstruction: curated Flightradar24 public ADS-B playback ' +
