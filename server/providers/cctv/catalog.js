@@ -17,6 +17,7 @@ import {
   loadWarendorfSourcesFromCatalog,
   loadNswSourcesFromOpenData,
   loadCalgarySourcesFromOpenData,
+  loadVegvesenSourcesFromOpenData,
 } from './sources.js';
 import { loadMdchartSourcesFromOpenData } from './mdchart.js';
 import { loadDdotSourcesFromGis } from './ddot.js';
@@ -103,6 +104,11 @@ const LIVE_PACKS = [
     name: 'colorado',
     enabled: () => envEnabled('CCTV_COLORADO_ENABLED'),
     load: loadColoradoSourcesFromOpenData,
+  },
+  {
+    name: 'vegvesen',
+    enabled: () => envEnabled('CCTV_VEGVESEN_ENABLED'),
+    load: loadVegvesenSourcesFromOpenData,
   },
 ];
 /**
