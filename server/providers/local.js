@@ -38,6 +38,8 @@ import { tideGaugesProxy } from './tideGauges.js';
 import { usdmDroughtProxy } from './usdmDrought.js';
 import { airQualityProxy } from './airQuality.js';
 import { stormReportsProxy } from './stormReports.js';
+import { oceanCurrentsProxy } from './oceanCurrents.js';
+import { powerPlantsProxy } from './powerPlants.js';
 
 /** Construct the local provider plugins in their established order. */
 function localProviderPlugins() {
@@ -81,6 +83,8 @@ function localProviderPlugins() {
     usdmDroughtProxy(),
     airQualityProxy(),
     stormReportsProxy(),
+    oceanCurrentsProxy(),
+    powerPlantsProxy(),
     keySetupEndpoint(),
   ];
 }

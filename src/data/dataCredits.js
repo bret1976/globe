@@ -109,6 +109,20 @@ export const DATA_CREDITS = [
       '(open citizen-science PM2.5/PM10 sensor data)',
   },
   {
+    key: 'ocean-currents',
+    html:
+      'Ocean currents: ' +
+      '<a href="https://open-meteo.com/en/docs/marine-weather-api" target="_blank" rel="noopener">Open-Meteo Marine</a> ' +
+      '(CC BY 4.0; Copernicus Marine / ECMWF ocean analyses)',
+  },
+  {
+    key: 'power-plants',
+    html:
+      'Power plants: ' +
+      '<a href="https://datasets.wri.org/dataset/globalpowerplantdatabase" target="_blank" rel="noopener">WRI Global Power Plant Database</a> ' +
+      '(World Resources Institute, CC BY 4.0)',
+  },
+  {
     key: 'storm-reports',
     html:
       'Storm reports: ' +
