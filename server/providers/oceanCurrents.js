@@ -17,7 +17,7 @@ import {
 } from '../../src/layers/oceanCurrents/parse.js';
 
 const TTL_MS = 6 * 60 * 60_000;
-const RETRY_BACKOFF_MS = 10 * 60_000;
+const RETRY_BACKOFF_MS = 3 * 60_000;
 const WARM_DELAY_MS = 20_000;
 
 export function oceanCurrentsProxy({
@@ -36,16 +36,30 @@ export function oceanCurrentsProxy({
   let lastError = null;
 
   async function fetchBatch(points) {
-    for (let attempt = 0; attempt < 3; attempt += 1) {
-      const response = await fetchImpl(oceanCurrentsBatchUrl(points), {
-        signal: AbortSignal.timeout(30_000),
-        headers: {
-          Accept: 'application/json',
-          'User-Agent':
-            'GodsEyeView/0.1 (ocean-currents proxy; +https://github.com/bret1976/globe)',
-        },
-      });
+    let lastErr = null;
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      let response;
+      try {
+        response = await fetchImpl(oceanCurrentsBatchUrl(points), {
+          signal: AbortSignal.timeout(30_000),
+          headers: {
+            Accept: 'application/json',
+            'User-Agent':
+              'GodsEyeView/0.1 (ocean-currents proxy; +https://github.com/bret1976/globe)',
+          },
+        });
+      } catch (error) {
+        // Network resets happen; log the real cause and back off before retrying.
+        const cause = error?.cause?.code || error?.cause?.message || '';
+        lastErr = new Error(
+          `${error?.message || 'fetch failed'}${cause ? ` (${cause})` : ''}`,
+        );
+        console.warn('[ocean-currents] batch network error:', lastErr.message);
+        await sleep(5_000 * (attempt + 1));
+        continue;
+      }
       if (response.status === 429) {
+        lastErr = new Error('Open-Meteo Marine rate limited');
         await sleep(65_000);
         continue;
       }
@@ -53,7 +67,7 @@ export function oceanCurrentsProxy({
         throw new Error(`Open-Meteo Marine HTTP ${response.status}`);
       return normalizeOceanCurrents(await response.json(), points);
     }
-    throw new Error('Open-Meteo Marine rate limited');
+    throw lastErr || new Error('Open-Meteo Marine unavailable');
   }
 
   async function fill() {
