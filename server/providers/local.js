@@ -36,6 +36,8 @@ import { ndbcBuoysProxy } from './ndbcBuoys.js';
 import { usgsGaugesProxy } from './usgsGauges.js';
 import { tideGaugesProxy } from './tideGauges.js';
 import { usdmDroughtProxy } from './usdmDrought.js';
+import { airQualityProxy } from './airQuality.js';
+import { stormReportsProxy } from './stormReports.js';
 
 /** Construct the local provider plugins in their established order. */
 function localProviderPlugins() {
@@ -77,6 +79,8 @@ function localProviderPlugins() {
     usgsGaugesProxy(),
     tideGaugesProxy(),
     usdmDroughtProxy(),
+    airQualityProxy(),
+    stormReportsProxy(),
     keySetupEndpoint(),
   ];
 }
