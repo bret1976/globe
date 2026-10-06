@@ -104,3 +104,30 @@ test('proxy fills grid in spaced batches and serves rows', async () => {
   assert.equal(snap.gridPoints, 855);
   assert.ok(snap.count > 400 && snap.count < 430);
 });
+
+test('proxy retries a network reset and still fills', async () => {
+  const { oceanCurrentsProxy } =
+    await import('../../../server/providers/oceanCurrents.js');
+  let calls = 0;
+  const fetchImpl = async (url) => {
+    calls += 1;
+    if (calls === 1)
+      throw Object.assign(new TypeError('fetch failed'), {
+        cause: { code: 'ECONNRESET' },
+      });
+    const n = new URL(url).searchParams.get('latitude').split(',').length;
+    const body = Array.from({ length: n }, () => ({
+      current: { ocean_current_velocity: 0.5, ocean_current_direction: 10 },
+    }));
+    return { ok: true, status: 200, json: async () => body };
+  };
+  const proxy = oceanCurrentsProxy({
+    fetchImpl,
+    sleep: async () => {},
+    warm: false,
+  });
+  await proxy._test.fill();
+  assert.equal(calls, 5);
+  assert.equal(proxy._test.snapshot().count, 855);
+  assert.equal(proxy._test.snapshot().partial, false);
+});
