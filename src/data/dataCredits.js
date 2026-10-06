@@ -102,6 +102,20 @@ export const DATA_CREDITS = [
       '(current GeoJSON intensity categories D0–D4)',
   },
   {
+    key: 'air-quality',
+    html:
+      'Air quality: ' +
+      '<a href="https://sensor.community/" target="_blank" rel="noopener">Sensor.Community</a> ' +
+      '(open citizen-science PM2.5/PM10 sensor data)',
+  },
+  {
+    key: 'storm-reports',
+    html:
+      'Storm reports: ' +
+      '<a href="https://www.weather.gov/" target="_blank" rel="noopener">National Weather Service</a> local storm reports via ' +
+      '<a href="https://mesonet.agron.iastate.edu/" target="_blank" rel="noopener">Iowa Environmental Mesonet</a> (public domain)',
+  },
+  {
     key: 'fz1073-2026',
     html:
       'FlyDubai FZ1073 reconstruction: curated Flightradar24 public ADS-B playback ' +

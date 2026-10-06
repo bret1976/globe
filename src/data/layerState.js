@@ -393,6 +393,7 @@ export const SHARE_TRACKING_RESTORE_POLICIES = Object.freeze({
  * owns stable URL ordering.
  */
 export const LAYER_STATE_REGISTRY = Object.freeze([
+  Object.freeze({ id: 'air-quality', token: 'aq', disposition: 'enabled-only' }),
   Object.freeze({
     id: 'ais-live-vessels',
     token: 'a',
@@ -499,16 +500,17 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
     disposition: 'enabled+options',
     optionOwner: 'satellites',
   }),
+  Object.freeze({ id: 'storm-reports', token: 'sr', disposition: 'enabled-only' }),
   Object.freeze({
     id: 'telegeography-submarine-cables',
     token: 'u',
     disposition: 'enabled-only',
   }),
+  Object.freeze({ id: 'tide-gauges', token: 'tg', disposition: 'enabled-only' }),
   Object.freeze({ id: 'traffic', token: 't', disposition: 'enabled-only' }),
   Object.freeze({ id: 'transit', token: 'j', disposition: 'enabled-only' }),
-  Object.freeze({ id: 'tide-gauges', token: 'tg', disposition: 'enabled-only' }),
-  Object.freeze({ id: 'usgs-gauges', token: '0', disposition: 'enabled-only' }),
   Object.freeze({ id: 'usdm-drought', token: 'ud', disposition: 'enabled-only' }),
+  Object.freeze({ id: 'usgs-gauges', token: '0', disposition: 'enabled-only' }),
   Object.freeze({ id: 'volcanoes', token: '3', disposition: 'enabled-only' }),
   Object.freeze({
     id: 'weather',

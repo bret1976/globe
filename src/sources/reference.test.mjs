@@ -27,6 +27,8 @@ test('reference factories retain compatibility without starting acquisition or s
     'usgsGauges',
     'tideGauges',
     'usdmDrought',
+    'airQuality',
+    'stormReports',
   ]);
   assert.notEqual(first.earthquakes, second.earthquakes);
   assert.notEqual(first['fire-perimeters'], second['fire-perimeters']);
@@ -42,6 +44,8 @@ test('reference factories retain compatibility without starting acquisition or s
   assert.notEqual(first.usgsGauges, second.usgsGauges);
   assert.notEqual(first.tideGauges, second.tideGauges);
   assert.notEqual(first.usdmDrought, second.usdmDrought);
+  assert.notEqual(first.airQuality, second.airQuality);
+  assert.notEqual(first.stormReports, second.stormReports);
   assert.equal(typeof first.earthquakes.getSnapshot, 'function');
   assert.equal(typeof first['fire-perimeters'].getSnapshot, 'function');
   assert.equal(typeof first.auFire.getSnapshot, 'function');
@@ -56,5 +60,7 @@ test('reference factories retain compatibility without starting acquisition or s
   assert.equal(typeof first.usgsGauges.getSnapshot, 'function');
   assert.equal(typeof first.tideGauges.getSnapshot, 'function');
   assert.equal(typeof first.usdmDrought.getSnapshot, 'function');
+  assert.equal(typeof first.airQuality.getSnapshot, 'function');
+  assert.equal(typeof first.stormReports.getSnapshot, 'function');
   assert.equal(requests, 0);
 });

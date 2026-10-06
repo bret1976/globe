@@ -12,6 +12,8 @@ import { createNdbcBuoysSource } from '../layers/ndbcBuoys/source.js';
 import { createUsgsGaugesSource } from '../layers/usgsGauges/source.js';
 import { createTideGaugesSource } from '../layers/tideGauges/source.js';
 import { createUsdmDroughtSource } from '../layers/usdmDrought/source.js';
+import { createAirQualitySource } from '../layers/airQuality/source.js';
+import { createStormReportsSource } from '../layers/stormReports/source.js';
 
 /** Construct the existing reference feeds independently of application setup. */
 export function createReferenceSources() {
@@ -30,5 +32,7 @@ export function createReferenceSources() {
     usgsGauges: createUsgsGaugesSource(),
     tideGauges: createTideGaugesSource(),
     usdmDrought: createUsdmDroughtSource(),
+    airQuality: createAirQualitySource(),
+    stormReports: createStormReportsSource(),
   };
 }
