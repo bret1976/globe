@@ -14,6 +14,8 @@ import { createTideGaugesSource } from '../layers/tideGauges/source.js';
 import { createUsdmDroughtSource } from '../layers/usdmDrought/source.js';
 import { createAirQualitySource } from '../layers/airQuality/source.js';
 import { createStormReportsSource } from '../layers/stormReports/source.js';
+import { createOceanCurrentsSource } from '../layers/oceanCurrents/source.js';
+import { createPowerPlantsSource } from '../layers/powerPlants/source.js';
 
 /** Construct the existing reference feeds independently of application setup. */
 export function createReferenceSources() {
@@ -34,5 +36,7 @@ export function createReferenceSources() {
     usdmDrought: createUsdmDroughtSource(),
     airQuality: createAirQualitySource(),
     stormReports: createStormReportsSource(),
+    oceanCurrents: createOceanCurrentsSource(),
+    powerPlants: createPowerPlantsSource(),
   };
 }

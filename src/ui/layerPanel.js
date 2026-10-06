@@ -36,6 +36,7 @@ const PANEL_GROUPS = [
     ids: [
       'military-installations',
       'local-datacenters',
+      'power-plants',
       'telegeography-submarine-cables',
       'local-dams',
       'alpr-cameras',
@@ -43,7 +44,7 @@ const PANEL_GROUPS = [
   },
   {
     label: 'Weather',
-    ids: ['weather', 'wind', 'weather-cyclones', 'nws-alerts', 'ndbc-buoys', 'usgs-gauges', 'tide-gauges', 'air-quality'],
+    ids: ['weather', 'wind', 'weather-cyclones', 'nws-alerts', 'ndbc-buoys', 'usgs-gauges', 'tide-gauges', 'air-quality', 'ocean-currents'],
   },
   {
     label: 'Events',
@@ -94,6 +95,8 @@ const PANEL_LABELS = {
   'usdm-drought': 'Drought Monitor (USDM)',
   'air-quality': 'Air Quality (Sensor.Community)',
   'storm-reports': 'Storm Reports (NWS)',
+  'ocean-currents': 'Ocean Currents (Open-Meteo)',
+  'power-plants': 'Power Plants (WRI)',
   'fz1073-2026': 'FlyDubai FZ1073',
   'recent-imagery': 'Recent Imagery',
   weather: 'Observed Weather',
