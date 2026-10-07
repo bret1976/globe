@@ -39,6 +39,8 @@ import { usdmDroughtProxy } from './usdmDrought.js';
 import { airQualityProxy } from './airQuality.js';
 import { stormReportsProxy } from './stormReports.js';
 import { radiosondesProxy } from './radiosondes.js';
+import { flightRestrictionsProxy } from './flightRestrictions.js';
+import { ionosphereProxy } from './ionosphere.js';
 import { oceanCurrentsProxy } from './oceanCurrents.js';
 import { powerPlantsProxy } from './powerPlants.js';
 
@@ -85,6 +87,8 @@ function localProviderPlugins() {
     airQualityProxy(),
     stormReportsProxy(),
     radiosondesProxy(),
+    flightRestrictionsProxy(),
+    ionosphereProxy(),
     oceanCurrentsProxy(),
     powerPlantsProxy(),
     keySetupEndpoint(),

@@ -435,6 +435,11 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
     disposition: 'enabled-only',
   }),
   Object.freeze({
+    id: 'flight-restrictions',
+    token: 'fr',
+    disposition: 'enabled-only',
+  }),
+  Object.freeze({
     id: 'flights',
     token: 'f',
     disposition: 'enabled+options',
@@ -451,6 +456,7 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
     token: 'l',
     disposition: 'enabled-only',
   }),
+  Object.freeze({ id: 'ionosphere', token: 'io', disposition: 'enabled-only' }),
   Object.freeze({ id: 'local-dams', token: 'q', disposition: 'enabled-only' }),
   Object.freeze({
     id: 'local-datacenters',

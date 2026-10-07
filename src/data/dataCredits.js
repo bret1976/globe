@@ -130,6 +130,20 @@ export const DATA_CREDITS = [
       '(<a href="https://creativecommons.org/licenses/by-sa/2.0/" target="_blank" rel="noopener">CC BY-SA 2.0</a>)',
   },
   {
+    key: 'flight-restrictions',
+    html:
+      'Flight restrictions: ' +
+      '<a href="https://tfr.faa.gov/" target="_blank" rel="noopener">FAA Graphic TFRs</a> ' +
+      '(Federal Aviation Administration, public domain; awareness only, not for flight planning)',
+  },
+  {
+    key: 'ionosphere',
+    html:
+      'Ionosphere TEC: ' +
+      '<a href="https://www.swpc.noaa.gov/products/glotec" target="_blank" rel="noopener">NOAA SWPC GloTEC</a> ' +
+      '(Space Weather Prediction Center, public domain)',
+  },
+  {
     key: 'storm-reports',
     html:
       'Storm reports: ' +
