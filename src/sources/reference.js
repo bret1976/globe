@@ -15,6 +15,8 @@ import { createUsdmDroughtSource } from '../layers/usdmDrought/source.js';
 import { createAirQualitySource } from '../layers/airQuality/source.js';
 import { createStormReportsSource } from '../layers/stormReports/source.js';
 import { createRadiosondesSource } from '../layers/radiosondes/source.js';
+import { createFlightRestrictionsSource } from '../layers/flightRestrictions/source.js';
+import { createIonosphereSource } from '../layers/ionosphere/source.js';
 import { createOceanCurrentsSource } from '../layers/oceanCurrents/source.js';
 import { createPowerPlantsSource } from '../layers/powerPlants/source.js';
 
@@ -40,5 +42,7 @@ export function createReferenceSources() {
     oceanCurrents: createOceanCurrentsSource(),
     powerPlants: createPowerPlantsSource(),
     radiosondes: createRadiosondesSource(),
+    flightRestrictions: createFlightRestrictionsSource(),
+    ionosphere: createIonosphereSource(),
   };
 }
