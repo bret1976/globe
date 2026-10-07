@@ -15,6 +15,44 @@ import {
 } from './normalize.js';
 import { readResponseJsonCapped } from '../common/http.js';
 
+/** Network-level failure worth one more try (reset, refused, DNS, TLS), as
+ * opposed to an HTTP answer or a timeout, which are final for this refresh. */
+function isRetryableNetworkError(error) {
+  return error?.name === 'TypeError' && /fetch failed/i.test(String(error?.message));
+}
+
+/** "fetch failed (ECONNRESET: socket hang up)" — undici hides the cause. */
+export function describeFetchError(error) {
+  const cause = error?.cause;
+  const detail = [cause?.code, cause?.message].filter(Boolean).join(': ');
+  return detail ? `${error?.message || error} (${detail})` : String(error?.message || error);
+}
+
+/**
+ * Catalog GET with one retry after a short pause on a network-level failure:
+ * a fresh container's first connections to some hosts are reset.
+ */
+async function fetchCatalogWithRetry(endpoint, { attempts = 3, pauseMs = 1500 } = {}) {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return await fetch(endpoint, {
+        headers: { Accept: 'application/json', 'User-Agent': CATALOG_USER_AGENT },
+        redirect: 'manual',
+        signal: AbortSignal.timeout(CCTV_SOURCE_FETCH_TIMEOUT_MS),
+      });
+    } catch (error) {
+      if (attempt >= attempts || !isRetryableNetworkError(error)) throw error;
+      console.warn(
+        '[CCTV] Vegagerðin catalog fetch retry', attempt, describeFetchError(error),
+      );
+      await new Promise((resolve) => setTimeout(resolve, pauseMs * attempt));
+    }
+  }
+}
+
+const CATALOG_USER_AGENT =
+  'GodsEyeView/0.1 (cctv catalog; +https://github.com/bret1976/globe)';
+
 /** Iceland and its near-shore islands (Vestmannaeyjar, Grímsey). */
 export function isLikelyIcelandCoordinate(lat, lon) {
   return (
@@ -113,11 +151,7 @@ export function vegagerdinCameraToSource(record) {
 export async function loadVegagerdinSourcesFromOpenData() {
   try {
     const endpoint = process.env.CCTV_VEGAGERDIN_URL || DEFAULT_VEGAGERDIN_CCTV_URL;
-    const resp = await fetch(endpoint, {
-      headers: { Accept: 'application/json' },
-      redirect: 'manual',
-      signal: AbortSignal.timeout(CCTV_SOURCE_FETCH_TIMEOUT_MS),
-    });
+    const resp = await fetchCatalogWithRetry(endpoint);
     const discard = async () => {
       try {
         await resp.body?.cancel();
@@ -156,7 +190,7 @@ export async function loadVegagerdinSourcesFromOpenData() {
     );
     return prioritized;
   } catch (error) {
-    console.warn('[CCTV] Vegagerðin camera download error:', error?.message || error);
+    console.warn('[CCTV] Vegagerðin camera download error:', describeFetchError(error));
     return [];
   }
 }
