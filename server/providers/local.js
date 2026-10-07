@@ -38,6 +38,7 @@ import { tideGaugesProxy } from './tideGauges.js';
 import { usdmDroughtProxy } from './usdmDrought.js';
 import { airQualityProxy } from './airQuality.js';
 import { stormReportsProxy } from './stormReports.js';
+import { radiosondesProxy } from './radiosondes.js';
 import { oceanCurrentsProxy } from './oceanCurrents.js';
 import { powerPlantsProxy } from './powerPlants.js';
 
@@ -83,6 +84,7 @@ function localProviderPlugins() {
     usdmDroughtProxy(),
     airQualityProxy(),
     stormReportsProxy(),
+    radiosondesProxy(),
     oceanCurrentsProxy(),
     powerPlantsProxy(),
     keySetupEndpoint(),

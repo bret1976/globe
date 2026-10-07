@@ -330,3 +330,50 @@ export const CCTV_FRAME_MAX_BODY_BYTES = 16 * 1024 * 1024;
 export const CCTV_MEDIA_FETCH_TIMEOUT_MS = 15 * 1000;
 /** Declared size ceiling for fixed media responses. */
 export const CCTV_MEDIA_MAX_BODY_BYTES = 64 * 1024 * 1024;
+
+/** Iowa DOT traffic cameras: the keyless ArcGIS feature service behind the
+ * Iowa DOT open-data "Traffic Cameras" item (CC BY 4.0). One request for the
+ * whole state; `Type='Iowa DOT'` keeps the road cameras (RWIS weather-station
+ * and rest-area cameras are a different product and often 404). Stills only:
+ * the HLS playlists use relative segment paths the media relay cannot follow. */
+export const DEFAULT_IOWADOT_CCTV_URL =
+  'https://services.arcgis.com/8lRhdTsQyJpO52F1/arcgis/rest/services/Traffic_Cameras_View/FeatureServer/0/query' +
+  "?where=Type%3D%27Iowa+DOT%27&outFields=device_id,Desc_,ImageURL,latitude,longitude,REGION,COMMON_ID,Route" +
+  '&returnGeometry=false&f=json&resultRecordCount=2000';
+/** The only origin Iowa DOT frames may come from (snapshot tree only). */
+export const IOWADOT_IMAGE_ORIGIN = 'https://atmsqf.iowadot.gov/';
+export const DEFAULT_IOWADOT_MAX_SOURCES = 250;
+/** The whole state is ~400 KB; bound an upstream that streams without end. */
+export const IOWADOT_MAX_CATALOG_BYTES = 8 * 1024 * 1024;
+/** Prioritization anchors: Iowa's metros, so a cap keeps statewide spread. */
+export const IOWA_ANCHORS = Object.freeze([
+  { lat: 41.5868, lon: -93.625 }, // Des Moines
+  { lat: 41.9779, lon: -91.6656 }, // Cedar Rapids
+  { lat: 41.2619, lon: -95.8608 }, // Council Bluffs
+  { lat: 41.5236, lon: -90.5776 }, // Quad Cities
+  { lat: 42.4999, lon: -96.4003 }, // Sioux City
+  { lat: 42.4928, lon: -92.3426 }, // Waterloo
+  { lat: 42.5006, lon: -90.6646 }, // Dubuque
+  { lat: 41.6611, lon: -91.5302 }, // Iowa City
+]);
+
+/** Vegagerðin (Icelandic Road and Coastal Administration) web cameras: the
+ * keyless gagnaveita JSON service, every image of every station in one
+ * request (~500 images at ~165 stations). CC BY 4.0. */
+export const DEFAULT_VEGAGERDIN_CCTV_URL =
+  'https://gagnaveita.vegagerdin.is/api/vefmyndavelar2014_1';
+/** The only origin Vegagerðin frames may come from. */
+export const VEGAGERDIN_IMAGE_ORIGIN =
+  'https://www.vegagerdin.is/vgdata/vefmyndavelar/';
+export const DEFAULT_VEGAGERDIN_MAX_SOURCES = 300;
+/** The whole country is ~140 KB. */
+export const VEGAGERDIN_MAX_CATALOG_BYTES = 4 * 1024 * 1024;
+/** Anchors around the Ring Road so a cap keeps the whole island. */
+export const ICELAND_ANCHORS = Object.freeze([
+  { lat: 64.1466, lon: -21.9426 }, // Reykjavík
+  { lat: 65.6835, lon: -18.0878 }, // Akureyri
+  { lat: 65.2669, lon: -14.3948 }, // Egilsstaðir
+  { lat: 66.0749, lon: -23.1217 }, // Ísafjörður
+  { lat: 63.9331, lon: -20.9971 }, // Selfoss
+  { lat: 64.2539, lon: -15.2082 }, // Höfn
+]);

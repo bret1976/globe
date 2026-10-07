@@ -44,7 +44,7 @@ const PANEL_GROUPS = [
   },
   {
     label: 'Weather',
-    ids: ['weather', 'wind', 'weather-cyclones', 'nws-alerts', 'ndbc-buoys', 'usgs-gauges', 'tide-gauges', 'air-quality', 'ocean-currents'],
+    ids: ['weather', 'wind', 'weather-cyclones', 'nws-alerts', 'ndbc-buoys', 'usgs-gauges', 'tide-gauges', 'air-quality', 'ocean-currents', 'radiosondes'],
   },
   {
     label: 'Events',
@@ -97,6 +97,7 @@ const PANEL_LABELS = {
   'storm-reports': 'Storm Reports (NWS)',
   'ocean-currents': 'Ocean Currents (Open-Meteo)',
   'power-plants': 'Power Plants (WRI)',
+  radiosondes: 'Weather Balloons (SondeHub)',
   'fz1073-2026': 'FlyDubai FZ1073',
   'recent-imagery': 'Recent Imagery',
   weather: 'Observed Weather',
