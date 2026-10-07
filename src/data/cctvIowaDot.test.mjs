@@ -167,3 +167,29 @@ test('the Iowa DOT lane is wired into the catalog and has a kill switch', async 
     assert.deepEqual(sources.filter((s) => s.cityId === 'iowa'), []);
   });
 });
+
+test('a reset first connection is retried, and the cause is logged', async (t) => {
+  const { describeFetchError } = await import('../../server/providers/cctv/iowadot.js');
+  t.mock.method(console, 'log', () => {});
+  const warnings = [];
+  t.mock.method(console, 'warn', (...args) => warnings.push(args.join(' ')));
+  let calls = 0;
+  t.mock.method(globalThis, 'fetch', async () => {
+    calls += 1;
+    if (calls === 1) {
+      throw new TypeError('fetch failed', {
+        cause: Object.assign(new Error('socket hang up'), { code: 'ECONNRESET' }),
+      });
+    }
+    return Response.json({ features: [feature()] });
+  });
+  const cameras = await loadIowaDotSourcesFromOpenData();
+  assert.equal(calls, 2);
+  assert.equal(cameras.length, 1);
+  assert.ok(warnings.some((w) => w.includes('ECONNRESET')));
+  assert.equal(
+    describeFetchError(new TypeError('fetch failed', { cause: { code: 'ETIMEDOUT' } })),
+    'fetch failed (ETIMEDOUT)',
+  );
+  assert.equal(describeFetchError(new Error('plain')), 'plain');
+});
