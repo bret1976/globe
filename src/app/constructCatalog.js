@@ -36,6 +36,7 @@ import { createApplicationTideGauges } from './layers/tideGauges.js';
 import { createApplicationUsdmDrought } from './layers/usdmDrought.js';
 import { createApplicationAirQuality } from './layers/airQuality.js';
 import { createApplicationStormReports } from './layers/stormReports.js';
+import { createApplicationRadiosondes } from './layers/radiosondes.js';
 import { createApplicationOceanCurrents } from './layers/oceanCurrents.js';
 import { createApplicationPowerPlants } from './layers/powerPlants.js';
 import { createInfrastructureLayers } from '../data/infrastructure.js';
@@ -80,6 +81,7 @@ const SOURCE_METHODS = Object.freeze({
   stormReports: ['getSnapshot'],
   oceanCurrents: ['getSnapshot'],
   powerPlants: ['getSnapshot'],
+  radiosondes: ['getSnapshot'],
   cables: ['fetch'],
   cyclones: ['getSnapshot'],
   wind: ['getSnapshot'],
@@ -169,6 +171,7 @@ export function createApplicationCatalog({
         createApplicationStormReports({ source: sources.stormReports }),
         createApplicationOceanCurrents({ source: sources.oceanCurrents }),
         createApplicationPowerPlants({ source: sources.powerPlants }),
+        createApplicationRadiosondes({ source: sources.radiosondes }),
         createApplicationAlpr({ surface, source: sources.alpr }),
         satellites,
         createApplicationLaunches({ source: sources.launches, satellites }),

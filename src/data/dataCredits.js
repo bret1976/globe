@@ -123,6 +123,13 @@ export const DATA_CREDITS = [
       '(World Resources Institute, CC BY 4.0)',
   },
   {
+    key: 'radiosondes',
+    html:
+      'Weather balloons: radiosonde telemetry from the ' +
+      '<a href="https://sondehub.org/" target="_blank" rel="noopener">SondeHub</a> community receiver network ' +
+      '(<a href="https://creativecommons.org/licenses/by-sa/2.0/" target="_blank" rel="noopener">CC BY-SA 2.0</a>)',
+  },
+  {
     key: 'storm-reports',
     html:
       'Storm reports: ' +
@@ -284,6 +291,18 @@ export const DATA_CREDITS = [
       'Road cameras (Norway): contains data under the ' +
       '<a href="https://data.norge.no/nlod/en/2.0" target="_blank" rel="noopener">Norwegian licence for Open Government data (NLOD)</a> ' +
       'distributed by Statens vegvesen',
+  },
+  {
+    key: 'iowadot-cctv',
+    html:
+      'Traffic cameras (Iowa): Iowa Department of Transportation open data, ' +
+      '<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>',
+  },
+  {
+    key: 'vegagerdin-cctv',
+    html:
+      'Road cameras (Iceland): Vegagerðin (Icelandic Road and Coastal Administration) web cameras, retrieved live, ' +
+      '<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>',
   },
   {
     key: 'gbfs',

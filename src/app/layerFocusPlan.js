@@ -32,6 +32,7 @@ export const LAYER_FOCUS_HEIGHT_M = Object.freeze({
   'storm-reports': 2_000_000,
   'ocean-currents': 6_000_000,
   'power-plants': 3_000_000,
+  radiosondes: 3_000_000,
   'fz1073-2026': 120_000,
   'gps-interference': 2_500_000,
   'rocket-launches': 800_000,
@@ -233,6 +234,12 @@ export const LAYER_LIVE_DESTINATIONS = Object.freeze({
     heightM: 3_000_000,
     label: 'European utility-scale power plants',
   }),
+  radiosondes: Object.freeze({
+    lat: 50.0,
+    lon: 8.0,
+    heightM: 3_000_000,
+    label: 'European weather balloon launches',
+  }),
   'fz1073-2026': Object.freeze({
     lat: 29.78,
     lon: 38.32,
@@ -350,6 +357,7 @@ export const FEATURED_DESTINATION_LAYER_IDS = Object.freeze([
   'storm-reports',
   'ocean-currents',
   'power-plants',
+  'radiosondes',
   'gps-interference',
   'local-firms',
   'fire-perimeters',

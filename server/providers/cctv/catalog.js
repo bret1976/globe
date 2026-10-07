@@ -22,6 +22,8 @@ import {
 import { loadMdchartSourcesFromOpenData } from './mdchart.js';
 import { loadDdotSourcesFromGis } from './ddot.js';
 import { loadColoradoSourcesFromOpenData } from './colorado.js';
+import { loadIowaDotSourcesFromOpenData } from './iowadot.js';
+import { loadVegagerdinSourcesFromOpenData } from './vegagerdin.js';
 
 /** Env kill switch: unset or anything but "0" means enabled. */
 const envEnabled = (name) => String(process.env[name] || '1').trim() !== '0';
@@ -109,6 +111,16 @@ const LIVE_PACKS = [
     name: 'vegvesen',
     enabled: () => envEnabled('CCTV_VEGVESEN_ENABLED'),
     load: loadVegvesenSourcesFromOpenData,
+  },
+  {
+    name: 'iowadot',
+    enabled: () => envEnabled('CCTV_IOWADOT_ENABLED'),
+    load: loadIowaDotSourcesFromOpenData,
+  },
+  {
+    name: 'vegagerdin',
+    enabled: () => envEnabled('CCTV_VEGAGERDIN_ENABLED'),
+    load: loadVegagerdinSourcesFromOpenData,
   },
 ];
 /**
