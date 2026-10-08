@@ -2,7 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
 import { gunzipSync } from 'node:zlib';
-import { createApiCompressionMiddleware } from './api-performance.js';
+import {
+  apiCompressionPlugin,
+  apiKeepWarmPlugin,
+  createApiCompressionMiddleware,
+} from './api-performance.js';
 
 function serve(handler) {
   const mw = createApiCompressionMiddleware();
@@ -57,4 +61,16 @@ test('gzips large /api JSON for clients that accept it', async () => {
   } finally {
     server.close();
   }
+});
+
+test('preview hooks return nothing (Vite runs returned functions as post-hooks)', () => {
+  const server = { middlewares: { use: () => () => {} }, httpServer: null };
+  assert.equal(
+    apiCompressionPlugin().configurePreviewServer(server),
+    undefined,
+  );
+  assert.equal(
+    apiKeepWarmPlugin({ enabled: () => true }).configurePreviewServer(server),
+    undefined,
+  );
 });
