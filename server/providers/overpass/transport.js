@@ -61,15 +61,28 @@ function overpassPayloadIsData(payload) {
 }
 
 /**
- * Try each mirror once, retaining response-size and per-mirror timeout caps.
- * Refusals and body-level failures rotate; total failure returns the last
- * rate-limit payload, otherwise the first refusal, or throws a network error.
+ * Stagger between hedged mirror launches (ms). The proxy used to walk the
+ * mirrors strictly one after another with a 22 s per-mirror timeout, so one
+ * hung mirror at the head of the list burned the browser's whole fetch
+ * ceiling and Military Installations / ALPR settled UNAVAILABLE (ERR_ABORTED)
+ * with healthy mirrors never tried. Now the next mirror is started as soon as
+ * the previous one fails, or after this stagger if it is merely slow; the
+ * first real data answer wins and the rest are aborted.
+ */
+const OVERPASS_HEDGE_MS = 5000;
+
+/**
+ * Ask the mirrors in order with hedging, retaining response-size and
+ * per-mirror timeout caps. Refusals and body-level failures rotate
+ * immediately; a slow mirror gets a sibling after `hedgeMs`. Total failure
+ * returns the last rate-limit payload, otherwise the first refusal, or throws
+ * a network error.
  * @param {string} body URL-encoded Overpass QL query body.
  * @param {number} [maxResponseBytes] Endpoint-specific response cap.
  * @param {object} [options] Server-only endpoint and I/O overrides for tests.
  * @returns {Promise<{status:number,body:string,contentType:string,endpoint:string,rateLimited:boolean}>}
  */
-async function fetchOverpassPayload(
+function fetchOverpassPayload(
   body,
   maxResponseBytes = OVERPASS_MAX_RESPONSE_BYTES,
   {
@@ -77,16 +90,19 @@ async function fetchOverpassPayload(
     fetchImpl = fetch,
     readBody = readResponseTextCapped,
     simplify = simplifyOverpassPayloadBody,
+    hedgeMs = OVERPASS_HEDGE_MS,
   } = {},
 ) {
   let lastError = null;
   let lastRateLimitPayload = null;
   let lastRefusalPayload = null;
+  const controllers = new Set();
 
-  for (const endpoint of endpoints) {
+  /** One mirror attempt → { payload } on data, or { failed: true }. */
+  async function attempt(endpoint) {
     const controller = new AbortController();
+    controllers.add(controller);
     const timeoutId = setTimeout(() => controller.abort(), OVERPASS_TIMEOUT_MS);
-
     try {
       const upstream = await fetchImpl(endpoint, {
         method: 'POST',
@@ -116,43 +132,90 @@ async function fetchOverpassPayload(
 
       if (rateLimited) {
         lastRateLimitPayload = payload;
-        continue;
+        return { failed: true };
       }
       // A 200 body carrying a runtime error / timeout is a transient upstream
       // failure — skip to the next mirror rather than returning or caching it.
       if (runtimeError) {
         lastError = new Error(`Overpass runtime error (${endpoint})`);
-        continue;
+        return { failed: true };
       }
-      // Anything but 2xx is this mirror declining, not an answer. Only 5xx used
-      // to rotate, so a 4xx ended the fan-out and was returned — and cached —
-      // as data: a mirror refusing this client answers 406 while the others
-      // answer 200 to the very same request, so every Overpass-backed layer
-      // failed on an error page with healthy mirrors untried. The first
-      // refusal is kept so a genuinely bad query still reports what upstream
-      // said, but only after every mirror has had the chance to answer it.
+      // Anything but 2xx is this mirror declining, not an answer. A mirror
+      // refusing this client answers 406 while the others answer 200 to the
+      // very same request, so a 4xx must rotate rather than be returned (and
+      // cached) as data. The first refusal is kept so a genuinely bad query
+      // still reports what upstream said, but only after every mirror has had
+      // the chance to answer it.
       if (status < 200 || status >= 300) {
         if (!lastRefusalPayload) lastRefusalPayload = payload;
         lastError = new Error(
           `Overpass upstream returned ${status} (${endpoint})`,
         );
-        continue;
+        return { failed: true };
       }
 
       // Success: decimate giant boundary geometry before it reaches the cache,
       // the disk, or the client (what makes the 32 MB read cap safe to hold).
       payload.body = simplify(payload.body);
-      return payload;
+      return { payload };
     } catch (error) {
       lastError = error;
+      return { failed: true };
     } finally {
       clearTimeout(timeoutId);
+      controllers.delete(controller);
     }
   }
 
-  if (lastRateLimitPayload) return lastRateLimitPayload;
-  if (lastRefusalPayload) return lastRefusalPayload;
-  throw lastError || new Error('All Overpass upstreams failed');
+  return new Promise((resolve, reject) => {
+    let next = 0;
+    let inFlight = 0;
+    let settled = false;
+    let hedgeTimer = null;
+
+    const settleFailure = () => {
+      if (settled || inFlight > 0 || next < endpoints.length) return;
+      settled = true;
+      if (lastRateLimitPayload) resolve(lastRateLimitPayload);
+      else if (lastRefusalPayload) resolve(lastRefusalPayload);
+      else reject(lastError || new Error('All Overpass upstreams failed'));
+    };
+
+    const launch = () => {
+      if (settled) return;
+      clearTimeout(hedgeTimer);
+      hedgeTimer = null;
+      if (next >= endpoints.length) {
+        settleFailure();
+        return;
+      }
+      const endpoint = endpoints[next++];
+      inFlight += 1;
+      if (next < endpoints.length && hedgeMs > 0) {
+        hedgeTimer = setTimeout(launch, hedgeMs);
+      }
+      attempt(endpoint).then((outcome) => {
+        inFlight -= 1;
+        if (settled) return;
+        if (outcome.payload) {
+          settled = true;
+          clearTimeout(hedgeTimer);
+          for (const controller of controllers) controller.abort();
+          resolve(outcome.payload);
+          return;
+        }
+        // Failed fast: try the next mirror now instead of waiting the stagger.
+        if (next < endpoints.length) launch();
+        else settleFailure();
+      });
+    };
+
+    if (!endpoints.length) {
+      reject(new Error('All Overpass upstreams failed'));
+      return;
+    }
+    launch();
+  });
 }
 
 export { overpassPayloadIsData, fetchOverpassPayload };

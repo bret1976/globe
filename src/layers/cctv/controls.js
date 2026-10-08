@@ -241,7 +241,11 @@ export function createControls({ state: layerState, services, parts, source }) {
         count: layerState._count,
         lastUpdate: layerState._lastUpdate,
         error: layerState._lastError,
-        loading: layerState._geoLoading,
+        // Cameras are on the globe as soon as the catalog lands; the
+        // ground-sampled coverage refinement drains in the background for
+        // minutes and must not hold the row on LOADING (read as a stall).
+        loading: layerState._geoLoading && !(layerState._count > 0),
+        refining: layerState._geoLoading && layerState._count > 0,
         loadingLoaded: Math.min(
           layerState._geoLoadDone,
           layerState._geoLoadTotal,

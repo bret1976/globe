@@ -9,20 +9,28 @@ import { resolveImageryHost } from '../../maps/imageryHost.js';
 import { utcDay } from '../recentImagery/model.js';
 
 export const WEATHER_LAYER_ID = 'weather';
-const GIBS =
-  'https://gibs-{s}.earthdata.nasa.gov/wmts/epsg3857/best';
+const GIBS = 'https://gibs-{s}.earthdata.nasa.gov/wmts/epsg3857/best';
 const PRODUCTS = Object.freeze([
+  // Identifiers / tile-matrix sets are the ones GIBS' epsg3857 WMTS
+  // capabilities advertise (checked 2026-10-07). The old Level8 VIIRS and
+  // "Himawari_AHI_Band13_CleanInfrared" Level7 URLs answered HTTP 400
+  // ("TILEMATRIXSET is invalid for LAYER") for every tile, so the row read
+  // NOMINAL while nothing at all was draped on the globe.
   {
     id: 'viirs-ir',
     layer: 'VIIRS_NOAA21_Brightness_Temp_BandI5_Day',
-    maxLevel: 8,
+    maxLevel: 9,
     format: 'png',
     alpha: 0.72,
   },
   {
     id: 'himawari-ir',
-    layer: 'Himawari_AHI_Band13_CleanInfrared',
-    maxLevel: 7,
+    layer: 'Himawari_AHI_Band13_Clean_Infrared',
+    maxLevel: 6,
+    // Sub-daily (10-minute) product that GIBS only retains for ~40 minutes
+    // in this endpoint, so a calendar date 400s most of the day. "default"
+    // is the WMTS time token for the newest frame.
+    time: 'default',
     format: 'png',
     alpha: 0.55,
     rectangle: { west: 80, south: -60, east: -140, north: 60 },
@@ -30,7 +38,7 @@ const PRODUCTS = Object.freeze([
 ]);
 
 function template(product, day) {
-  return `${GIBS}/${product.layer}/default/${day}/GoogleMapsCompatible_Level${product.maxLevel}/{z}/{y}/{x}.${product.format}`;
+  return `${GIBS}/${product.layer}/default/${product.time || day}/GoogleMapsCompatible_Level${product.maxLevel}/{z}/{y}/{x}.${product.format}`;
 }
 
 function addLayer(cesium, collection, product, day) {

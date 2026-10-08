@@ -687,10 +687,12 @@ test('the voice TOOL SCHEMA matches the pinned release — the mission mapping i
   // ordering while allowing source formatting. Derived from the unchanged
   // release schema before formatting (the previous source-byte pin passed).
   const block = JSON.stringify(GEV_REALTIME_TOOLS);
-  assert.equal(block.length, 26417, 'serialized tool schema length drifted');
+  // 2026-10-07: layer enums deliberately extended (aurora, volcanoes, TFR,
+  // Ukraine War Fires, …) so voice can toggle every layer.
+  assert.equal(block.length, 26474, 'serialized tool schema length drifted');
   assert.equal(
     crypto.createHash('sha256').update(block).digest('hex'),
-    '98050750aeaa8cc00acd732ee735092a2e3a552ad824165b6af4bc4c3f1236c0',
+    'd202588aa4876ff21e54212d627dc0f6a0573bd4ca68faa6f0a16dd68e75b384',
     'the first-run missions must ride EXISTING tools: no schema edit, no cache bust',
   );
   const instructions = fs.readFileSync(new URL('../server/providers/openai/instructions.js', import.meta.url), 'utf8');

@@ -22,7 +22,9 @@ function composeFetchSignal(signal, timeoutMs) {
 /** Read mapped installations and explicit nearby-place searches through fixed endpoints. */
 export function createInstallationSource({
   fetchImpl = (...args) => globalThis.fetch(...args),
-  timeoutMs = 20_000,
+  // 35 s, matching ALPR: a cold Overpass round trip from the Railway region
+  // regularly exceeds 20 s, and the old ceiling aborted it just before data.
+  timeoutMs = 35_000,
 } = {}) {
   return {
     async getMappedSites(box, { exact = false, signal } = {}) {

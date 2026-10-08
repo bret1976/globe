@@ -22,8 +22,14 @@ export const OVERPASS_URL = '/api/overpass';
 
 export const REQUEST_DEBOUNCE_MS = 500;
 
-/** Client-side ceiling so a hung Overpass proxy cannot leave the layer on LOADING. */
-export const FETCH_TIMEOUT_MS = 20_000;
+/**
+ * Client-side ceiling so a hung Overpass proxy cannot leave the layer on
+ * LOADING. 35 s (was 20 s): a cold mirror answers from the Railway region in
+ * 20-35 s, and a 20 s ceiling aborted those requests (ERR_ABORTED) one breath
+ * before the proxy's hedged fan-out returned data — the row then read
+ * UNAVAILABLE even though the second attempt succeeded.
+ */
+export const FETCH_TIMEOUT_MS = 35_000;
 
 /** Keep public Overpass queries city-scale, never globe-wide. */
 export const MAX_VIEWPORT_DEGREES = 3;

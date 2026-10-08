@@ -311,3 +311,32 @@ test('coalesced outage callers both receive last-good data, never a cached refus
     }
   }
 });
+
+test('a hung head mirror is hedged: a later mirror answers well inside the client ceiling', async () => {
+  // Live 2026-10-07: the first mirror hung, the proxy waited its full 22 s
+  // per-mirror timeout, and the browser's 20 s ceiling aborted Military
+  // Installations / ALPR before a healthy mirror was even asked.
+  const tried = [];
+  const started = Date.now();
+  const payload = await fetchOverpassPayload('data=x', 1e6, {
+    endpoints: ENDPOINTS,
+    hedgeMs: 30,
+    fetchImpl: (url, options) => {
+      tried.push(url);
+      if (url === ENDPOINTS[0]) {
+        return new Promise((_, reject) =>
+          options.signal.addEventListener('abort', () =>
+            reject(Object.assign(new Error('aborted'), { name: 'AbortError' })),
+          ),
+        );
+      }
+      return Promise.resolve({ status: 200, url, headers: { get: () => 'application/json' } });
+    },
+    readBody: async (response) => `{"elements":[],"from":"${response.url}"}`,
+    simplify: (body) => body,
+  });
+  assert.equal(payload.status, 200);
+  assert.equal(payload.endpoint, ENDPOINTS[1], 'the second mirror answered');
+  assert.deepEqual(tried, ENDPOINTS.slice(0, 2), 'no third mirror once data arrived');
+  assert.ok(Date.now() - started < 2000, 'answer arrives after the stagger, not the 22 s timeout');
+});

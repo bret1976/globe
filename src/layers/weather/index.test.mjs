@@ -35,8 +35,15 @@ test('observed weather drapes IR on a globe host and clears on disable', () => {
   layer.init({});
   layer.enable();
   assert.equal(added.length, 2);
-  assert.match(added[0].provider.url, /VIIRS_NOAA21_Brightness_Temp_BandI5_Day/);
-  assert.match(added[1].provider.url, /Himawari_AHI_Band13_CleanInfrared/);
+  assert.match(
+    added[0].provider.url,
+    /VIIRS_NOAA21_Brightness_Temp_BandI5_Day\/default\/2026-09-23\/GoogleMapsCompatible_Level9\//,
+  );
+  // GIBS epsg3857 names: Clean_Infrared, Level6, newest frame via "default".
+  assert.match(
+    added[1].provider.url,
+    /Himawari_AHI_Band13_Clean_Infrared\/default\/default\/GoogleMapsCompatible_Level6\//,
+  );
   layer.disable();
   assert.equal(added.length, 0);
   layer.destroy();
