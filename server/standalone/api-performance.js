@@ -132,8 +132,11 @@ export function createApiCompressionMiddleware({ threshold = 1024 } = {}) {
 }
 
 export function apiCompressionPlugin() {
-  const install = (server) =>
+  // Block body on purpose: Vite calls any function a configurePreviewServer
+  // hook returns as a post-hook, and connect's use() returns the app itself.
+  const install = (server) => {
     server.middlewares.use(createApiCompressionMiddleware());
+  };
   return {
     name: 'gev-api-compression',
     configureServer: install,
