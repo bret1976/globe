@@ -34,6 +34,7 @@ test('reference factories retain compatibility without starting acquisition or s
     'radiosondes',
     'flightRestrictions',
     'ionosphere',
+    'ukraineFires',
   ]);
   assert.notEqual(first.earthquakes, second.earthquakes);
   assert.notEqual(first['fire-perimeters'], second['fire-perimeters']);
@@ -56,6 +57,7 @@ test('reference factories retain compatibility without starting acquisition or s
   assert.notEqual(first.radiosondes, second.radiosondes);
   assert.notEqual(first.flightRestrictions, second.flightRestrictions);
   assert.notEqual(first.ionosphere, second.ionosphere);
+  assert.notEqual(first.ukraineFires, second.ukraineFires);
   assert.equal(typeof first.earthquakes.getSnapshot, 'function');
   assert.equal(typeof first['fire-perimeters'].getSnapshot, 'function');
   assert.equal(typeof first.auFire.getSnapshot, 'function');
@@ -77,5 +79,6 @@ test('reference factories retain compatibility without starting acquisition or s
   assert.equal(typeof first.radiosondes.getSnapshot, 'function');
   assert.equal(typeof first.flightRestrictions.getSnapshot, 'function');
   assert.equal(typeof first.ionosphere.getSnapshot, 'function');
+  assert.equal(typeof first.ukraineFires.getSnapshot, 'function');
   assert.equal(requests, 0);
 });

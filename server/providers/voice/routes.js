@@ -15,6 +15,12 @@ import {
   QWEN_LLM_MODEL,
   voiceInferenceConfigured,
 } from './inference.js';
+import {
+  geminiActiveModel,
+  geminiConfigured,
+  geminiIntent,
+  geminiTranscribe,
+} from './gemini.js';
 
 const JSON_HEADERS = {
   'Content-Type': 'application/json; charset=utf-8',
@@ -51,18 +57,25 @@ export async function handleVoiceStatus(req, res, { fetchImpl } = {}) {
     llm: false,
     tts: false,
   }));
+  const gemini = geminiConfigured();
   sendJson(res, 200, {
     protocol: 'self-hosted-qwen',
     planner: true,
-    asr: Boolean(health.asr),
+    asr: Boolean(health.asr) || gemini,
+    serverAsr: gemini ? 'gemini' : health.asr ? 'qwen' : null,
+    gemini,
     llm: true,
     tts: Boolean(health.tts) || true,
     inference: Boolean(health.configured),
     browserAsr: true,
     browserTts: true,
     models: {
-      asr: health.asr ? QWEN_ASR_MODEL : BROWSER_ASR_MODEL,
-      llm: QWEN_LLM_MODEL,
+      asr: health.asr
+        ? QWEN_ASR_MODEL
+        : gemini
+          ? geminiActiveModel()
+          : BROWSER_ASR_MODEL,
+      llm: gemini && !health.configured ? geminiActiveModel() : QWEN_LLM_MODEL,
       tts: health.tts ? KOKORO_TTS_MODEL : BROWSER_TTS_MODEL,
       ...(health.models || {}),
     },
@@ -77,6 +90,27 @@ export async function handleVoiceAsr(req, res, { fetchImpl } = {}) {
   } catch (error) {
     sendJson(res, 400, { error: error?.message || 'Invalid ASR request' });
     return;
+  }
+  if (geminiConfigured()) {
+    try {
+      const data = await geminiTranscribe(
+        { audio: payload.audio, mimeType: payload.mimeType },
+        { fetchImpl },
+      );
+      if (data.text) {
+        sendJson(res, 200, { text: data.text, model: data.model });
+        return;
+      }
+      if (!voiceInferenceConfigured()) {
+        sendJson(res, 200, { text: '', model: data.model, empty: true });
+        return;
+      }
+    } catch (error) {
+      if (!voiceInferenceConfigured()) {
+        sendJson(res, 502, { error: error?.message || 'ASR failed' });
+        return;
+      }
+    }
   }
   if (voiceInferenceConfigured()) {
     try {
@@ -102,7 +136,7 @@ export async function handleVoiceAsr(req, res, { fetchImpl } = {}) {
   }
   sendJson(res, 503, {
     error:
-      'Speech-to-text runs in the browser with Whisper. Optional GPU ASR is unset.',
+      'Speech-to-text runs in the browser with Whisper. Server ASR (GEMINI_API_KEY) is unset.',
   });
 }
 
@@ -114,6 +148,31 @@ export async function resolveVoiceAct(payload, { fetchImpl } = {}) {
     viewport: payload?.viewport,
   });
   if (!voiceInferenceConfigured()) {
+    if (!planner.calls.length && text && geminiConfigured()) {
+      try {
+        const intent = await geminiIntent(text, {
+          fetchImpl,
+          lastLocationQuery:
+            planner.locationQuery || payload?.lastLocationQuery,
+        });
+        if (intent.calls.length) {
+          const calls = intent.calls.map((call) =>
+            withViewportFallback(call, payload?.viewport),
+          );
+          return {
+            calls,
+            speech: intent.speech || composeSelfHostedSpeech(calls, text),
+            locationQuery:
+              calls.find((call) => call.name === 'fly_to_location')?.arguments
+                ?.query || planner.locationQuery,
+            place: planner.place,
+            source: 'gemini',
+          };
+        }
+      } catch {
+        /* Planner reply stays authoritative when Gemini is unreachable. */
+      }
+    }
     return { ...planner, source: 'planner' };
   }
   try {
@@ -145,6 +204,73 @@ export async function resolveVoiceAct(payload, { fetchImpl } = {}) {
     /* Planner remains authoritative when the GPU box is unreachable. */
   }
   return { ...planner, source: 'planner' };
+}
+
+function withViewportFallback(call, viewport) {
+  if (call.name !== 'select_nearest_aircraft') return call;
+  const args = { ...call.arguments };
+  if (
+    !args.locationQuery &&
+    Number.isFinite(viewport?.lat) &&
+    Number.isFinite(viewport?.lon)
+  ) {
+    args.latitude = viewport.lat;
+    args.longitude = viewport.lon;
+  }
+  return { ...call, arguments: args };
+}
+
+/**
+ * One-shot voice command: recorded audio in, transcript + actions out.
+ * POST { audio: base64, mimeType, viewport?, lastLocationQuery?, lastPlace? }
+ * → { transcript, calls, speech, source, asrModel }
+ */
+export async function handleVoiceCommand(req, res, { fetchImpl } = {}) {
+  if (methodNotAllowed(req, res, ['POST'])) return;
+  let payload;
+  try {
+    payload = await readJsonBody(req, 8 * 1024 * 1024);
+  } catch (error) {
+    sendJson(res, 400, { error: error?.message || 'Invalid voice request' });
+    return;
+  }
+  if (!geminiConfigured()) {
+    sendJson(res, 503, { error: 'Server ASR (GEMINI_API_KEY) is unset' });
+    return;
+  }
+  let asr;
+  try {
+    asr = await geminiTranscribe(
+      { audio: payload.audio, mimeType: payload.mimeType },
+      { fetchImpl },
+    );
+  } catch (error) {
+    sendJson(res, 502, { error: error?.message || 'ASR failed' });
+    return;
+  }
+  if (!asr.text) {
+    sendJson(res, 200, {
+      transcript: '',
+      calls: [],
+      speech: '',
+      source: 'none',
+      asrModel: asr.model,
+    });
+    return;
+  }
+  const plan = await resolveVoiceAct(
+    { ...payload, text: asr.text },
+    { fetchImpl },
+  );
+  sendJson(res, 200, {
+    transcript: asr.text,
+    calls: plan.calls,
+    speech: plan.speech,
+    source: plan.source,
+    locationQuery: plan.locationQuery,
+    place: plan.place,
+    asrModel: asr.model,
+  });
 }
 
 export async function handleVoiceAct(req, res, { fetchImpl } = {}) {

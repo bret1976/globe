@@ -187,3 +187,28 @@ test('layer-only requests never geocode a layer name as a destination', () => {
     ]);
   }
 });
+
+test('mic commands cover every data layer, including aurora and turning layers off', () => {
+  for (const [phrase, layerId, enabled] of [
+    ['show earthquakes', 'earthquakes', true],
+    ['turn on aurora', 'aurora', true],
+    ['turn on the northern lights', 'aurora', true],
+    ['show volcanoes', 'volcanoes', true],
+    ['show flight restrictions', 'flight-restrictions', true],
+    ['show weather balloons', 'radiosondes', true],
+    ['show the ionosphere', 'ionosphere', true],
+    ['show ukraine war fires', 'ukraine-fires', true],
+    ['turn off aurora', 'aurora', false],
+    ['hide earthquakes', 'earthquakes', false],
+  ]) {
+    const plan = planSelfHostedVoiceTurn(phrase);
+    assert.deepEqual(
+      plan.calls,
+      [{ name: 'set_layer_visibility', arguments: { layerId, enabled } }],
+      phrase,
+    );
+  }
+  const tokyo = planSelfHostedVoiceTurn('fly to Tokyo');
+  assert.equal(tokyo.calls[0].name, 'fly_to_location');
+  assert.match(tokyo.calls[0].arguments.query, /tokyo/i);
+});

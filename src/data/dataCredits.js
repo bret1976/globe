@@ -144,6 +144,14 @@ export const DATA_CREDITS = [
       '(Space Weather Prediction Center, public domain)',
   },
   {
+    key: 'ukraine-fires',
+    html:
+      'Ukraine war fires: ' +
+      '<a href="https://firms.modaps.eosdis.nasa.gov/" target="_blank" rel="noopener">NASA FIRMS</a> ' +
+      'VIIRS NOAA-20 375 m active fire detections (LANCE/EOSDIS, public domain; satellites see heat, not causes); ' +
+      'border: <a href="https://www.naturalearthdata.com/" target="_blank" rel="noopener">Natural Earth</a> (public domain)',
+  },
+  {
     key: 'storm-reports',
     html:
       'Storm reports: ' +

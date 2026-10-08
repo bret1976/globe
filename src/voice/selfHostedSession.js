@@ -68,6 +68,32 @@ export function createSelfHostedSession({
     tts: true,
     protocol: 'self-hosted-qwen',
   };
+  let statusPromise = null;
+
+  function loadStatus() {
+    if (!statusPromise) {
+      statusPromise = Promise.resolve()
+        .then(() => backend.status({ signal }))
+        .then((next) => {
+          if (next && typeof next === 'object') status = next;
+          return status;
+        })
+        .catch(() => {
+          statusPromise = null;
+          return status;
+        });
+    }
+    return statusPromise;
+  }
+
+  /** Server speech-to-text (Gemini on the globe service) is preferred when
+   * the status probe reports it: phones and Safari cannot always download
+   * and run in-browser Whisper, which left TALK stuck on "Loading Whisper…". */
+  async function serverAsrAvailable() {
+    if (typeof backend.transcribe !== 'function') return false;
+    await withDeadline(loadStatus(), 2_500);
+    return Boolean(status?.asr && status?.serverAsr);
+  }
 
   function viewport() {
     const carto =
@@ -544,14 +570,16 @@ export function createSelfHostedSession({
         resumeAfter = live && !busy;
         return;
       }
+      const preferServer = await serverAsrAvailable();
       emit({
         type: 'state',
         state: 'executing',
-        detail: browserVoice?.asrReady?.()
-          ? 'Hearing you…'
-          : browserVoice
-            ? 'Loading Whisper…'
-            : 'Hearing you…',
+        detail:
+          preferServer || browserVoice?.asrReady?.()
+            ? 'Hearing you…'
+            : browserVoice
+              ? 'Loading Whisper…'
+              : 'Hearing you…',
       });
       let mimeType = blob.type || 'audio/webm';
       let bytes = new Uint8Array(await blob.arrayBuffer());
@@ -559,33 +587,44 @@ export function createSelfHostedSession({
         bytes = new Uint8Array(await audioBlobToWavBytes(blob));
         mimeType = 'audio/wav';
       } catch {
-        /* Whisper can still decode the original clip via AudioContext. */
+        /* Whisper / Gemini can still decode the original clip. */
       }
-      const transcribeSignal = AbortSignal.any(
-        [signal, AbortSignal.timeout(60_000)].filter(Boolean),
-      );
+      const transcribeSignal = () =>
+        AbortSignal.any([signal, AbortSignal.timeout(30_000)].filter(Boolean));
       let result = null;
-      let usedBrowser = false;
-      if (browserVoice) {
-        try {
-          result = await browserVoice.transcribe({
-            blob,
-            audio: bytes,
-            mimeType,
-            signal: transcribeSignal,
-          });
-          usedBrowser = true;
-        } catch {
-          usedBrowser = false;
-        }
-      }
-      if (!usedBrowser && typeof backend.transcribe === 'function') {
+      let transcribed = false;
+      let lastAsrError = null;
+      const viaServer = async () => {
         result = await backend.transcribe({
           audio: bytes,
           mimeType,
-          signal: transcribeSignal,
+          signal: transcribeSignal(),
         });
+        transcribed = true;
+      };
+      const viaBrowser = async () => {
+        result = await browserVoice.transcribe({
+          blob,
+          audio: bytes,
+          mimeType,
+          signal: AbortSignal.any(
+            [signal, AbortSignal.timeout(60_000)].filter(Boolean),
+          ),
+        });
+        transcribed = true;
+      };
+      const order = preferServer
+        ? [viaServer, browserVoice ? viaBrowser : null]
+        : [browserVoice ? viaBrowser : null, viaServer];
+      for (const attempt of order.filter(Boolean)) {
+        if (transcribed || !live || clipEpoch !== sessionEpoch) break;
+        try {
+          await attempt();
+        } catch (error) {
+          lastAsrError = error;
+        }
       }
+      if (!transcribed && lastAsrError) throw lastAsrError;
       if (!live || clipEpoch !== sessionEpoch) return;
       const spoken = String(result?.text || '').trim();
       if (!spoken) {
@@ -880,6 +919,7 @@ export function createSelfHostedSession({
     capabilities: { costControls: false, pushToTalk: true },
     ignoreButtonClick: () => spaceHeld || holding,
     primeMic() {
+      void loadStatus();
       unlockPlayback();
       preferRecorder = canUseRecorder();
       if (preferRecorder) requestMic();
@@ -955,19 +995,7 @@ export function createSelfHostedSession({
           : 'Listening — speak, or type a command',
       });
       if (!listening) ui?.commandInput?.focus?.();
-      void backend
-        .status({ signal })
-        .then((next) => {
-          status = next;
-        })
-        .catch(() => {
-          status = {
-            asr: false,
-            llm: true,
-            tts: true,
-            protocol: 'self-hosted-qwen',
-          };
-        });
+      void loadStatus();
     },
     stop() {
       sessionEpoch += 1;

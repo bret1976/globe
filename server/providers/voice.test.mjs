@@ -134,11 +134,11 @@ test('voice TTS returns spoken text when the GPU Kokoro box is offline', async (
   }
 });
 
-test('voice ASR ignores GEMINI_API_KEY and stays in the browser', async () => {
+test('voice ASR uses Gemini server-side when GEMINI_API_KEY is set, else stays in the browser', async () => {
   const previous = process.env.VOICE_INFERENCE_URL;
   const previousGemini = process.env.GEMINI_API_KEY;
   delete process.env.VOICE_INFERENCE_URL;
-  process.env.GEMINI_API_KEY = 'must-not-be-used';
+  delete process.env.GEMINI_API_KEY;
   try {
     const routes = install(selfHostedVoiceProxy());
     const status = await request(routes.get('/api/voice/status'));
@@ -150,6 +150,12 @@ test('voice ASR ignores GEMINI_API_KEY and stays in the browser', async () => {
     });
     assert.equal(res.status, 503);
     assert.match(res.body.error, /Whisper/i);
+
+    process.env.GEMINI_API_KEY = 'test-key-not-real';
+    const keyed = await request(routes.get('/api/voice/status'));
+    assert.equal(keyed.body.asr, true);
+    assert.equal(keyed.body.serverAsr, 'gemini');
+    assert.ok(!JSON.stringify(keyed.body).includes('test-key-not-real'));
   } finally {
     if (previous === undefined) delete process.env.VOICE_INFERENCE_URL;
     else process.env.VOICE_INFERENCE_URL = previous;

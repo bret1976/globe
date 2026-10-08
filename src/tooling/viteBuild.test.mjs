@@ -69,11 +69,14 @@ test('root config retains existing named exports and standalone provider order',
   for (const [name, value] of Object.entries(providers))
     assert.equal(compatibility[name], value, name);
   const config = standaloneConfig({ mode: 'test' });
+  // /api gzip runs before every provider so their responses can be compressed.
+  assert.equal(config.plugins.at(3).name, 'gev-api-compression');
   assert.deepEqual(
-    config.plugins.slice(3, -1).map((plugin) => plugin.name),
+    config.plugins.slice(4, -2).map((plugin) => plugin.name),
     providers.localProviderPlugins().map((plugin) => plugin.name),
   );
-  assert.equal(config.plugins.at(-2).name, 'gev-key-setup');
+  assert.equal(config.plugins.at(-3).name, 'gev-key-setup');
+  assert.equal(config.plugins.at(-2).name, 'gev-api-keep-warm');
   assert.equal(config.plugins.at(-1).name, 'api-not-found');
 });
 
