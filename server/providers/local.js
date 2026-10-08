@@ -43,6 +43,7 @@ import { flightRestrictionsProxy } from './flightRestrictions.js';
 import { ionosphereProxy } from './ionosphere.js';
 import { oceanCurrentsProxy } from './oceanCurrents.js';
 import { powerPlantsProxy } from './powerPlants.js';
+import { ukraineFiresProxy } from './ukraineFires.js';
 
 /** Construct the local provider plugins in their established order. */
 function localProviderPlugins() {
@@ -91,6 +92,7 @@ function localProviderPlugins() {
     ionosphereProxy(),
     oceanCurrentsProxy(),
     powerPlantsProxy(),
+    ukraineFiresProxy(),
     keySetupEndpoint(),
   ];
 }

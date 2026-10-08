@@ -1,6 +1,7 @@
 import {
   handleVoiceAct,
   handleVoiceAsr,
+  handleVoiceCommand,
   handleVoiceStatus,
   handleVoiceTts,
 } from './voice/routes.js';
@@ -21,6 +22,9 @@ function selfHostedVoiceProxy({
     );
     middlewares.use('/api/voice/act', (req, res) =>
       handleVoiceAct(req, res, { fetchImpl }),
+    );
+    middlewares.use('/api/voice/command', (req, res) =>
+      handleVoiceCommand(req, res, { fetchImpl }),
     );
     middlewares.use('/api/voice/tts', (req, res) =>
       handleVoiceTts(req, res, { fetchImpl }),

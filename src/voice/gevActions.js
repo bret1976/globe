@@ -61,6 +61,24 @@ const VOICE_LAYER_FOCUS_IDS = new Set([
   'weather',
   'weather-cyclones',
   'wind',
+  'nws-alerts',
+  'ndbc-buoys',
+  'usgs-gauges',
+  'tide-gauges',
+  'air-quality',
+  'ocean-currents',
+  'radiosondes',
+  'power-plants',
+  'volcanoes',
+  'aurora',
+  'ionosphere',
+  'radiation',
+  'floods',
+  'usdm-drought',
+  'storm-reports',
+  'flight-restrictions',
+  'ukraine-fires',
+  'fz1073-2026',
 ]);
 
 async function leaveCockpitForGlobeNav(styleManager) {
@@ -219,6 +237,14 @@ const COCKPIT_TARGET_LAYERS = new Set([
 ]);
 
 const LAYER_ALIASES = new Map([
+  ['aurora', 'aurora'],
+  ['northern lights', 'aurora'],
+  ['volcano', 'volcanoes'],
+  ['earthquake', 'earthquakes'],
+  ['flight restrictions', 'flight-restrictions'],
+  ['tfr', 'flight-restrictions'],
+  ['ukraine fires', 'ukraine-fires'],
+  ['ukraine war fires', 'ukraine-fires'],
   ['flights', 'flights'],
   ['planes', 'flights'],
   ['aircraft', 'flights'],

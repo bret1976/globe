@@ -41,9 +41,11 @@ export function createSelfHostedBackend({
       const data = await response.json().catch(() => ({}));
       if (!response.ok)
         throw new Error(data.error || `Voice ASR HTTP ${response.status}`);
-      if (typeof data.text !== 'string' || !data.text.trim())
+      if (typeof data.text !== 'string')
         throw new Error('ASR returned no transcript');
-      return data;
+      // An empty transcript means "no intelligible speech" — the session
+      // keeps listening instead of surfacing an error.
+      return { ...data, text: data.text.trim() };
     },
     async act({ text, viewport, lastLocationQuery, lastPlace, signal } = {}) {
       const response = await transport(actEndpoint, {

@@ -20,6 +20,17 @@ export class LayerPresentation {
     this._focusGeneration = 0;
     this._onUserLayerEnablePrepare = onUserLayerEnablePrepare;
     this._onUserLayerEnabled = onUserLayerEnabled;
+    // Layers whose data lands outside a manager tick (AIS first position,
+    // GBFS city sync, CCTV catalog drain, async loaders) used to leave their
+    // row on LOADING / "—" until the next periodic refresh — up to a minute,
+    // which read as a stalled layer. Watch the live stats and repaint the
+    // panel as soon as an enabled row's presentation actually changes.
+    this._statsSignature = '';
+    this._statsWatch =
+      typeof setInterval === 'function'
+        ? setInterval(() => this._watchStats(), 1000)
+        : null;
+    this._statsWatch?.unref?.();
     this._unsubscribe = manager.subscribeActivity((change) => {
       if (change.type === 'status') this.refresh();
       else if (change.type === 'destroy-all') this.destroy();
@@ -120,12 +131,45 @@ export class LayerPresentation {
   refresh() {
     this._panel?._refreshTogglePanel();
   }
+  _watchStats() {
+    if (!this._panel) return;
+    if (typeof document !== 'undefined' && document.hidden) return;
+    let layers;
+    try {
+      layers = this.manager.getAll();
+    } catch {
+      return;
+    }
+    const signature = layers
+      .filter((layer) => layer.enabled || layer.lifecycleState !== 'disabled')
+      .map((layer) => {
+        const stats = layer.stats || {};
+        return [
+          layer.id,
+          layer.lifecycleState,
+          stats.count,
+          stats.countLabel,
+          stats.loading,
+          stats.loadingLabel,
+          stats.stale,
+          stats.partial,
+          stats.status,
+          stats.error || stats.lastError || stats.managerRefreshError || '',
+        ].join(':');
+      })
+      .join('|');
+    if (signature === this._statsSignature) return;
+    this._statsSignature = signature;
+    this.refresh();
+  }
   flushVisible() {
     if (!this.pendingVisible) return;
     this.pendingVisible = false;
     this.refresh();
   }
   destroy() {
+    if (this._statsWatch) clearInterval(this._statsWatch);
+    this._statsWatch = null;
     this._panel?.destroy();
     this._panel = null;
     this.pendingVisible = false;

@@ -65,6 +65,29 @@ function refreshFailureFromStats(stats, label) {
   return null;
 }
 
+/** Enable settles ON (LOADING) once the first update outlives this. */
+const FIRST_UPDATE_DEADLINE_MS = 12_000;
+/** A first update still pending after this is reported as failed. */
+const FIRST_UPDATE_HARD_CAP_MS = 75_000;
+
+function firstUpdateDeadlineMs(module) {
+  const custom = Number(module?.firstUpdateDeadlineMs);
+  return Number.isFinite(custom) && custom > 0
+    ? custom
+    : FIRST_UPDATE_DEADLINE_MS;
+}
+
+/** Race a first update against the enable deadline. */
+function raceFirstUpdate(promise, deadlineMs) {
+  let timer = null;
+  return Promise.race([
+    promise.then((value) => ({ value, timedOut: false })),
+    new Promise((resolve) => {
+      timer = setTimeout(() => resolve({ timedOut: true }), deadlineMs);
+    }),
+  ]).finally(() => clearTimeout(timer));
+}
+
 /**
  * LayerLifecycle — Manages registration, toggling, and update loops
  * for real-time data overlays on the CesiumJS globe.
@@ -231,10 +254,71 @@ export class LayerLifecycle {
       count: 0,
       lastUpdate: null,
       ...moduleStats,
-      loading: lifecycleLoading || moduleStats.loading === true,
+      loading:
+        lifecycleLoading ||
+        moduleStats.loading === true ||
+        Boolean(entry.firstUpdatePending),
+      ...(entry.firstUpdatePending &&
+      !(
+        typeof moduleStats.loadingLabel === 'string' && moduleStats.loadingLabel
+      )
+        ? { loadingLabel: 'loading data…' }
+        : {}),
       refreshing: entry.refreshing || moduleStats.refreshing === true,
       managerRefreshError: entry.managerRefreshError,
     };
+  }
+
+  /**
+   * Keep watching a first update that outlived the enable deadline. The
+   * layer is already settled ON; this owns its LOADING presentation and
+   * blocks the periodic loop from stacking a second fetch on top of it.
+   */
+  _adoptPendingFirstUpdate(layerId, entry, firstUpdate) {
+    const refreshEpoch = ++entry.refreshEpoch;
+    entry.firstUpdatePending = true;
+    entry.refreshing = true;
+    let settled = false;
+    const finish = (failure) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(hardCap);
+      entry.firstUpdatePending = false;
+      if (
+        this.layers.get(layerId) !== entry ||
+        entry.destroying ||
+        entry.refreshEpoch !== refreshEpoch
+      )
+        return;
+      entry.refreshing = false;
+      entry.managerRefreshError = failure ? String(failure) : null;
+      this._publishActivity({ type: 'data-updated', layerId });
+      this._publishActivity({ type: 'status' });
+      if (failure) console.warn(`[Data] ${layerId} first update:`, failure);
+    };
+    const hardCap = setTimeout(
+      () =>
+        finish('Feed did not answer in time — retrying on the next refresh'),
+      FIRST_UPDATE_HARD_CAP_MS,
+    );
+    hardCap.unref?.();
+    firstUpdate.then(
+      (result) => {
+        if (result === false) {
+          finish(
+            refreshFailureFromStats(
+              this._moduleStats(entry),
+              entry.module.name || layerId,
+            )?.message || 'Feed returned no data — retrying',
+          );
+        } else finish(null);
+      },
+      (error) => {
+        if (isAbortError(error)) finish(null);
+        else finish(error?.message || 'Feed failed — retrying');
+      },
+    );
+    this._publishActivity({ type: 'status' });
   }
 
   _invalidateRefresh(layerId, entry, reason = 'invalidated') {
@@ -987,11 +1071,25 @@ export class LayerLifecycle {
       }
       if (signal?.aborted) return finishCancelledEnable('enable');
 
-      // First update immediately
+      // First update immediately. A slow or hung upstream must not leave the
+      // toggle on ENABLING forever: after FIRST_UPDATE_DEADLINE_MS the layer
+      // settles ON with a manager-owned LOADING state while the same update
+      // keeps running, and a hard cap turns a hang into a visible retry.
       this._setVisibilityIntentPhase(entry, intentEpoch, 'update');
+      let firstUpdate = null;
       try {
-        const updated = await entry.module.update(this.viewer, { signal });
-        if (updated === false) throw lifecycleRejectedError(layerId, 'update');
+        firstUpdate = Promise.resolve().then(() =>
+          entry.module.update(this.viewer, { signal }),
+        );
+        const outcome = await raceFirstUpdate(
+          firstUpdate,
+          firstUpdateDeadlineMs(entry.module),
+        );
+        if (outcome.timedOut) {
+          this._adoptPendingFirstUpdate(layerId, entry, firstUpdate);
+        } else if (outcome.value === false) {
+          throw lifecycleRejectedError(layerId, 'update');
+        }
       } catch (e) {
         if (signal?.aborted || isAbortError(e)) {
           return finishCancelledEnable(

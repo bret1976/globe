@@ -39,6 +39,7 @@ import { createApplicationStormReports } from './layers/stormReports.js';
 import { createApplicationRadiosondes } from './layers/radiosondes.js';
 import { createApplicationFlightRestrictions } from './layers/flightRestrictions.js';
 import { createApplicationIonosphere } from './layers/ionosphere.js';
+import { createApplicationUkraineFires } from './layers/ukraineFires.js';
 import { createApplicationOceanCurrents } from './layers/oceanCurrents.js';
 import { createApplicationPowerPlants } from './layers/powerPlants.js';
 import { createInfrastructureLayers } from '../data/infrastructure.js';
@@ -86,6 +87,7 @@ const SOURCE_METHODS = Object.freeze({
   radiosondes: ['getSnapshot'],
   flightRestrictions: ['getSnapshot'],
   ionosphere: ['getSnapshot'],
+  ukraineFires: ['getSnapshot'],
   cables: ['fetch'],
   cyclones: ['getSnapshot'],
   wind: ['getSnapshot'],
@@ -178,6 +180,7 @@ export function createApplicationCatalog({
         createApplicationRadiosondes({ source: sources.radiosondes }),
         createApplicationFlightRestrictions({ source: sources.flightRestrictions }),
         createApplicationIonosphere({ source: sources.ionosphere }),
+        createApplicationUkraineFires({ source: sources.ukraineFires }),
         createApplicationAlpr({ surface, source: sources.alpr }),
         satellites,
         createApplicationLaunches({ source: sources.launches, satellites }),

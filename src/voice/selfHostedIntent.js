@@ -86,16 +86,73 @@ const PLACE_ALIASES = Object.freeze({
   nyc: { locationId: 'nyc', query: 'New York' },
 });
 
+/**
+ * Every toggle in the layers list that voice can drive, with the spoken
+ * label used in replies. Shared by the deterministic planner, the Gemini
+ * intent fallback (server) and the Qwen tool enum so a new layer only needs
+ * one entry here to become voice-controllable.
+ */
+export const VOICE_LAYER_LABELS = Object.freeze({
+  satellites: 'satellites',
+  flights: 'flights',
+  military: 'military flights',
+  'ais-live-vessels': 'live vessels',
+  traffic: 'street traffic',
+  transit: 'transit',
+  bikeshare: 'bike share',
+  cctv: 'CCTV',
+  'recent-imagery': 'recent imagery',
+  'military-installations': 'military installations',
+  'local-datacenters': 'data centers',
+  'power-plants': 'power plants',
+  'telegeography-submarine-cables': 'submarine cables',
+  'local-dams': 'dams',
+  'alpr-cameras': 'mapped ALPR cameras',
+  weather: 'observed weather',
+  wind: 'wind',
+  'weather-cyclones': 'cyclones',
+  'nws-alerts': 'weather alerts',
+  'ndbc-buoys': 'marine buoys',
+  'usgs-gauges': 'stream gauges',
+  'tide-gauges': 'tide gauges',
+  'air-quality': 'air quality',
+  'ocean-currents': 'ocean currents',
+  radiosondes: 'weather balloons',
+  'rocket-launches': 'rocket launches',
+  'fz1073-2026': 'FlyDubai FZ1073',
+  earthquakes: 'earthquakes',
+  volcanoes: 'volcanoes',
+  aurora: 'the aurora',
+  ionosphere: 'ionosphere TEC',
+  radiation: 'radiation',
+  floods: 'floods and droughts',
+  'usdm-drought': 'the drought monitor',
+  'storm-reports': 'storm reports',
+  'gps-interference': 'GPS interference',
+  'flight-restrictions': 'flight restrictions',
+  'ukraine-fires': 'Ukraine war fires',
+  'local-firms': 'fires',
+  'fire-perimeters': 'fire perimeters',
+  'au-fire': 'AU fire incidents',
+  directions: 'directions',
+  radio: 'radio',
+});
+
+export const VOICE_LAYER_IDS = Object.freeze(Object.keys(VOICE_LAYER_LABELS));
+
 const LAYER_ALIASES = Object.freeze([
   ['military flights', 'military'],
   ['mapped alpr cameras', 'alpr-cameras'],
   ['alpr cameras', 'alpr-cameras'],
   ['mapped installations', 'military-installations'],
   ['military installations', 'military-installations'],
+  ['military bases', 'military-installations'],
   ['data centers', 'local-datacenters'],
+  ['data centres', 'local-datacenters'],
   ['dams', 'local-dams'],
   ['space missions', 'rocket-launches'],
   ['rocket launches', 'rocket-launches'],
+  ['launches', 'rocket-launches'],
   ['bike share', 'bikeshare'],
   ['transit', 'transit'],
   ['directions', 'directions'],
@@ -122,12 +179,64 @@ const LAYER_ALIASES = Object.freeze([
   ['flights', 'flights'],
   ['military', 'military'],
   ['fires', 'local-firms'],
+  ['active fires', 'local-firms'],
+  ['wildfires', 'local-firms'],
   ['fire perimeters', 'fire-perimeters'],
   ['wildfire perimeters', 'fire-perimeters'],
   ['perimeters', 'fire-perimeters'],
   ['au fire', 'au-fire'],
   ['australia fire', 'au-fire'],
+  ['australia fires', 'au-fire'],
+  ['ukraine fires', 'ukraine-fires'],
+  ['ukraine fire', 'ukraine-fires'],
+  ['ukraine war fires', 'ukraine-fires'],
+  ['ukraine war', 'ukraine-fires'],
+  ['war fires', 'ukraine-fires'],
   ['earthquakes', 'earthquakes'],
+  ['earthquake', 'earthquakes'],
+  ['quakes', 'earthquakes'],
+  ['volcanoes', 'volcanoes'],
+  ['volcanos', 'volcanoes'],
+  ['volcano', 'volcanoes'],
+  ['aurora', 'aurora'],
+  ['auroras', 'aurora'],
+  ['northern lights', 'aurora'],
+  ['aurora borealis', 'aurora'],
+  ['ionosphere', 'ionosphere'],
+  ['electron content', 'ionosphere'],
+  ['radiation', 'radiation'],
+  ['floods', 'floods'],
+  ['flooding', 'floods'],
+  ['drought monitor', 'usdm-drought'],
+  ['drought', 'usdm-drought'],
+  ['droughts', 'usdm-drought'],
+  ['storm reports', 'storm-reports'],
+  ['tornado reports', 'storm-reports'],
+  ['tornadoes', 'storm-reports'],
+  ['flight restrictions', 'flight-restrictions'],
+  ['no fly zones', 'flight-restrictions'],
+  ['no-fly zones', 'flight-restrictions'],
+  ['restricted airspace', 'flight-restrictions'],
+  ['tfrs', 'flight-restrictions'],
+  ['tfr', 'flight-restrictions'],
+  ['weather alerts', 'nws-alerts'],
+  ['weather warnings', 'nws-alerts'],
+  ['nws alerts', 'nws-alerts'],
+  ['buoys', 'ndbc-buoys'],
+  ['marine buoys', 'ndbc-buoys'],
+  ['stream gauges', 'usgs-gauges'],
+  ['river gauges', 'usgs-gauges'],
+  ['tide gauges', 'tide-gauges'],
+  ['tides', 'tide-gauges'],
+  ['air quality', 'air-quality'],
+  ['air pollution', 'air-quality'],
+  ['ocean currents', 'ocean-currents'],
+  ['weather balloons', 'radiosondes'],
+  ['radiosondes', 'radiosondes'],
+  ['power plants', 'power-plants'],
+  ['power stations', 'power-plants'],
+  ['flydubai', 'fz1073-2026'],
+  ['fly dubai', 'fz1073-2026'],
   ['gps jam', 'gps-interference'],
   ['gps jamming', 'gps-interference'],
   ['gps interference', 'gps-interference'],
@@ -177,7 +286,7 @@ function stripLayerWords(normalized) {
   return text
     .replace(LAYER_FILLER, ' ')
     .replace(
-      /\b(take me to|fly me to|fly to|go to|navigate to|show me|turn on|enable|open)\b/g,
+      /\b(take me to|fly me to|fly to|go to|navigate to|show me|turn on|turn off|switch on|switch off|enable|disable|hide|open)\b/g,
       ' ',
     )
     .replace(/\b(in|at|near|around|for|the|and|then|to|of)\b/g, ' ')
@@ -224,6 +333,12 @@ function matchPlace(normalized) {
     if (rest) return { query: rest };
   }
   return null;
+}
+
+function wantsLayerOff(normalized) {
+  return /\b(turn off|switch off|shut off|hide|disable|remove|stop showing|clear)\b/.test(
+    normalized,
+  );
 }
 
 function wantsNearestAircraft(normalized) {
@@ -292,6 +407,7 @@ export function planSelfHostedVoiceTurn(text, context = {}) {
     null;
   const viewport = context.viewport || {};
   const layerId = matchLayer(normalized);
+  const layerOff = Boolean(layerId) && wantsLayerOff(normalized);
 
   if (spokenPlace) {
     calls.push({
@@ -305,11 +421,11 @@ export function planSelfHostedVoiceTurn(text, context = {}) {
       name: 'set_layer_visibility',
       arguments: {
         layerId,
-        enabled: true,
+        enabled: !layerOff,
         ...(spokenPlace ? { focus: false } : {}),
       },
     });
-    if (layerId === 'cctv') {
+    if (layerId === 'cctv' && !layerOff) {
       calls.push({
         name: 'control_cctv',
         arguments: { action: 'nearest' },
@@ -366,7 +482,7 @@ export function planSelfHostedVoiceTurn(text, context = {}) {
 
 export function composeSelfHostedSpeech(calls, originalText) {
   if (!calls?.length) {
-    return `I heard “${String(originalText || '').trim() || 'that'}” — give me a place, zip code, traffic, vessels, cables, CCTV, a nearest flight, or a cockpit command.`;
+    return `I heard “${String(originalText || '').trim() || 'that'}” — give me a place, zip code, a data layer like earthquakes or aurora, a nearest flight, or a cockpit command.`;
   }
   const parts = [];
   for (const call of calls) {
@@ -375,26 +491,12 @@ export function composeSelfHostedSpeech(calls, originalText) {
         `On my way to ${call.arguments.query || call.arguments.locationId}.`,
       );
     } else if (call.name === 'set_layer_visibility') {
-      const labels = {
-        traffic: 'street traffic',
-        'ais-live-vessels': 'live vessels',
-        'telegeography-submarine-cables': 'submarine cables',
-        cctv: 'CCTV',
-        flights: 'flights',
-        military: 'military flights',
-        'local-firms': 'fires',
-        'fire-perimeters': 'fire perimeters',
-        'au-fire': 'AU fire incidents',
-        earthquakes: 'earthquakes',
-        'gps-interference': 'GPS interference',
-        satellites: 'satellites',
-        'recent-imagery': 'recent imagery',
-        weather: 'observed weather',
-        wind: 'wind',
-        'weather-cyclones': 'cyclones',
-      };
+      const label =
+        VOICE_LAYER_LABELS[call.arguments.layerId] || call.arguments.layerId;
       parts.push(
-        `I'll turn on ${labels[call.arguments.layerId] || call.arguments.layerId}.`,
+        call.arguments.enabled === false
+          ? `I'll turn off ${label}.`
+          : `I'll turn on ${label}.`,
       );
     } else if (call.name === 'control_cctv') {
       parts.push("I'll open the nearest camera.");
@@ -438,30 +540,13 @@ export function qwenToolDefinitions() {
       function: {
         name: 'set_layer_visibility',
         description:
-          'Turn a data layer on. Use traffic, ais-live-vessels, telegeography-submarine-cables, cctv, or fire-perimeters when asked.',
+          'Turn a data layer on or off. Use traffic, ais-live-vessels, telegeography-submarine-cables, cctv, aurora, earthquakes, or any listed layer id when asked.',
         parameters: {
           type: 'object',
           properties: {
             layerId: {
               type: 'string',
-              enum: [
-                'flights',
-                'military',
-                'traffic',
-                'cctv',
-                'ais-live-vessels',
-                'telegeography-submarine-cables',
-                'local-firms',
-                'fire-perimeters',
-                'au-fire',
-                'earthquakes',
-                'gps-interference',
-                'satellites',
-                'recent-imagery',
-                'weather',
-                'weather-cyclones',
-                'wind',
-              ],
+              enum: [...VOICE_LAYER_IDS],
             },
             enabled: { type: 'boolean' },
           },
