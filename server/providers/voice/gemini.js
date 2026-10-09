@@ -13,6 +13,7 @@ import {
   VOICE_LAYER_IDS,
   VOICE_LAYER_LABELS,
 } from '../../../src/voice/selfHostedIntent.js';
+import { clipHasSpeech } from './speechGate.js';
 
 const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
 export const GEMINI_VOICE_MODELS = Object.freeze([
@@ -25,6 +26,21 @@ const TOTAL_TIMEOUT_MS = 22_000;
 const RETIRED = /^gemini-(1\.|2\.)/;
 
 let preferredModel = null;
+
+/** Models that reject thinkingLevel 'minimal' (HTTP 400); they get 'low'. */
+const NO_MINIMAL_THINKING = new Set();
+
+function withThinkingLevel(body, level) {
+  const config = body?.generationConfig;
+  if (!config?.thinkingConfig) return body;
+  return {
+    ...body,
+    generationConfig: {
+      ...config,
+      thinkingConfig: { ...config.thinkingConfig, thinkingLevel: level },
+    },
+  };
+}
 
 export function geminiApiKey(env = process.env) {
   return String(
@@ -41,7 +57,10 @@ export function geminiConfigured(env = process.env) {
  * model, then defaults. Retired gemini-1.x / 2.x names are skipped.
  * GEMINI_ASR_MODEL is the production speech-to-text override (gemini-3.8-flash).
  */
-export function geminiModelChain(env = process.env, { purpose = 'voice' } = {}) {
+export function geminiModelChain(
+  env = process.env,
+  { purpose = 'voice' } = {},
+) {
   const asrOverride = String(env.GEMINI_ASR_MODEL || '').trim();
   const override = String(env.GEMINI_VOICE_MODEL || '').trim();
   const chain = [];
@@ -94,26 +113,51 @@ async function generate(
   const deadline = AbortSignal.any(
     [signal, AbortSignal.timeout(TOTAL_TIMEOUT_MS)].filter(Boolean),
   );
+  const postModel = (model) => {
+    const requestBody = NO_MINIMAL_THINKING.has(model)
+      ? withThinkingLevel(body, 'low')
+      : body;
+    return fetchImpl(
+      `${GEMINI_BASE}/${encodeURIComponent(model)}:generateContent`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': key,
+        },
+        body: JSON.stringify(requestBody),
+        signal: AbortSignal.any([
+          deadline,
+          AbortSignal.timeout(PER_MODEL_TIMEOUT_MS),
+        ]),
+      },
+    );
+  };
   let lastError = null;
   for (const model of geminiModelChain(env, { purpose })) {
     if (deadline.aborted) break;
     try {
-      const response = await fetchImpl(
-        `${GEMINI_BASE}/${encodeURIComponent(model)}:generateContent`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-goog-api-key': key,
-          },
-          body: JSON.stringify(body),
-          signal: AbortSignal.any([
-            deadline,
-            AbortSignal.timeout(PER_MODEL_TIMEOUT_MS),
-          ]),
-        },
-      );
+      const response = await postModel(model);
       const data = await response.json().catch(() => ({}));
+      if (
+        !response.ok &&
+        response.status === 400 &&
+        body?.generationConfig?.thinkingConfig?.thinkingLevel === 'minimal' &&
+        !NO_MINIMAL_THINKING.has(model) &&
+        /thinking/i.test(String(data?.error?.message || ''))
+      ) {
+        // e.g. gemini-3.8-flash rejects 'minimal'. Remember and retry once
+        // at the lowest level it accepts instead of dropping to the next model.
+        NO_MINIMAL_THINKING.add(model);
+        const retry = await postModel(model);
+        const retryData = await retry.json().catch(() => ({}));
+        if (retry.ok) {
+          preferredModel = model;
+          return { text: candidateText(retryData), model };
+        }
+        lastError = new Error(`Gemini ${model} HTTP ${retry.status}`);
+        continue;
+      }
       if (!response.ok) {
         // Never echo the request (it carries the key header); status + short reason only.
         const reason = String(
@@ -139,10 +183,13 @@ async function generate(
 }
 
 const TRANSCRIBE_PROMPT =
-  'This is a short spoken voice command for a 3D globe app (place names, ' +
-  'data layers like earthquakes, aurora, flights, ships, wildfires). ' +
-  'Transcribe exactly what was said in English. Reply with only the transcript, ' +
-  'no quotes or commentary. If there is no intelligible speech, reply with an empty string.';
+  'Transcribe the spoken English in this audio clip verbatim. It may be a ' +
+  'voice command for a 3D globe app (place names and map data layers). ' +
+  'Write only words that are actually spoken in the audio; never guess, ' +
+  'complete or invent a command. If the clip has no clearly spoken words ' +
+  '(silence, noise, hum, music, breathing, or unintelligible sound), reply ' +
+  'with exactly: NO_SPEECH. Reply with only the transcript, no quotes or ' +
+  'commentary.';
 
 /** Transcribe a base64 audio clip. Returns { text, model }. */
 export async function geminiTranscribe(
@@ -151,6 +198,9 @@ export async function geminiTranscribe(
 ) {
   const data = String(audio || '').replace(/^data:[^,]*,/, '');
   if (!data) throw new Error('ASR requires audio');
+  if (clipHasSpeech(data, mimeType) === false) {
+    return { text: '', model: 'speech-gate', noSpeech: true };
+  }
   const result = await generate(
     {
       contents: [
@@ -174,6 +224,9 @@ export async function geminiTranscribe(
     .replace(/^["“”'\s]+|["“”'\s]+$/g, '')
     .replace(/^(transcript|transcription)\s*:\s*/i, '')
     .trim();
+  if (/^no[_ ]speech\.?$/i.test(text)) {
+    return { text: '', model: result.model, noSpeech: true };
+  }
   return { text, model: result.model };
 }
 

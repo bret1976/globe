@@ -33,6 +33,8 @@ test('reference factories retain compatibility without starting acquisition or s
     'powerPlants',
     'radiosondes',
     'flightRestrictions',
+    'aviationHazards',
+    'fireballs',
     'ionosphere',
     'ukraineFires',
   ]);

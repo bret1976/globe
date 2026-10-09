@@ -71,8 +71,10 @@ test('root config retains existing named exports and standalone provider order',
   const config = standaloneConfig({ mode: 'test' });
   // /api gzip runs before every provider so their responses can be compressed.
   assert.equal(config.plugins.at(3).name, 'gev-api-compression');
+  // Stale-while-revalidate sits between gzip and the providers it fronts.
+  assert.equal(config.plugins.at(4).name, 'gev-api-swr');
   assert.deepEqual(
-    config.plugins.slice(4, -2).map((plugin) => plugin.name),
+    config.plugins.slice(5, -2).map((plugin) => plugin.name),
     providers.localProviderPlugins().map((plugin) => plugin.name),
   );
   assert.equal(config.plugins.at(-3).name, 'gev-key-setup');

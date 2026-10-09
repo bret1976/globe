@@ -13,7 +13,10 @@
  *    upstream traffic stays at one fetch per proxy TTL while user clicks are
  *    served from a warm cache.
  */
+import { promisify } from 'node:util';
 import zlib from 'node:zlib';
+
+const gzipAsync = promisify(zlib.gzip);
 
 const SKIP_COMPRESSION =
   /^\/api\/(cctv\/(frame|media)|realtime|voice\/(tts|command|asr)|radio\/click|tomtom\/flow)/;
@@ -183,6 +186,155 @@ export const KEEP_WARM_ENDPOINTS = Object.freeze([
   '/api/celestrak/starlink',
 ]);
 
+/**
+ * Stale-while-revalidate for the keep-warm layer feeds.
+ *
+ * Most proxies cache for 1–5 min but the keep-warm sweep runs every 4 min,
+ * and an expired proxy cache makes the click wait on a cold Singapore → US
+ * upstream fetch (5–13 s for radiosondes, tide gauges, air quality, military
+ * aircraft…). That is the "sometimes it lags" Bret saw. This layer keeps the
+ * last good 200 body of each feed (plus its gzip) and answers clicks from it
+ * at once; when the copy is older than `refreshAfterMs` it re-reads the feed
+ * through its own proxy in the background, so the proxies' upstream rates
+ * and TTLs are unchanged. Copies older than `maxStaleMs` are never served.
+ */
+const SWR_BYPASS_HEADER = 'x-gev-swr-bypass';
+const SWR_DEFAULTS = Object.freeze({
+  refreshAfterMs: 30_000,
+  maxStaleMs: 30 * 60_000,
+});
+export const SWR_ENDPOINTS = Object.freeze({
+  ...Object.fromEntries(
+    KEEP_WARM_ENDPOINTS.filter(
+      // Own serialized caches already; a second copy would only cost memory.
+      (endpoint) => !['/api/firms', '/api/ukraine-fires'].includes(endpoint),
+    ).map((endpoint) => [endpoint, SWR_DEFAULTS]),
+  ),
+  // Live aircraft: refresh on every poll, never serve a copy older than 5 min.
+  '/api/adsblol/mil': Object.freeze({
+    refreshAfterMs: 8_000,
+    maxStaleMs: 5 * 60_000,
+  }),
+});
+const SWR_KEEP_HEADERS = /^(content-type|x-[a-z0-9-]+)$/i;
+
+export function createSwrStore({
+  endpoints = SWR_ENDPOINTS,
+  fetchImpl = (...args) => globalThis.fetch(...args),
+  now = () => Date.now(),
+} = {}) {
+  const entries = new Map();
+  const inflight = new Map();
+  let base = null;
+  const policy = (url) => {
+    const raw = String(url || '');
+    if (raw.includes('?')) return null;
+    return Object.prototype.hasOwnProperty.call(endpoints, raw)
+      ? endpoints[raw]
+      : null;
+  };
+  async function refresh(url) {
+    if (!base) return null;
+    if (inflight.has(url)) return inflight.get(url);
+    const job = (async () => {
+      try {
+        const response = await fetchImpl(`${base}${url}`, {
+          headers: { 'accept-encoding': 'identity', [SWR_BYPASS_HEADER]: '1' },
+          signal: AbortSignal.timeout(120_000),
+        });
+        const body = Buffer.from(await response.arrayBuffer());
+        const type = String(response.headers.get('content-type') || '');
+        if (response.status !== 200 || !/json/i.test(type) || !body.length)
+          return null;
+        const headers = {};
+        for (const [name, value] of response.headers.entries()) {
+          if (SWR_KEEP_HEADERS.test(name)) headers[name] = value;
+        }
+        const entry = {
+          at: now(),
+          headers,
+          body,
+          gz:
+            body.length >= 1024
+              ? gzipAsync(body, { level: 6 }).catch(() => null)
+              : null,
+        };
+        entries.set(url, entry);
+        return entry;
+      } catch {
+        return null;
+      } finally {
+        inflight.delete(url);
+      }
+    })();
+    inflight.set(url, job);
+    return job;
+  }
+  function middleware(req, res, next) {
+    const url = String(req.originalUrl || req.url || '');
+    const rule = req.method === 'GET' ? policy(url) : null;
+    if (!rule || req.headers[SWR_BYPASS_HEADER]) return next();
+    const entry = entries.get(url);
+    const age = entry ? now() - entry.at : Infinity;
+    if (!entry || age > rule.maxStaleMs) {
+      // Normal path now; capture a copy for the next click from the
+      // proxy's freshly warmed cache once this response is out.
+      res.once('finish', () => void refresh(url));
+      return next();
+    }
+    if (age > rule.refreshAfterMs) void refresh(url);
+    const wantsGzip = /\bgzip\b/i.test(
+      String(req.headers['accept-encoding'] || ''),
+    );
+    void Promise.resolve(wantsGzip && entry.gz ? entry.gz : null).then((gz) => {
+      if (res.headersSent) return;
+      const body = gz || entry.body;
+      res.writeHead(200, {
+        ...entry.headers,
+        'cache-control': 'no-store',
+        vary: 'Accept-Encoding',
+        'x-gev-swr-age-ms': String(Math.max(0, age)),
+        ...(gz ? { 'content-encoding': 'gzip' } : {}),
+        'content-length': String(body.length),
+      });
+      res.end(body);
+    });
+  }
+  return {
+    middleware,
+    refresh,
+    has: (url) => entries.has(url),
+    setBase(value) {
+      base = value;
+    },
+    get size() {
+      return entries.size;
+    },
+  };
+}
+
+const sharedSwrStore = createSwrStore();
+
+export function apiSwrPlugin({ store = sharedSwrStore } = {}) {
+  const install = (server) => {
+    server.middlewares.use(store.middleware);
+    const httpServer = server.httpServer;
+    if (!httpServer) return;
+    const setBase = () => {
+      const address = httpServer.address();
+      const port = typeof address === 'object' && address ? address.port : null;
+      if (port) store.setBase(`http://127.0.0.1:${port}`);
+    };
+    if (httpServer.listening) setBase();
+    else httpServer.once('listening', setBase);
+  };
+  return {
+    name: 'gev-api-swr',
+    configureServer: install,
+    configurePreviewServer: install,
+  };
+}
+
 export function apiKeepWarmPlugin({
   endpoints = KEEP_WARM_ENDPOINTS,
   intervalMs = 4 * 60_000,
@@ -192,6 +344,8 @@ export function apiKeepWarmPlugin({
     (Boolean(process.env.RAILWAY_ENVIRONMENT) &&
       process.env.GEV_KEEP_WARM !== '0'),
   fetchImpl = (...args) => globalThis.fetch(...args),
+  swrStore = endpoints === KEEP_WARM_ENDPOINTS ? sharedSwrStore : null,
+  concurrency = 4,
 } = {}) {
   let timer = null;
   let running = false;
@@ -208,7 +362,20 @@ export function apiKeepWarmPlugin({
         if (running) return;
         running = true;
         try {
-          for (const endpoint of endpoints) {
+          // A few at a time: one slow upstream no longer holds the rest of
+          // the list cold for minutes after a deploy.
+          const queue = [
+            ...new Set([
+              ...endpoints,
+              ...(swrStore ? Object.keys(SWR_ENDPOINTS) : []),
+            ]),
+          ];
+          const warmOne = async (endpoint) => {
+            if (swrStore && Object.hasOwn(SWR_ENDPOINTS, endpoint)) {
+              swrStore.setBase(base);
+              await swrStore.refresh(endpoint);
+              return;
+            }
             try {
               const response = await fetchImpl(`${base}${endpoint}`, {
                 headers: {
@@ -221,7 +388,14 @@ export function apiKeepWarmPlugin({
             } catch {
               /* the next sweep retries; user requests still work */
             }
-          }
+          };
+          const workers = Array.from(
+            { length: Math.max(1, Math.min(concurrency, queue.length)) },
+            async () => {
+              while (queue.length) await warmOne(queue.shift());
+            },
+          );
+          await Promise.all(workers);
         } finally {
           running = false;
         }

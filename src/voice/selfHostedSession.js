@@ -16,6 +16,8 @@ import {
 import { audioBlobToWavBytes } from './audioWav.js';
 
 const MIC_SPEECH_THRESHOLD = 0.012;
+/** Open-mic VAD sampling period, independent of the globe's frame rate. */
+const VAD_SAMPLE_MS = 40;
 const MIN_RECORDING_BYTES = 250;
 
 /**
@@ -53,6 +55,7 @@ export function createSelfHostedSession({
   let visualizerSource = null;
   let visualizerSink = null;
   let visualizerFrame = null;
+  let vadTimer = null;
   let heardSpeech = false;
   let lastSpeechAt = 0;
   let listenArmedAt = 0;
@@ -709,6 +712,8 @@ export function createSelfHostedSession({
   function stopVisualizer({ teardown = false } = {}) {
     if (visualizerFrame) cancelAnimationFrame(visualizerFrame);
     visualizerFrame = null;
+    if (vadTimer) clearInterval(vadTimer);
+    vadTimer = null;
     if (ui?.root) ui.root.dataset.speaker = 'idle';
     if (!teardown) return;
     analyser = null;
@@ -752,10 +757,22 @@ export function createSelfHostedSession({
       }
     }
     if (visualizerFrame) cancelAnimationFrame(visualizerFrame);
+    if (vadTimer) clearInterval(vadTimer);
     const wave = new Uint8Array(analyser.fftSize);
     const bars = ui?.root?.querySelectorAll?.('.gev-voice-visualizer span');
-    const render = () => {
-      if (!live || !analyser) return;
+    let lastPeak = 0;
+    let lastCanHear = false;
+    // Speech detection runs on its own timer. It used to ride the render
+    // loop, so while the globe was busy drawing layers (a few frames a
+    // second) the start and end of a command were sampled late or missed
+    // and the mic "did not hear" the user. The bars still paint per frame.
+    let timerId = null;
+    const detect = () => {
+      if (!live || !analyser) {
+        if (timerId) clearInterval(timerId);
+        if (vadTimer === timerId) vadTimer = null;
+        return;
+      }
       analyser.getByteTimeDomainData(wave);
       let peak = 0;
       for (const sample of wave) {
@@ -769,6 +786,8 @@ export function createSelfHostedSession({
         now,
         listenArmedAt,
       });
+      lastPeak = peak;
+      lastCanHear = canHear;
       if (canHear && peak > MIC_SPEECH_THRESHOLD) {
         const firstHear = !heardSpeech;
         heardSpeech = true;
@@ -799,15 +818,21 @@ export function createSelfHostedSession({
         if (ui?.root) ui.root.dataset.speaker = 'idle';
         if (!pendingTranscript) void flushRecording();
       }
-      if (bars?.length && canHear) {
+    };
+    timerId = setInterval(detect, VAD_SAMPLE_MS);
+    vadTimer = timerId;
+    const render = () => {
+      if (!live || !analyser) return;
+      if (bars?.length && lastCanHear) {
         bars.forEach((bar, index) => {
-          const level = Math.min(1, peak * (1.2 + (index % 5) * 0.15));
+          const level = Math.min(1, lastPeak * (1.2 + (index % 5) * 0.15));
           bar.style.setProperty('--audio-level', String(level));
           bar.style.setProperty('--audio-opacity', String(0.35 + level * 0.65));
         });
       }
       visualizerFrame = requestAnimationFrame(render);
     };
+    detect();
     visualizerFrame = requestAnimationFrame(render);
   }
 

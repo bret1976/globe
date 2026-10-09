@@ -1,5 +1,7 @@
 import path from 'node:path';
 import { promises as fsp } from 'node:fs';
+import { promisify } from 'node:util';
+import zlib from 'node:zlib';
 
 import { filterTrailing24h, parseFirmsCsv } from '../../src/data/firmsCsv.js';
 
@@ -49,6 +51,48 @@ export function firmsProxy() {
   let statusInflight = null;
 
   const mapKey = () => String(process.env.FIRMS_MAP_KEY || '').trim();
+
+  // The world payload is ~27 MB of JSON (~135K fires). Re-filtering,
+  // stringifying and gzipping it on every request held the event loop for
+  // seconds, so every other layer click queued behind it (and the keep-warm
+  // sweep re-paid it every 4 min). Serialize once per cache entry/staleness,
+  // re-filter the trailing 24 h at most once a minute, and keep the gzip.
+  const SERIALIZED_TTL_MS = 60_000;
+  const gzipAsync = promisify(zlib.gzip);
+  /** @type {?{entry: object, stale: boolean, at: number, json: Buffer, gz: Promise<?Buffer>}} */
+  let serialized = null;
+  function serializedPayload(entry, stale) {
+    const now = Date.now();
+    if (
+      serialized &&
+      serialized.entry === entry &&
+      serialized.stale === stale &&
+      now - serialized.at < SERIALIZED_TTL_MS
+    )
+      return serialized;
+    const json = Buffer.from(JSON.stringify(buildPayload(entry, stale)));
+    const gz = gzipAsync(json, { level: 6 }).catch(() => null);
+    serialized = { entry, stale, at: now, json, gz };
+    return serialized;
+  }
+  async function sendPayload(req, res, entry, stale) {
+    const out = serializedPayload(entry, stale);
+    const wantsGzip = /\bgzip\b/i.test(
+      String(req.headers?.['accept-encoding'] || ''),
+    );
+    const gz = wantsGzip ? await out.gz : null;
+    if (res.headersSent) return;
+    const headers = {
+      'Content-Type': 'application/json',
+      'Cache-Control': 'no-store',
+      Vary: 'Accept-Encoding',
+    };
+    if (gz) headers['Content-Encoding'] = 'gzip';
+    const body = gz || out.json;
+    headers['Content-Length'] = String(body.length);
+    res.writeHead(200, headers);
+    res.end(req.method === 'HEAD' ? undefined : body);
+  }
 
   async function readDiskOnce() {
     if (diskChecked) return;
@@ -219,7 +263,7 @@ export function firmsProxy() {
 
         const entry = mem;
         if (entry && Date.now() - entry.at < TTL_MS) {
-          sendJson(200, buildPayload(entry, false));
+          await sendPayload(req, res, entry, false);
           return;
         }
         // Stale or missing → refresh in the background. The first fill of
@@ -243,7 +287,7 @@ export function firmsProxy() {
             });
         }
         if (entry) {
-          sendJson(200, buildPayload(entry, true));
+          await sendPayload(req, res, entry, true);
           return;
         }
         sendJson(200, {
