@@ -100,12 +100,23 @@ export function createSelfHostedSession({
   }
 
   function viewport() {
-    const carto =
-      globalThis.__godsEyeView?.viewer?.camera?.positionCartographic;
+    const view = globalThis.__godsEyeView;
+    const carto = view?.viewer?.camera?.positionCartographic;
     if (!carto) return null;
+    let enabledLayers;
+    try {
+      // Lets "turn off all layers" switch off exactly what is on.
+      enabledLayers = view.dataManager
+        ?.getAll?.()
+        ?.filter((layer) => layer?.enabled)
+        .map((layer) => layer.id);
+    } catch {
+      enabledLayers = undefined;
+    }
     return {
       lat: (carto.latitude * 180) / Math.PI,
       lon: (carto.longitude * 180) / Math.PI,
+      ...(Array.isArray(enabledLayers) ? { enabledLayers } : {}),
     };
   }
 

@@ -142,6 +142,9 @@ export const VOICE_LAYER_IDS = Object.freeze(Object.keys(VOICE_LAYER_LABELS));
 
 const LAYER_ALIASES = Object.freeze([
   ['military flights', 'military'],
+  ['military planes', 'military'],
+  ['military aircraft', 'military'],
+  ['military jets', 'military'],
   ['mapped alpr cameras', 'alpr-cameras'],
   ['alpr cameras', 'alpr-cameras'],
   ['mapped installations', 'military-installations'],
@@ -177,6 +180,9 @@ const LAYER_ALIASES = Object.freeze([
   ['cameras', 'cctv'],
   ['street cameras', 'cctv'],
   ['flights', 'flights'],
+  ['flight', 'flights'],
+  ['planes', 'flights'],
+  ['airplanes', 'flights'],
   ['military', 'military'],
   ['fires', 'local-firms'],
   ['active fires', 'local-firms'],
@@ -267,13 +273,30 @@ export function normalizeVoiceUtterance(text) {
     .trim();
 }
 
-function matchLayer(normalized) {
+const SINGULAR_AIRCRAFT_ALIASES = new Set(['flight', 'planes', 'airplanes']);
+
+/** Every distinct layer named in the utterance, in spoken order. */
+function matchLayers(normalized) {
+  let text = ` ${normalized} `;
+  const found = [];
+  // "nearest flight/plane" is an aircraft pick, not a layer toggle.
+  const nearest = wantsNearestAircraft(normalized);
   for (const [alias, layerId] of [...LAYER_ALIASES].sort(
     (a, b) => b[0].length - a[0].length,
   )) {
-    if (new RegExp(`\\b${alias}\\b`).test(normalized)) return layerId;
+    if (nearest && SINGULAR_AIRCRAFT_ALIASES.has(alias)) continue;
+    const pattern = new RegExp(`\\b${alias}\\b`, 'g');
+    let match;
+    while ((match = pattern.exec(text))) {
+      found.push({ at: match.index, layerId });
+    }
+    text = text.replace(pattern, (hit) => ' '.repeat(hit.length));
   }
-  return null;
+  const ids = [];
+  for (const { layerId } of found.sort((a, b) => a.at - b.at)) {
+    if (!ids.includes(layerId)) ids.push(layerId);
+  }
+  return ids;
 }
 
 function stripLayerWords(normalized) {
@@ -286,7 +309,7 @@ function stripLayerWords(normalized) {
   return text
     .replace(LAYER_FILLER, ' ')
     .replace(
-      /\b(take me to|fly me to|fly to|go to|navigate to|show me|turn on|turn off|switch on|switch off|enable|disable|hide|open)\b/g,
+      /\b(take me to|fly me to|fly to|go to|navigate to|zoom to|zoom in on|zoom on|center on|show me|turn on|turn off|switch on|switch off|enable|disable|hide|open)\b/g,
       ' ',
     )
     .replace(/\b(in|at|near|around|for|the|and|then|to|of)\b/g, ' ')
@@ -320,16 +343,22 @@ function matchAliasPlace(normalized) {
   return null;
 }
 
+const NAVIGATE_TO =
+  /(?:take me (?:over |back )?to|fly me (?:over )?to|fly (?:over )?to|go (?:over )?to|head (?:over )?to|navigate to|zoom (?:in )?(?:to|on|onto|into|over)|center (?:on|over)|show me)\s+(.+)$/;
+const PLACE_PHRASE_END =
+  /\s+(?:and|then|so|where|with|to see|while|because)\b|\s*[.;]\s*/;
+
 function matchPlace(normalized) {
   const zip = matchZip(normalized);
   if (zip) return zip;
   const alias = matchAliasPlace(normalized);
   if (alias) return alias;
-  const takeMe = normalized.match(
-    /(?:take me to|fly me to|fly to|go to|navigate to|show me)\s+(.+)$/,
-  );
+  const takeMe = normalized.match(NAVIGATE_TO);
   if (takeMe?.[1]) {
-    const rest = stripLayerWords(takeMe[1]);
+    // "take me over to Tokyo Japan and then turn on flights so I can see…"
+    // → only "Tokyo Japan" is the place; the rest is the next instruction.
+    const placePhrase = takeMe[1].split(PLACE_PHRASE_END)[0];
+    const rest = stripLayerWords(placePhrase);
     if (rest) return { query: rest };
   }
   return null;
@@ -338,6 +367,22 @@ function matchPlace(normalized) {
 function wantsLayerOff(normalized) {
   return /\b(turn off|switch off|shut off|hide|disable|remove|stop showing|clear)\b/.test(
     normalized,
+  );
+}
+
+function wantsAllLayersOff(normalized) {
+  if (/\b(except|but)\b/.test(normalized)) return false;
+  if (
+    /\b(turn|switch|shut)\b/.test(normalized) &&
+    /\boff\b/.test(normalized) &&
+    /\b(all|every|everything)\b/.test(normalized) &&
+    !/\b(turn|switch) on\b/.test(normalized)
+  )
+    return true;
+  return (
+    /\b(hide|disable|remove|clear) (all|every|everything)\b/.test(normalized) ||
+    /\b(clear|reset) (the )?(map|globe)\b/.test(normalized) ||
+    /\ball (the )?(data )?layers off\b/.test(normalized)
   );
 }
 
@@ -406,7 +451,30 @@ export function planSelfHostedVoiceTurn(text, context = {}) {
     context.lastLocationQuery ||
     null;
   const viewport = context.viewport || {};
-  const layerId = matchLayer(normalized);
+  if (wantsAllLayersOff(normalized)) {
+    const enabled = Array.isArray(viewport.enabledLayers)
+      ? viewport.enabledLayers.filter((id) => VOICE_LAYER_IDS.includes(id))
+      : VOICE_LAYER_IDS;
+    const offCalls = enabled.map((id) => ({
+      name: 'set_layer_visibility',
+      arguments: { layerId: id, enabled: false },
+    }));
+    return {
+      calls: offCalls,
+      locationQuery,
+      place,
+      speech: offCalls.length
+        ? 'Turning off all layers.'
+        : 'All layers are already off.',
+      allLayersOff: true,
+    };
+  }
+  // "turn off earthquakes and aurora" names two layers; the first one still
+  // decides the fly-to framing. An "except …" turn goes to the model.
+  const layerIds = /\b(except|but not|apart from)\b/.test(normalized)
+    ? []
+    : matchLayers(normalized);
+  const layerId = layerIds[0] || null;
   const layerOff = Boolean(layerId) && wantsLayerOff(normalized);
 
   if (spokenPlace) {
@@ -416,16 +484,16 @@ export function planSelfHostedVoiceTurn(text, context = {}) {
     });
   }
 
-  if (layerId) {
+  for (const id of layerIds) {
     calls.push({
       name: 'set_layer_visibility',
       arguments: {
-        layerId,
+        layerId: id,
         enabled: !layerOff,
         ...(spokenPlace ? { focus: false } : {}),
       },
     });
-    if (layerId === 'cctv' && !layerOff) {
+    if (id === 'cctv' && !layerOff) {
       calls.push({
         name: 'control_cctv',
         arguments: { action: 'nearest' },

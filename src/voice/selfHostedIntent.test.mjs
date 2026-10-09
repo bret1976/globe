@@ -220,3 +220,74 @@ test('mic commands cover every data layer, including aurora and turning layers o
   assert.equal(tokyo.calls[0].name, 'fly_to_location');
   assert.match(tokyo.calls[0].arguments.query, /tokyo/i);
 });
+
+test('zoom-to and take-me-over-to phrasing fly without the model', () => {
+  for (const text of ['Zoom to Ukraine', 'zoom in on Ukraine']) {
+    const plan = planSelfHostedVoiceTurn(text);
+    assert.equal(plan.calls[0].name, 'fly_to_location');
+    assert.equal(plan.calls[0].arguments.query, 'ukraine');
+  }
+  const long = planSelfHostedVoiceTurn(
+    "Okay, so what I'd like you to do now is take me over to Tokyo, Japan and then turn on the flights layer so I can see the planes around there.",
+  );
+  assert.deepEqual(
+    long.calls.map((call) => call.name),
+    ['fly_to_location', 'set_layer_visibility'],
+  );
+  assert.equal(long.calls[0].arguments.query, 'tokyo japan');
+  assert.equal(long.calls[1].arguments.layerId, 'flights');
+});
+
+test('turn off all layers switches off exactly the layers that are on', () => {
+  const viewport = { lat: 0, lon: 0, enabledLayers: ['earthquakes', 'aurora'] };
+  for (const text of [
+    'Turn off all layers.',
+    'turn everything off',
+    'clear the map',
+    'hide all layers',
+  ]) {
+    const plan = planSelfHostedVoiceTurn(text, { viewport });
+    assert.deepEqual(
+      plan.calls.map((call) => [
+        call.arguments.layerId,
+        call.arguments.enabled,
+      ]),
+      [
+        ['earthquakes', false],
+        ['aurora', false],
+      ],
+      text,
+    );
+  }
+  assert.equal(
+    planSelfHostedVoiceTurn('turn off all layers', {
+      viewport: { enabledLayers: [] },
+    }).calls.length,
+    0,
+  );
+  assert.equal(
+    planSelfHostedVoiceTurn('turn off all layers except flights').calls.length,
+    0,
+  );
+});
+
+test('two layers in one turn both toggle; military planes stay military', () => {
+  const plan = planSelfHostedVoiceTurn('turn off earthquakes and aurora');
+  assert.deepEqual(
+    plan.calls.map((call) => [call.arguments.layerId, call.arguments.enabled]),
+    [
+      ['earthquakes', false],
+      ['aurora', false],
+    ],
+  );
+  assert.deepEqual(
+    planSelfHostedVoiceTurn('show military planes').calls.map(
+      (call) => call.arguments.layerId,
+    ),
+    ['military'],
+  );
+  assert.equal(
+    planSelfHostedVoiceTurn('turn on the flight').calls[0].arguments.layerId,
+    'flights',
+  );
+});
