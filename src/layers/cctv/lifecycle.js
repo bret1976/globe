@@ -4,6 +4,8 @@ import { CCTV_OVERLAY_SOURCE_ID } from '../../data/cctvCards.js';
 import { GIZMO_ID_PREFIX } from '../../data/cctvGizmo.js';
 import {
   GROUND_PRIOR_INIT_WAIT_MS,
+  CCTV_BOOT_BILLBOARD_MAX,
+  CCTV_BILLBOARD_CHUNK,
   CAMERA_ICON,
   IDLE_CAMERA_COLOR,
   CALIBRATION_RANGE_FLOOR_M,
@@ -26,6 +28,7 @@ export function createLifecycle({
   /** Resets all module-scoped runtime state to initial values. */
 
   function clearRuntimeState() {
+    layerState._billboardEpoch = (layerState._billboardEpoch || 0) + 1;
     parts.geometryQueue.stopGeometryLoadQueue();
     // Idempotent — also covers a re-init without a prior destroy().
     parts.cards.teardownAmbientCards();
@@ -128,16 +131,23 @@ export function createLifecycle({
       ]);
       sourceAbort.signal.throwIfAborted();
 
-      for (let i = 0; i < catalog.length; i++) {
-        const camera = catalog[i];
+      function priorMap(list) {
+        const map = new Map();
+        if (!Array.isArray(list)) return map;
+        catalog.forEach((camera, index) => {
+          if (list[index]) map.set(camera.id, list[index]);
+        });
+        return map;
+      }
+      let priorById = priorMap(priors);
+
+      function addCamera(index) {
+        const camera = catalog[index];
+        if (!camera || layerState._recordById.has(camera.id)) return;
         // Ellipsoidal ground prior (or null while the batch is still in
         // flight). Geometry falls back to the catalog value only until the
         // batch lands.
-        const groundPrior = priors?.[i] || null;
-        // Cheap first-pass altitude from the ellipsoidal prior (catalog value
-        // only as the pre-prior fallback) — the staggered geometry queue
-        // refines with sampled tile heights after enable so the init path
-        // never raycasts the scene once per camera.
+        const groundPrior = priorById.get(camera.id) || null;
         const priorGround = Number.isFinite(groundPrior?.ellipsoid)
           ? groundPrior.ellipsoid
           : Number(camera.groundElevationM) || 0;
@@ -163,41 +173,18 @@ export function createLifecycle({
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
           scaleByDistance: new Cesium.NearFarScalar(350, 1.25, 4_000_000, 0.42),
         });
-
         const record = {
           camera,
           position,
           billboard,
           coverageEntities: [],
           projection: null,
-          // Task 5 (height-datum fix): regime-aware ground resolution state.
-          //   groundPrior     — { ellipsoid, source } from the Re:Earth batch
-          //     (null until a late batch lands). The prior applies in EVERY
-          //     regime and is the terrain-globe resolution outright.
-          //   groundResolved  — PER-REGIME one-shot latch (regime key →
-          //     boolean): true once this record's resolution completed for that
-          //     regime; such records are excluded from the completion pass so
-          //     their geometry freezes. Re-armed only on a genuine pose change,
-          //     explicit user select/move, or a surface-regime change — never
-          //     on the 10s timer.
-          //   groundSamples   — PER-REGIME resolved ground (regime key →
-          //     metres): the accepted one-shot scene sample in google-3d, the
-          //     mirrored prior in terrain-globe. Kept across re-arms as the
-          //     "has ever resolved" memory for the B9c mid-stream guard.
-          //   frustumPositions — cached Cartesians for pure recomputes (so
-          //     plane placement never re-derives geometry it already has).
           groundPrior,
           groundResolved: {},
           groundSamples: {},
           frustumGeometry: null,
           frustumPositions: null,
-          // §9.1 activation obstruction probe result: effective-range clamp so
-          // the far-cap plane never clips into the tiles. Null = unclamped.
-          // Reset + re-probed on every activation; cleared when the user takes
-          // the range slider (slider overrides the clamp).
           probeClampRangeM: null,
-          // Viewshed (design §3a/§3b): per-camera color identity + the volume
-          // primitive handle (exists only in viewshed mode for the visible set).
           viewshedColors: viewshedColors(
             cameraHue(hueIndexById.get(camera.id) ?? 0),
           ),
@@ -208,7 +195,32 @@ export function createLifecycle({
         layerState._recordById.set(camera.id, record);
       }
 
-      layerState._count = layerState._records.length;
+      function applyKnownPriors() {
+        if (!priorById.size || !layerState._records.length) return;
+        const records = layerState._records;
+        parts.ground.applyLateGroundPriors(
+          records,
+          records.map((record) => priorById.get(record.camera.id) || null),
+        );
+      }
+
+      // Nearest cameras first. The worldwide rest is added after init returns
+      // so a phone is not frozen building thousands of billboards.
+      const carto = layerState._viewer?.camera?.positionCartographic;
+      const refLat = carto ? Cesium.Math.toDegrees(carto.latitude) : NaN;
+      const refLon = carto ? Cesium.Math.toDegrees(carto.longitude) : NaN;
+      const ranked = catalog.map((camera, index) => ({
+        index,
+        distKm: Number.isFinite(refLat)
+          ? parts.model.haversineKm(refLat, refLon, camera.lat, camera.lon)
+          : index,
+      }));
+      ranked.sort((a, b) => a.distKm - b.distKm);
+      const bootCount = Math.min(catalog.length, CCTV_BOOT_BILLBOARD_MAX);
+      for (const entry of ranked.slice(0, bootCount)) addCamera(entry.index);
+      const deferred = ranked.slice(bootCount);
+
+      layerState._count = catalog.length;
       // Do not bare-assign `_activeCameraId` here. A pre-set id without
       // setActiveCamera left SOURCE · UNKNOWN / blank player until a click.
       // enable() activates nearest (or first) camera with a real frame load.
@@ -217,16 +229,33 @@ export function createLifecycle({
       }
 
       // Task 5: if the prior batch lost init's bounded race, apply it post-hoc
-      // when it lands (pure recomputes — applyLateGroundPriors guards against
-      // a torn-down/re-inited catalog).
+      // when it lands. Index-aligned with the catalog, matched onto records
+      // by camera id because the boot set is distance order, not catalog order.
       if (!priors) {
-        const initRecords = layerState._records.slice();
         priorsPromise
           .then((late) => {
-            if (late) parts.ground.applyLateGroundPriors(initRecords, late);
+            if (!late) return;
+            priorById = priorMap(late);
+            applyKnownPriors();
           })
           .catch(() => {});
       }
+
+      const billboardEpoch = (layerState._billboardEpoch || 0) + 1;
+      layerState._billboardEpoch = billboardEpoch;
+      const pumpBillboards = () => {
+        if (layerState._billboardEpoch !== billboardEpoch) return;
+        if (!layerState._billboards) return;
+        const batch = deferred.splice(0, CCTV_BILLBOARD_CHUNK);
+        for (const entry of batch) addCamera(entry.index);
+        if (deferred.length) {
+          setTimeout(pumpBillboards, 0);
+          return;
+        }
+        applyKnownPriors();
+        parts.rendering.refreshHorizonCulling();
+      };
+      if (deferred.length) setTimeout(pumpBillboards, 0);
 
       // Task 5: track the surface regime the initial geometry was computed for
       // and listen for map-stack changes (main.js re-dispatches

@@ -1,4 +1,30 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { normalizeFirePerimeterSnapshot } from '../../src/layers/perimeters/records.js';
+
+// InciWeb blocks GodsEye's Railway region in Asia. The perimeter geometry
+// still loads from NIFC; this snapshot is only the incident-name index, and
+// a live fetch replaces it wherever the upstream answers.
+const INCIWEB_INDEX_SNAPSHOT = path.join(
+  path.dirname(fileURLToPath(import.meta.url)),
+  'firePerimeters',
+  'inciweb-index.json',
+);
+
+let bundledInciwebIndex;
+function readBundledInciwebIndex() {
+  if (bundledInciwebIndex) return bundledInciwebIndex;
+  try {
+    const parsed = JSON.parse(
+      fs.readFileSync(INCIWEB_INDEX_SNAPSHOT, 'utf8'),
+    );
+    bundledInciwebIndex = Array.isArray(parsed) ? parsed : [];
+  } catch {
+    bundledInciwebIndex = [];
+  }
+  return bundledInciwebIndex;
+}
 import {
   readResponseJsonCapped,
   readResponseTextCapped,
@@ -89,7 +115,7 @@ export function firePerimetersProxy({
     const rows = await upstream(
       'https://inciweb.wildfire.gov/api/single-publication/',
       4 * MIB,
-      20_000,
+      8_000,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -214,6 +240,14 @@ export function firePerimetersProxy({
         stale,
       );
     } catch (error) {
+      if (key === 'index' && error?.code !== 'RESPONSE_TOO_LARGE') {
+        const bundled = readBundledInciwebIndex();
+        if (bundled.length) {
+          // One blocked attempt, then the snapshot for the index TTL.
+          cache.set('index', { value: bundled, savedAt: now() });
+          return json(200, bundled, true);
+        }
+      }
       json(error.status === 429 ? 429 : 502, {
         error: 'fire_perimeters_unavailable',
       });

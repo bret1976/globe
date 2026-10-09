@@ -143,12 +143,20 @@ export const PROBE_CLEARANCE_M = 4;
 
 export const PROBE_MIN_RANGE_M = 12;
 
-// Bounded wait for the enable-time ground-prior batch: warm proxy disk cache
-// resolves in milliseconds; a cold/slow upstream must never hang layer init,
-// so past this budget init proceeds on catalog fallbacks and the batch applies
+// Bounded wait for the enable-time ground-prior batch: a warm proxy cache
+// resolves in milliseconds. Phones were sitting on the old 8s budget, then
+// still building every billboard, which is where the ~16s first click went.
+// Past this budget init paints on catalog heights and the batch applies
 // post-hoc (applyLateGroundPriors) when it lands.
 
-export const GROUND_PRIOR_INIT_WAIT_MS = 8000;
+export const GROUND_PRIOR_INIT_WAIT_MS = 400;
+
+// Billboards created before initialize() resolves. The rest stream in on
+// later turns so a phone is not blocked on the worldwide catalog.
+
+export const CCTV_BOOT_BILLBOARD_MAX = 160;
+
+export const CCTV_BILLBOARD_CHUNK = 80;
 
 /** Default calibration offsets — all zeroed, range scale 1x. */
 

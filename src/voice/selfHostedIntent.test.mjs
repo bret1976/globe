@@ -236,45 +236,71 @@ test('zoom-to and take-me-over-to phrasing fly without the model', () => {
   );
   assert.equal(long.calls[0].arguments.query, 'tokyo japan');
   assert.equal(long.calls[1].arguments.layerId, 'flights');
+  assert.equal(long.calls[1].arguments.enabled, true);
 });
 
-test('turn off all layers switches off exactly the layers that are on', () => {
+test('turn off all layers is one clear, including reset and an empty viewport', () => {
   const viewport = { lat: 0, lon: 0, enabledLayers: ['earthquakes', 'aurora'] };
   for (const text of [
     'Turn off all layers.',
     'turn everything off',
     'clear the map',
     'hide all layers',
+    'reset the globe',
   ]) {
     const plan = planSelfHostedVoiceTurn(text, { viewport });
-    assert.deepEqual(
-      plan.calls.map((call) => [
-        call.arguments.layerId,
-        call.arguments.enabled,
-      ]),
-      [
-        ['earthquakes', false],
-        ['aurora', false],
-      ],
-      text,
-    );
+    assert.deepEqual(plan.calls, [{ name: 'clear_layers', arguments: {} }], text);
+    assert.equal(plan.speech, 'Turning off all layers.');
   }
-  assert.equal(
-    planSelfHostedVoiceTurn('turn off all layers', {
-      viewport: { enabledLayers: [] },
-    }).calls.length,
-    0,
-  );
+  const none = planSelfHostedVoiceTurn('turn off all layers', {
+    viewport: { enabledLayers: [] },
+  });
+  assert.deepEqual(none.calls, []);
+  assert.equal(none.speech, 'All layers are already off.');
   assert.equal(
     planSelfHostedVoiceTurn('turn off all layers except flights').calls.length,
     0,
   );
 });
 
-test('two layers in one turn both toggle; military planes stay military', () => {
-  const plan = planSelfHostedVoiceTurn('turn off earthquakes and aurora');
+test('a three-command sentence keeps order and does not flip later layers off', () => {
+  const mixed = planSelfHostedVoiceTurn(
+    'turn off satellites, fly to Tokyo, and turn on flights',
+  );
   assert.deepEqual(
-    plan.calls.map((call) => [call.arguments.layerId, call.arguments.enabled]),
+    mixed.calls.map((call) => [
+      call.name,
+      call.arguments.layerId || call.arguments.query,
+      call.arguments.enabled,
+    ]),
+    [
+      ['set_layer_visibility', 'satellites', false],
+      ['fly_to_location', 'tokyo', undefined],
+      ['set_layer_visibility', 'flights', true],
+    ],
+  );
+  const sequence = planSelfHostedVoiceTurn(
+    'zoom to Ukraine. turn off all layers. fly to Tokyo and turn on flights',
+  );
+  assert.deepEqual(
+    sequence.calls.map((call) => [
+      call.name,
+      call.arguments.layerId || call.arguments.query,
+      call.arguments.enabled,
+    ]),
+    [
+      ['fly_to_location', 'ukraine', undefined],
+      ['clear_layers', undefined, undefined],
+      ['fly_to_location', 'tokyo', undefined],
+      ['set_layer_visibility', 'flights', true],
+    ],
+  );
+});
+
+test('two layers in one on or off clause keep that polarity', () => {
+  const off = planSelfHostedVoiceTurn('turn off earthquakes and aurora');
+  assert.deepEqual(
+    off.calls.map((call) => [call.arguments.layerId, call.arguments.enabled]),
     [
       ['earthquakes', false],
       ['aurora', false],
@@ -290,4 +316,8 @@ test('two layers in one turn both toggle; military planes stay military', () => 
     planSelfHostedVoiceTurn('turn on the flight').calls[0].arguments.layerId,
     'flights',
   );
+  const on = planSelfHostedVoiceTurn('fly to Tokyo and turn on flights');
+  assert.equal(on.calls[0].name, 'fly_to_location');
+  assert.equal(on.calls[1].arguments.layerId, 'flights');
+  assert.equal(on.calls[1].arguments.enabled, true);
 });

@@ -71,6 +71,14 @@ export function createVoiceCommands({
         ? 'Tap the mic and speak, or type a command'
         : 'Voice active');
     ui.button.setAttribute('aria-pressed', String(session.isActive()));
+    if (ui.buttonLabel) {
+      ui.buttonLabel.textContent =
+        event.state === 'executing' || event.state === 'speaking'
+          ? 'BUSY'
+          : event.state === 'listening' || event.state === 'connecting'
+            ? 'LIVE'
+            : 'TALK';
+    }
     if (ui.errorDetail)
       ui.errorDetail.textContent =
         event.state === 'error'

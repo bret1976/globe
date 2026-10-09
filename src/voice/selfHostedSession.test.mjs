@@ -862,6 +862,73 @@ test('a follow-up typed during the first fly is queued, not dropped', async () =
   session.stop();
 });
 
+test('two commands spoken while the first is still flying both run, in order', async () => {
+  const actions = [];
+  let releaseFly;
+  const flying = new Promise((resolve) => {
+    releaseFly = resolve;
+  });
+  const plans = {
+    first: {
+      calls: [{ name: 'fly_to_location', arguments: { query: 'Ukraine' } }],
+      speech: 'On my way.',
+    },
+    second: {
+      calls: [{ name: 'clear_layers', arguments: {} }],
+      speech: 'Turning off all layers.',
+    },
+    third: {
+      calls: [
+        { name: 'fly_to_location', arguments: { query: 'Tokyo' } },
+        {
+          name: 'set_layer_visibility',
+          arguments: { layerId: 'flights', enabled: true },
+        },
+      ],
+      speech: 'On my way to Tokyo. Flights on.',
+    },
+  };
+  const order = ['first', 'second', 'third'];
+  let actCount = 0;
+  const backend = backendFixture(plans.first);
+  backend.act = async () => plans[order[actCount++] || 'third'];
+  const session = createVoiceSession({
+    runner: async (name) => {
+      if (name === 'fly_to_location' && actions.length === 0) await flying;
+      actions.push(name);
+      return { ok: true };
+    },
+    createAdapter: (hooks) => createSelfHostedSession({ ...hooks, backend }),
+  });
+  let finished = 0;
+  let markFinished;
+  const allFinished = new Promise((resolve) => {
+    markFinished = resolve;
+  });
+  session.subscribe((event) => {
+    if (event.type !== 'completion') return;
+    finished += 1;
+    if (finished === 3) markFinished();
+  });
+  await session.start();
+  const first = session.sendText('zoom to Ukraine');
+  await Promise.resolve();
+  const second = session.sendText('turn off all layers');
+  const third = session.sendText('fly to Tokyo and turn on flights');
+  releaseFly();
+  assert.equal(await first, true);
+  assert.equal(await second, true);
+  assert.equal(await third, true);
+  await allFinished;
+  assert.deepEqual(actions, [
+    'fly_to_location',
+    'clear_layers',
+    'fly_to_location',
+    'set_layer_visibility',
+  ]);
+  session.stop();
+});
+
 test('a hanging TTS reply still releases the session for the next command', async () => {
   const actions = [];
   const backend = backendFixture({

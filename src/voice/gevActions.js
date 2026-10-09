@@ -452,6 +452,36 @@ export function createGevActionRunner({
       }
     }
 
+    if (name === 'clear_layers') {
+      const clear =
+        styleManager?.clearSelectedLayers?.bind(styleManager) ||
+        dataManager?.clearSelectedLayers?.bind(dataManager);
+      if (!clear) {
+        return {
+          ok: false,
+          action: 'clear_layers',
+          error: 'Clear all is unavailable',
+        };
+      }
+      try {
+        // The shell clear resets context mode, then turns off whatever is
+        // actually on. That is the same path as the Clear All button, so
+        // satellites do not each wait on a context-settlement promise.
+        const result = await clear({ origin: 'voice' });
+        return {
+          ok: true,
+          action: 'clear_layers',
+          cleared: result?.clearedIds?.length ?? result?.targetIds?.length ?? null,
+        };
+      } catch (error) {
+        return {
+          ok: false,
+          action: 'clear_layers',
+          error: error?.message || 'Could not turn off all layers',
+        };
+      }
+    }
+
     if (name === 'set_layer_visibility') {
       const layerId = normalizeLayerId(args.layerId);
       if (!layerId) {
@@ -510,8 +540,16 @@ export function createGevActionRunner({
             changeOptions,
           );
         }
-        if (layerId === 'rocket-launches' || layerId === 'satellites') {
-          await styleManager?._waitForContextLayerSettlement?.();
+        if (
+          enabled &&
+          (layerId === 'rocket-launches' || layerId === 'satellites')
+        ) {
+          // Disabling satellites must not wait on this. A stuck context
+          // reaction left "turn off all layers" busy until the page froze.
+          await Promise.race([
+            Promise.resolve(styleManager?._waitForContextLayerSettlement?.()),
+            new Promise((resolve) => setTimeout(resolve, 1500)),
+          ]);
         }
       } catch (error) {
         changeError = error;

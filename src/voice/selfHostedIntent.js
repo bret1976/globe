@@ -435,6 +435,120 @@ function flyArguments(place, layerId) {
   return args;
 }
 
+function clauseVerbPattern() {
+  return /\b(turn off all(?: the)? layers|turn off every(?:thing| layer)|clear all(?: the)? layers|turn everything off|hide all(?: the)? layers|disable all(?: the)? layers|reset the globe|reset the map|clear the globe|clear the map|turn off|switch off|shut off|turn on|switch on|fly me to|fly to|zoom to|zoom on|zoom onto|zoom into|go to|take me to|navigate to|head to|center on|show me|hide|disable|enable)\b/g;
+}
+
+const FLY_CLAUSE_VERBS = new Set([
+  'fly me to',
+  'fly to',
+  'zoom to',
+  'zoom on',
+  'zoom onto',
+  'zoom into',
+  'go to',
+  'take me to',
+  'navigate to',
+  'head to',
+  'center on',
+  'show me',
+]);
+
+const LAYER_CLAUSE_VERBS = new Set([
+  'turn off',
+  'switch off',
+  'shut off',
+  'turn on',
+  'switch on',
+  'hide',
+  'disable',
+  'enable',
+]);
+
+/**
+ * One spoken turn can carry several commands. "and" stays inside a command
+ * ("earthquakes and aurora", "fly to Tokyo and turn on flights"). A new
+ * verb starts the next command, except a fly followed immediately by its
+ * layer toggle, which the single-clause planner already understands.
+ * @param {string} normalized
+ * @returns {string[]}
+ */
+export function splitVoiceClauses(normalized) {
+  const matches = [...String(normalized || '').matchAll(clauseVerbPattern())];
+  if (matches.length <= 1) return [normalized];
+  const clauses = [];
+  let index = 0;
+  while (index < matches.length) {
+    const start = index === 0 ? 0 : matches[index].index;
+    let consumed = index;
+    let next = index + 1;
+    if (
+      FLY_CLAUSE_VERBS.has(matches[index][1]) &&
+      matches[next] &&
+      LAYER_CLAUSE_VERBS.has(matches[next][1])
+    ) {
+      consumed = next;
+      next = index + 2;
+    }
+    const end = matches[next] ? matches[next].index : normalized.length;
+    const clause = normalized.slice(start, end).trim();
+    if (clause) clauses.push(clause);
+    index = consumed + 1;
+  }
+  return clauses.length ? clauses : [normalized];
+}
+
+/** On/off for one named layer from the verb closest before it. */
+function layerSwitchOn(normalized, layerId) {
+  let at = -1;
+  for (const [alias, id] of LAYER_ALIASES) {
+    if (id !== layerId) continue;
+    const found = normalized.search(new RegExp(`\\b${alias}\\b`));
+    if (found >= 0 && (at < 0 || found < at)) at = found;
+  }
+  if (at < 0) return !wantsLayerOff(normalized);
+  const verbs = [
+    ...normalized
+      .slice(0, at)
+      .matchAll(
+        /\b(turn off|switch off|shut off|turn on|switch on|hide|disable|enable|show me)\b/g,
+      ),
+  ];
+  if (!verbs.length) return !wantsLayerOff(normalized);
+  return !/\b(?:off|hide|disable)\b/.test(verbs[verbs.length - 1][1]);
+}
+
+/**
+ * A flood of "turn this layer off" calls is one Clear All. Running them one
+ * by one, satellites included, stalls the page and the next spoken command.
+ * @param {Array<{name:string, arguments?:object}>} calls
+ */
+export function collapseManyLayerOffs(calls) {
+  if (!Array.isArray(calls)) return [];
+  const offs = calls.filter(
+    (call) =>
+      call?.name === 'set_layer_visibility' &&
+      call.arguments?.enabled === false,
+  );
+  if (offs.length < 8) return calls;
+  let inserted = false;
+  const next = [];
+  for (const call of calls) {
+    const isOff =
+      call?.name === 'set_layer_visibility' &&
+      call.arguments?.enabled === false;
+    if (!isOff) {
+      next.push(call);
+      continue;
+    }
+    if (!inserted) {
+      next.push({ name: 'clear_layers', arguments: {} });
+      inserted = true;
+    }
+  }
+  return next;
+}
+
 /**
  * @param {string} text
  * @param {{ lastLocationQuery?: string, lastPlace?: object, viewport?: { lat?: number, lon?: number } }} [context]
@@ -442,6 +556,35 @@ function flyArguments(place, layerId) {
  */
 export function planSelfHostedVoiceTurn(text, context = {}) {
   const normalized = normalizeVoiceUtterance(text);
+  const clauses = splitVoiceClauses(normalized);
+  if (clauses.length > 1) {
+    const calls = [];
+    const speeches = [];
+    let locationQuery = context.lastLocationQuery || null;
+    let place = context.lastPlace || null;
+    let cursor = context || {};
+    for (const clause of clauses) {
+      const plan = planSelfHostedVoiceTurn(clause, cursor);
+      if (!plan.calls?.length) continue;
+      calls.push(...plan.calls);
+      if (plan.speech && !/I heard/.test(plan.speech)) speeches.push(plan.speech);
+      if (plan.locationQuery) locationQuery = plan.locationQuery;
+      if (plan.place) place = plan.place;
+      cursor = {
+        ...cursor,
+        lastLocationQuery: locationQuery,
+        lastPlace: place,
+      };
+    }
+    if (calls.length) {
+      return {
+        calls: collapseManyLayerOffs(calls),
+        locationQuery,
+        place,
+        speech: speeches.join(' '),
+      };
+    }
+  }
   const calls = [];
   const spokenPlace = matchPlace(normalized);
   const place = spokenPlace || context.lastPlace || null;
@@ -454,18 +597,23 @@ export function planSelfHostedVoiceTurn(text, context = {}) {
   if (wantsAllLayersOff(normalized)) {
     const enabled = Array.isArray(viewport.enabledLayers)
       ? viewport.enabledLayers.filter((id) => VOICE_LAYER_IDS.includes(id))
-      : VOICE_LAYER_IDS;
-    const offCalls = enabled.map((id) => ({
-      name: 'set_layer_visibility',
-      arguments: { layerId: id, enabled: false },
-    }));
+      : null;
+    if (enabled && !enabled.length) {
+      return {
+        calls: [],
+        locationQuery,
+        place,
+        speech: 'All layers are already off.',
+        allLayersOff: true,
+      };
+    }
+    // One Clear All. A call per layer (satellites first) froze the page
+    // before the rest of a multi-command sentence could run.
     return {
-      calls: offCalls,
+      calls: [{ name: 'clear_layers', arguments: {} }],
       locationQuery,
       place,
-      speech: offCalls.length
-        ? 'Turning off all layers.'
-        : 'All layers are already off.',
+      speech: 'Turning off all layers.',
       allLayersOff: true,
     };
   }
@@ -475,7 +623,6 @@ export function planSelfHostedVoiceTurn(text, context = {}) {
     ? []
     : matchLayers(normalized);
   const layerId = layerIds[0] || null;
-  const layerOff = Boolean(layerId) && wantsLayerOff(normalized);
 
   if (spokenPlace) {
     calls.push({
@@ -485,15 +632,18 @@ export function planSelfHostedVoiceTurn(text, context = {}) {
   }
 
   for (const id of layerIds) {
+    // Polarity follows the verb in front of this layer, so "turn off
+    // satellites and turn on flights" does not turn both off.
+    const enabled = layerSwitchOn(normalized, id);
     calls.push({
       name: 'set_layer_visibility',
       arguments: {
         layerId: id,
-        enabled: !layerOff,
+        enabled,
         ...(spokenPlace ? { focus: false } : {}),
       },
     });
-    if (id === 'cctv' && !layerOff) {
+    if (id === 'cctv' && enabled) {
       calls.push({
         name: 'control_cctv',
         arguments: { action: 'nearest' },
@@ -558,6 +708,8 @@ export function composeSelfHostedSpeech(calls, originalText) {
       parts.push(
         `On my way to ${call.arguments.query || call.arguments.locationId}.`,
       );
+    } else if (call.name === 'clear_layers') {
+      parts.push('Turning off all layers.');
     } else if (call.name === 'set_layer_visibility') {
       const label =
         VOICE_LAYER_LABELS[call.arguments.layerId] || call.arguments.layerId;

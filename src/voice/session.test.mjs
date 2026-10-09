@@ -579,7 +579,7 @@ test('a short mic click starts listening and the leftover click does not stop it
     );
     await new Promise((done) => setTimeout(done, 0));
     assert.deepEqual(held, ['prime']);
-    assert.equal(ui.buttonLabel.textContent, 'TALK');
+    assert.equal(ui.buttonLabel.textContent, 'LIVE');
     assert.deepEqual(cancelled, ['cancel']);
     assert.deepEqual(released, []);
     assert.equal(started.length, 1);

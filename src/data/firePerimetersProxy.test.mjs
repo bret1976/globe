@@ -211,6 +211,20 @@ test('bad publication ids and non-GET requests never fetch upstream', async () =
   assert.equal(calls, 0);
 });
 
+test('InciWeb index falls back to the bundled catalog when the upstream is blocked', async () => {
+  const request = install({
+    fetchImpl: async () => {
+      throw new Error('blocked');
+    },
+  });
+  const res = await request('/inciweb/index');
+  assert.equal(res.status, 200);
+  assert.equal(res.headers['X-Data-Stale'], 'true');
+  assert.ok(Array.isArray(res.body));
+  assert.ok(res.body.length > 100);
+  assert.ok(res.body[0].incident_title);
+});
+
 test('InciWeb index preserves the fixed POST, caches for one hour and serves stale arrays', async () => {
   let clock = 0,
     calls = 0;

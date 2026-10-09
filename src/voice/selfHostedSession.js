@@ -14,6 +14,7 @@ import {
   shouldWatchdogFlush,
 } from './openMicPolicy.js';
 import { audioBlobToWavBytes } from './audioWav.js';
+import { collapseManyLayerOffs } from './selfHostedIntent.js';
 
 const MIC_SPEECH_THRESHOLD = 0.012;
 /** Open-mic VAD sampling period, independent of the globe's frame rate. */
@@ -63,7 +64,7 @@ export function createSelfHostedSession({
   let recordWatchTimer = null;
   let recordStartedAt = 0;
   let flushing = false;
-  let queuedUtterance = '';
+  let queuedUtterances = [];
   let speakEpoch = 0;
   let sessionEpoch = 0;
   let status = {
@@ -224,11 +225,19 @@ export function createSelfHostedSession({
     }
   }
 
+  function rememberUtterance(spoken) {
+    if (!spoken) return;
+    queuedUtterances.push(spoken);
+    // Keep the latest few so a three-command sequence survives a busy turn
+    // without letting background noise pile up.
+    if (queuedUtterances.length > 3) queuedUtterances.shift();
+  }
+
   function queueTranscript(text, isFinal) {
     const spoken = String(text || '').trim();
     if (!spoken) return;
     if (busy) {
-      if (isFinal) queuedUtterance = spoken;
+      if (isFinal) rememberUtterance(spoken);
       return;
     }
     pendingTranscript = spoken;
@@ -255,7 +264,7 @@ export function createSelfHostedSession({
     const spoken = String(text || '').trim();
     if (!spoken) return;
     if (busy) {
-      queuedUtterance = spoken;
+      rememberUtterance(spoken);
       return;
     }
     let failureDetail = '';
@@ -263,7 +272,6 @@ export function createSelfHostedSession({
     const isCurrent = () =>
       live && !signal?.aborted && turnEpoch === sessionEpoch;
     busy = true;
-    queuedUtterance = '';
     clearSilenceTimer();
     pendingTranscript = '';
     try {
@@ -288,7 +296,8 @@ export function createSelfHostedSession({
       if (!isCurrent()) return;
       if (plan.locationQuery) lastLocationQuery = plan.locationQuery;
       if (plan.place) lastPlace = plan.place;
-      for (const call of plan.calls) {
+      const calls = collapseManyLayerOffs(plan.calls);
+      for (const call of calls) {
         if (!isCurrent()) return;
         const result = await runAction(call.name, call.arguments || {});
         if (!isCurrent()) return;
@@ -327,8 +336,7 @@ export function createSelfHostedSession({
     } finally {
       if (turnEpoch !== sessionEpoch) return;
       busy = false;
-      const next = queuedUtterance;
-      queuedUtterance = '';
+      const next = queuedUtterances.shift();
       if (next) {
         interruptSpeech();
         void handleUtterance(next);
@@ -1058,7 +1066,7 @@ export function createSelfHostedSession({
       lastSpeechAt = 0;
       listenArmedAt = 0;
       flushing = false;
-      queuedUtterance = '';
+      queuedUtterances = [];
       pendingTranscript = '';
       clearSilenceTimer();
       clearRecordWatch();
