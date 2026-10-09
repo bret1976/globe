@@ -1190,6 +1190,88 @@ test('open-mic prefers in-browser Whisper over the hosted ASR endpoint', async (
   }
 });
 
+test('mic analyser reaches the audio destination at zero gain', async () => {
+  const mic = installMicRecorder();
+  const contexts = [];
+  class FakeAudioContext {
+    constructor() {
+      this.destination = { id: 'dest' };
+      this.gainNodes = [];
+      contexts.push(this);
+    }
+    resume() {
+      return Promise.resolve();
+    }
+    createMediaStreamSource() {
+      return {
+        connect(target) {
+          this.target = target;
+        },
+        disconnect() {},
+      };
+    }
+    createAnalyser() {
+      const node = {
+        fftSize: 0,
+        smoothingTimeConstant: 0,
+        connections: [],
+        connect(target) {
+          this.connections.push(target);
+        },
+        disconnect() {},
+        getByteTimeDomainData(buffer) {
+          buffer.fill(128);
+        },
+      };
+      this.analyser = node;
+      return node;
+    }
+    createGain() {
+      const node = {
+        gain: { value: 1 },
+        connections: [],
+        connect(target) {
+          this.connections.push(target);
+        },
+        disconnect() {},
+      };
+      this.gainNodes.push(node);
+      return node;
+    }
+    close() {
+      return Promise.resolve();
+    }
+  }
+  const previousAudio = globalThis.AudioContext;
+  const previousRaf = globalThis.requestAnimationFrame;
+  const previousCancel = globalThis.cancelAnimationFrame;
+  globalThis.AudioContext = FakeAudioContext;
+  globalThis.requestAnimationFrame = () => 1;
+  globalThis.cancelAnimationFrame = () => {};
+  try {
+    const session = createSelfHostedSession({
+      emit() {},
+      runAction: async () => ({ ok: true }),
+      backend: backendFixture({ calls: [], speech: '', source: 'planner' }),
+    });
+    session.primeMic();
+    await session.start();
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    const ctx = contexts[0];
+    assert.ok(ctx?.analyser, 'the mic stream opens an analyser');
+    const sink = ctx.gainNodes[0];
+    assert.equal(sink.gain.value, 0);
+    assert.ok(ctx.analyser.connections.includes(sink));
+    assert.ok(sink.connections.includes(ctx.destination));
+    session.stop();
+  } finally {
+    globalThis.AudioContext = previousAudio;
+    globalThis.requestAnimationFrame = previousRaf;
+    globalThis.cancelAnimationFrame = previousCancel;
+    mic.restore();
+  }
+});
+
 test('spoken replies use in-browser Kokoro before the hosted TTS endpoint', async () => {
   const spoken = [];
   const backend = backendFixture({

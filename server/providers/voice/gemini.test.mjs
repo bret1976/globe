@@ -29,6 +29,29 @@ test('never uses retired 1.x/2.x models', () => {
   );
 });
 
+test('GEMINI_ASR_MODEL leads speech-to-text and retired names are skipped', () => {
+  assert.equal(
+    geminiModelChain(
+      { GEMINI_ASR_MODEL: 'gemini-3.8-flash' },
+      { purpose: 'asr' },
+    )[0],
+    'gemini-3.8-flash',
+  );
+  const skipped = geminiModelChain(
+    {
+      GEMINI_ASR_MODEL: 'gemini-2.5-flash',
+      GEMINI_VOICE_MODEL: 'gemini-3.6-flash',
+    },
+    { purpose: 'asr' },
+  );
+  assert.equal(skipped[0], 'gemini-3.6-flash');
+  assert.ok(!skipped.some((model) => /^gemini-(1|2)\./.test(model)));
+  assert.notEqual(
+    geminiModelChain({ GEMINI_ASR_MODEL: 'gemini-3.8-flash' })[0],
+    'gemini-3.8-flash',
+  );
+});
+
 test('transcribe falls through a failing model and strips quotes', async () => {
   const seen = [];
   const fetchImpl = async (url, init) => {

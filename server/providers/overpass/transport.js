@@ -67,9 +67,11 @@ function overpassPayloadIsData(payload) {
  * ceiling and Military Installations / ALPR settled UNAVAILABLE (ERR_ABORTED)
  * with healthy mirrors never tried. Now the next mirror is started as soon as
  * the previous one fails, or after this stagger if it is merely slow; the
- * first real data answer wins and the rest are aborted.
+ * first real data answer wins and the rest are aborted. A five-second stagger
+ * still left a cold Railway click inside the 30–45 s client ceiling when the
+ * head mirror was merely slow, so the sibling starts just after a second.
  */
-const OVERPASS_HEDGE_MS = 5000;
+const OVERPASS_HEDGE_MS = 1200;
 
 /**
  * Ask the mirrors in order with hedging, retaining response-size and
@@ -218,4 +220,4 @@ function fetchOverpassPayload(
   });
 }
 
-export { overpassPayloadIsData, fetchOverpassPayload };
+export { overpassPayloadIsData, fetchOverpassPayload, OVERPASS_HEDGE_MS };

@@ -316,6 +316,11 @@ export function createControls({ state: layerState, services, parts, source }) {
       return parts.navigation.focusCamera(cameraId, durationSec);
     },
 
+    /** Recompute the city geometry cohort from the camera's current view. */
+    restartFocusGeometry(origin) {
+      parts.geometryQueue.startGeometryLoadQueue(origin);
+    },
+
     /**
      * Cycles the active camera forward or backward by `step` positions in the catalog.
      * @param {number} [step=1] - Number of positions to advance (negative to go back).

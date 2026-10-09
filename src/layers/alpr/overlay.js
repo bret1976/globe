@@ -1,5 +1,6 @@
 import * as Cesium from 'cesium';
 import {
+  ALPR_HEIGHT_SAMPLES_PER_PAINT,
   MAX_CANVAS_FRUSTUMS,
   MARKER_ICON_SIZE,
   SELECTED_MARKER_ICON_SIZE,
@@ -24,6 +25,7 @@ export function createAlprOverlay({ state, services }) {
     images = [],
     destroyed = false;
   let surfaceRegime;
+  let heightSamplesRemaining = 0;
   const requestPaint = () => {
     if (!destroyed && state.enabled) lane?.requestPaint();
   };
@@ -80,7 +82,14 @@ export function createAlprOverlay({ state, services }) {
       record.latitude,
     );
     let height;
+    if (scene.sampleHeightSupported && heightSamplesRemaining <= 0) {
+      // This paint already spent its mesh samples. Falling through to the
+      // globe or DEM would latch that height onto the entity and the mesh
+      // sample would never run. Leave it unresolved for the 250 ms retry.
+      return null;
+    }
     if (scene.sampleHeightSupported) {
+      heightSamplesRemaining -= 1;
       try {
         height = scene.sampleHeight(location, [entity]);
       } catch {
@@ -106,6 +115,7 @@ export function createAlprOverlay({ state, services }) {
 
   function paint({ ctx, width, height, keyhole, occluder }) {
     hits = [];
+    heightSamplesRemaining = ALPR_HEIGHT_SAMPLES_PER_PAINT;
     if (!state.enabled || destroyed) return;
     let unresolved = false;
     const painted = [];

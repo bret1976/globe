@@ -3,6 +3,41 @@ import {
   planeSupportPoints,
   poseHash,
 } from '../../data/cctvFootprint.js';
+import { GROUND_PRIOR_FOCUS_MAX } from './policy.js';
+
+/**
+ * Indices of the nearest catalog points to the viewer, capped at one terrain
+ * chunk. A missing viewer returns nothing so init does not guess a city.
+ * @param {Array<{lat:number, lon:number}>} points
+ * @param {number} refLat
+ * @param {number} refLon
+ * @param {number} maxCount
+ * @param {(lat1:number, lon1:number, lat2:number, lon2:number) => number} distanceKm
+ * @returns {number[]}
+ */
+export function selectGroundPriorIndices(
+  points,
+  refLat,
+  refLon,
+  maxCount,
+  distanceKm,
+) {
+  if (!Array.isArray(points) || !points.length) return [];
+  if (!Number.isFinite(refLat) || !Number.isFinite(refLon)) return [];
+  const cap = Math.max(1, Math.floor(maxCount) || 1);
+  return points
+    .map((point, index) => ({
+      index,
+      distKm: distanceKm(refLat, refLon, point.lat, point.lon),
+    }))
+    .sort(
+      (a, b) =>
+        (Number.isFinite(a.distKm) ? a.distKm : Number.POSITIVE_INFINITY) -
+        (Number.isFinite(b.distKm) ? b.distKm : Number.POSITIVE_INFINITY),
+    )
+    .slice(0, cap)
+    .map((entry) => entry.index);
+}
 
 /** Cooldown before a provisional (geoid-fallback / partial) footprint is retried. */
 const FOOTPRINT_RETRY_MS = 60_000;
@@ -149,20 +184,35 @@ export function createGround({ state: layerState, services, parts, source }) {
   }
 
   /**
-   * Task 5: batches every catalog camera's coords through the Re:Earth
+   * Task 5: batches the cameras in front of the viewer through the Re:Earth
    * ellipsoidal ground resolver (`/api/terrain/heights` proxy — network-cached,
-   * chunked, geoid fallback; NOT a scene query). The catalog's orthometric
-   * `groundElevationM` rides along as `sourceOrthometricM` so the geoid
-   * fallback chain is meaningful where the catalog value is real (Caltrans).
-   * Never rejects — a total failure resolves null and geometry stays on
-   * catalog fallbacks (no worse than pre-Task-5).
+   * one chunk, geoid fallback; NOT a scene query). The result stays
+   * index-aligned with the full catalog; cameras outside the chunk are null
+   * and keep their catalog height until the view moves. The catalog's
+   * orthometric `groundElevationM` rides along as `sourceOrthometricM` so the
+   * geoid fallback chain is meaningful where the catalog value is real
+   * (Caltrans). Never rejects — a total failure resolves null and geometry
+   * stays on catalog fallbacks (no worse than pre-Task-5).
    * @param {Object[]} catalog - Camera objects (post-ensureCameraPose).
-   * @returns {Promise<Array<{ellipsoid:number, source:string}>|null>}
+   * @returns {Promise<Array<{ellipsoid:number, source:string}|null>|null>}
    */
 
   async function resolveGroundPriors(catalog) {
     try {
-      const coords = catalog.map((camera) => {
+      if (!Array.isArray(catalog) || !catalog.length) return [];
+      const carto = layerState._viewer?.camera?.positionCartographic;
+      const refLat = carto ? (carto.latitude * 180) / Math.PI : NaN;
+      const refLon = carto ? (carto.longitude * 180) / Math.PI : NaN;
+      const indices = selectGroundPriorIndices(
+        catalog,
+        refLat,
+        refLon,
+        GROUND_PRIOR_FOCUS_MAX,
+        parts.model.haversineKm,
+      );
+      if (!indices.length) return catalog.map(() => null);
+      const coords = indices.map((index) => {
+        const camera = catalog[index];
         const ortho = Number(camera.groundElevationM);
         return {
           lat: camera.lat,
@@ -170,7 +220,13 @@ export function createGround({ state: layerState, services, parts, source }) {
           ...(Number.isFinite(ortho) ? { sourceOrthometricM: ortho } : {}),
         };
       });
-      return await resolveEllipsoidalGround(coords);
+      const resolved = await resolveEllipsoidalGround(coords);
+      if (!Array.isArray(resolved)) return null;
+      const priors = catalog.map(() => null);
+      indices.forEach((index, position) => {
+        priors[index] = resolved[position] || null;
+      });
+      return priors;
     } catch (error) {
       console.warn(
         '[Data:CCTV] ground-prior batch failed (keeping catalog fallbacks):',

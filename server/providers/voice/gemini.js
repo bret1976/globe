@@ -36,10 +36,18 @@ export function geminiConfigured(env = process.env) {
   return Boolean(geminiApiKey(env));
 }
 
-/** Model order: env override (if not retired), last good model, then defaults. */
-export function geminiModelChain(env = process.env) {
+/**
+ * Model order: ASR override (speech-to-text only), voice override, last good
+ * model, then defaults. Retired gemini-1.x / 2.x names are skipped.
+ * GEMINI_ASR_MODEL is the production speech-to-text override (gemini-3.8-flash).
+ */
+export function geminiModelChain(env = process.env, { purpose = 'voice' } = {}) {
+  const asrOverride = String(env.GEMINI_ASR_MODEL || '').trim();
   const override = String(env.GEMINI_VOICE_MODEL || '').trim();
   const chain = [];
+  if (purpose === 'asr' && asrOverride && !RETIRED.test(asrOverride)) {
+    chain.push(asrOverride);
+  }
   if (override && !RETIRED.test(override)) chain.push(override);
   if (preferredModel) chain.push(preferredModel);
   chain.push(...GEMINI_VOICE_MODELS);
@@ -48,6 +56,10 @@ export function geminiModelChain(env = process.env) {
 
 export function geminiActiveModel(env = process.env) {
   return geminiModelChain(env)[0];
+}
+
+export function geminiAsrModel(env = process.env) {
+  return geminiModelChain(env, { purpose: 'asr' })[0];
 }
 
 function normalizeMime(mimeType) {
@@ -75,7 +87,7 @@ function candidateText(data) {
 
 async function generate(
   body,
-  { fetchImpl = fetch, env = process.env, signal } = {},
+  { fetchImpl = fetch, env = process.env, signal, purpose = 'voice' } = {},
 ) {
   const key = geminiApiKey(env);
   if (!key) throw new Error('GEMINI_API_KEY is not set');
@@ -83,7 +95,7 @@ async function generate(
     [signal, AbortSignal.timeout(TOTAL_TIMEOUT_MS)].filter(Boolean),
   );
   let lastError = null;
-  for (const model of geminiModelChain(env)) {
+  for (const model of geminiModelChain(env, { purpose })) {
     if (deadline.aborted) break;
     try {
       const response = await fetchImpl(
@@ -156,7 +168,7 @@ export async function geminiTranscribe(
         thinkingConfig: { thinkingLevel: 'minimal' },
       },
     },
-    { fetchImpl, env, signal },
+    { fetchImpl, env, signal, purpose: 'asr' },
   );
   const text = result.text
     .replace(/^["“”'\s]+|["“”'\s]+$/g, '')

@@ -55,6 +55,22 @@ export const GEO_LOAD_BATCH_SIZE = 4;
 
 export const GEO_LOAD_BATCH_DELAY_MS = 120;
 
+// First-click geometry only refines the city in front of the camera. The
+// worldwide catalog is thousands of cameras; walking all of them keeps the
+// "refining coverage" chip up for minutes and blocks ambient cards. Cameras
+// outside this radius keep their billboards at catalog height until the view
+// moves onto them.
+
+export const GEO_LOAD_FOCUS_KM = 18;
+
+export const GEO_LOAD_FOCUS_MAX = 48;
+
+// One `/api/terrain/heights` chunk. The enable-time prior used to ask for
+// every catalog point (~60 sequential chunks) and held the proxy after init
+// had already moved on.
+
+export const GROUND_PRIOR_FOCUS_MAX = 64;
+
 export const GEO_TRACKING_BATCH_SIZE = 2;
 
 export const GEO_TRACKING_BATCH_DELAY_MS = 250;

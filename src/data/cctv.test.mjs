@@ -72,6 +72,13 @@ import cctvLayer, {
   setCctvCardPresentationOptions,
   setActiveCamera,
 } from './cctv.js';
+import { selectCctvGeometryCohorts } from '../layers/cctv/geometryQueue.js';
+import { selectGroundPriorIndices } from '../layers/cctv/ground.js';
+import {
+  GEO_LOAD_FOCUS_KM,
+  GEO_LOAD_FOCUS_MAX,
+  GROUND_PRIOR_FOCUS_MAX,
+} from '../layers/cctv/policy.js';
 import {
   CCTV_ACTIVATION_RESULT,
   CCTV_FOCUS_REQUEST_EVENT,
@@ -375,6 +382,72 @@ test('geometry drain pacing yields to tracked and cockpit camera ownership', () 
   const queue = [{ id: 'near' }, { id: 'far' }, active];
   assert.equal(prioritizeActiveCctvGeometryRecord(queue, active), true);
   assert.equal(queue[0], active);
+});
+
+test('first-click geometry waits on the city cohort, not the worldwide catalog', () => {
+  const near = Array.from({ length: 80 }, (_, index) => ({
+    record: { id: `near-${index}` },
+    distKm: index * 0.2,
+  }));
+  const far = Array.from({ length: 100 }, (_, index) => ({
+    record: { id: `far-${index}` },
+    distKm: GEO_LOAD_FOCUS_KM + 5 + index,
+  }));
+  const active = { record: { id: 'active' }, distKm: 400, active: true };
+  const split = selectCctvGeometryCohorts([...far, active, ...near]);
+  assert.equal(split.foreground.length, GEO_LOAD_FOCUS_MAX);
+  assert.equal(split.foreground[0], active.record);
+  assert.equal(split.foreground[1].id, 'near-0');
+  assert.equal(
+    split.deferred.length,
+    near.length + far.length - (GEO_LOAD_FOCUS_MAX - 1),
+  );
+  assert.ok(split.deferred.every((record) => record.id !== 'active'));
+
+  const ocean = selectCctvGeometryCohorts(
+    far.map((entry) => ({ ...entry, active: false })),
+    { radiusKm: GEO_LOAD_FOCUS_KM, maxCount: GEO_LOAD_FOCUS_MAX },
+  );
+  assert.equal(ocean.foreground.length, 0);
+  assert.equal(ocean.deferred.length, far.length);
+
+  const points = Array.from({ length: 200 }, (_, index) => ({
+    lat: 30 + index * 0.2,
+    lon: -97,
+  }));
+  const indices = selectGroundPriorIndices(
+    points,
+    30.2672,
+    -97.7431,
+    GROUND_PRIOR_FOCUS_MAX,
+    (lat1, lon1, lat2, lon2) => Math.hypot(lat1 - lat2, lon1 - lon2),
+  );
+  assert.equal(indices.length, GROUND_PRIOR_FOCUS_MAX);
+  assert.equal(indices[0], 1);
+  assert.ok(Math.max(...indices) < GROUND_PRIOR_FOCUS_MAX + 2);
+  assert.deepEqual(
+    selectGroundPriorIndices(points, NaN, -97, GROUND_PRIOR_FOCUS_MAX, () => 0),
+    [],
+  );
+
+  const root = path.dirname(fileURLToPath(import.meta.url));
+  const queueSource = fs.readFileSync(
+    path.join(root, '../layers/cctv/geometryQueue.js'),
+    'utf8',
+  );
+  const ingestionSource = fs.readFileSync(
+    path.join(root, '../layers/cctv/ingestion.js'),
+    'utf8',
+  );
+  assert.match(
+    queueSource,
+    /selectCctvGeometryCohorts\(rankedFromViewer\(\)\)/,
+  );
+  assert.match(ingestionSource, /enqueueUnresolvedFocusGeometry\(\)/);
+  assert.doesNotMatch(
+    ingestionSource,
+    /_records\.filter\(\s*\(record\) => !\w+\.ground\.isGroundResolved/,
+  );
 });
 
 test('geometry drain rechecks pacing when tracking releases between batches', () => {

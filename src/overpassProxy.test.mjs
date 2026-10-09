@@ -13,6 +13,7 @@ import path from 'node:path';
 import { Readable } from 'node:stream';
 import createViteConfig, { fetchOverpassPayload, overpassPayloadIsData, readOverpassDisk } from '../vite.config.js';
 import { OVERPASS_UPSTREAMS } from '../server/providers/overpass/constants.js';
+import { OVERPASS_HEDGE_MS } from '../server/providers/overpass/transport.js';
 
 const ENDPOINTS = ['https://a.example/api', 'https://b.example/api', 'https://c.example/api'];
 
@@ -310,6 +311,14 @@ test('coalesced outage callers both receive last-good data, never a cached refus
       await unlink(file);
     }
   }
+});
+
+test('a slow mirror starts its sibling inside two seconds', () => {
+  assert.ok(OVERPASS_HEDGE_MS > 0);
+  assert.ok(
+    OVERPASS_HEDGE_MS <= 1500,
+    `hedge is ${OVERPASS_HEDGE_MS} ms; a 5 s stagger left cold ALPR inside the 30–45 s ceiling`,
+  );
 });
 
 test('a hung head mirror is hedged: a later mirror answers well inside the client ceiling', async () => {

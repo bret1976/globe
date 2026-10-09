@@ -7,6 +7,14 @@ import {
 } from './selfHostedIntent.js';
 import { findPoiByName } from '../locations.js';
 
+test('Take me to Austin is a fly to Austin', () => {
+  const plan = planSelfHostedVoiceTurn('Take me to Austin');
+  assert.equal(plan.calls[0].name, 'fly_to_location');
+  assert.equal(plan.calls[0].arguments.query, 'Austin');
+  assert.equal(plan.calls[0].arguments.locationId, 'austin');
+  assert.equal(plan.calls[0].arguments.waitForArrival, true);
+});
+
 test('Pentagon is a unique curated POI, not a loose single-word match', () => {
   assert.deepEqual(findPoiByName('Pentagon'), { cityId: 'dc', index: 3 });
   assert.equal(findPoiByName('Tower'), null);

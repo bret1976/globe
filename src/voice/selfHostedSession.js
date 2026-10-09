@@ -51,6 +51,7 @@ export function createSelfHostedSession({
   let playbackContext = null;
   let analyser = null;
   let visualizerSource = null;
+  let visualizerSink = null;
   let visualizerFrame = null;
   let heardSpeech = false;
   let lastSpeechAt = 0;
@@ -712,6 +713,12 @@ export function createSelfHostedSession({
     if (!teardown) return;
     analyser = null;
     try {
+      visualizerSink?.disconnect?.();
+    } catch {
+      /* already disconnected */
+    }
+    visualizerSink = null;
+    try {
       visualizerSource?.disconnect?.();
     } catch {
       /* already disconnected */
@@ -731,9 +738,16 @@ export function createSelfHostedSession({
         analyser.fftSize = 512;
         analyser.smoothingTimeConstant = 0.35;
         visualizerSource.connect(analyser);
+        // Chrome keeps analyser levels at zero unless the graph reaches
+        // destination. Zero gain so the mic is not played back.
+        visualizerSink = audioContext.createGain();
+        visualizerSink.gain.value = 0;
+        analyser.connect(visualizerSink);
+        visualizerSink.connect(audioContext.destination);
       } catch {
         visualizerSource = null;
         analyser = null;
+        visualizerSink = null;
         return;
       }
     }

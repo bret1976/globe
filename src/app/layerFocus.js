@@ -20,6 +20,8 @@ import {
   layerLiveDestination,
   pickLayerFocusAnchor,
   waitForLayerFocusObjects,
+  isUsableOperatorCameraHeight,
+  isNearbyOperatorFocus,
 } from './layerFocusPlan.js';
 
 export {
@@ -206,6 +208,16 @@ export async function prepareEnabledLayerFocus({ viewer, layerId } = {}) {
     return { ok: true, location: cached || immediate || camera };
   }
 
+  // The view the operator already has is the click. Austin's boot hash matches
+  // the default spawn, so it is not an operator fix yet — snapping to London
+  // before the catalog loads makes the camera grid finish in London.
+  if (layerId === 'cctv') {
+    const heightM = viewer.camera.positionCartographic?.height;
+    if (isUsableOperatorCameraHeight(heightM) && camera) {
+      return { ok: true, mode: 'hold', location: camera };
+    }
+  }
+
   const anchor = pickLayerFocusAnchor({
     layerId,
     location: cached || immediate,
@@ -282,6 +294,69 @@ async function refineLiveVesselFocus({ viewer, module, venue, epoch }) {
   return id;
 }
 
+const CCTV_CATALOG_WAIT_MS = 8_000;
+
+/** Click-time view, including the Austin boot spawn. GPS only if the camera is in space. */
+function clickTimeCctvProbe(viewer, location) {
+  const heightM = viewer?.camera?.positionCartographic?.height;
+  const camera = resolveViewerOperatorFallback(viewer);
+  if (isUsableOperatorCameraHeight(heightM) && camera) return camera;
+  if (location && isFiniteLatLon(location.lat, location.lon)) return location;
+  return null;
+}
+
+async function waitForCctvNearest(module, probe, epoch) {
+  const started = Date.now();
+  let nearest = module.nearestCameraToLatLon(probe.lat, probe.lon);
+  while (
+    !nearest &&
+    epoch === layerFocusEpoch &&
+    Date.now() - started < CCTV_CATALOG_WAIT_MS
+  ) {
+    await new Promise((resolve) => {
+      setTimeout(resolve, 200);
+    });
+    if (epoch !== layerFocusEpoch) return null;
+    nearest = module.nearestCameraToLatLon(probe.lat, probe.lon);
+  }
+  return epoch === layerFocusEpoch ? nearest : null;
+}
+
+/**
+ * Catalog may still be empty on the click. Stay on the click-time view until
+ * a camera exists, then frame it when it is within 120 km. London is only the
+ * answer once the catalog says nothing is that close.
+ */
+async function focusCctvFromClickView({ viewer, module, location, epoch }) {
+  const probe = clickTimeCctvProbe(viewer, location);
+  if (probe && typeof module?.nearestCameraToLatLon === 'function') {
+    const nearest = await waitForCctvNearest(module, probe, epoch);
+    if (epoch !== layerFocusEpoch) return { ok: false, reason: 'superseded' };
+    if (nearest?.id && isNearbyOperatorFocus(nearest.distKm)) {
+      module.focusCamera?.(nearest.id, 1.8);
+      return { ok: true, mode: 'cctv', id: nearest.id, location: probe };
+    }
+  }
+  if (epoch !== layerFocusEpoch) return { ok: false, reason: 'superseded' };
+  const result = focusCctvLiveDestination(viewer, module);
+  const dest = result?.destination;
+  // flyTo has not moved yet. Put the camera on the venue first so the geometry
+  // cohort is that city, not the empty view the click started on.
+  if (dest) {
+    snapViewerToLayerFocus(
+      viewer,
+      dest.lat,
+      dest.lon,
+      dest.heightM,
+      dest.pitchDeg || layerFocusPitchDeg('cctv'),
+    );
+  }
+  module.restartFocusGeometry?.(
+    dest ? { lat: dest.lat, lon: dest.lon } : undefined,
+  );
+  return result;
+}
+
 /**
  * After a Data Layers row enable, fly to that layer's live data immediately.
  * Cache-only location — never await the geolocation prompt.
@@ -306,18 +381,8 @@ export async function focusEnabledLayer({ viewer, layerId, module } = {}) {
     cameraHeightM: viewer.camera.positionCartographic?.height,
   });
 
-  let nearestCameraId = null;
-  let nearestCameraDistKm = null;
-  if (
-    layerId === 'cctv' &&
-    typeof module?.nearestCameraToLatLon === 'function'
-  ) {
-    const probe = location || layerLiveDestination('cctv');
-    const nearest = probe
-      ? module.nearestCameraToLatLon(probe.lat, probe.lon)
-      : null;
-    nearestCameraId = nearest?.id || null;
-    nearestCameraDistKm = nearest?.distKm ?? null;
+  if (layerId === 'cctv') {
+    return focusCctvFromClickView({ viewer, module, location, epoch });
   }
 
   const needsLiveObjects = layerId === 'flights';
@@ -396,17 +461,10 @@ export async function focusEnabledLayer({ viewer, layerId, module } = {}) {
   const plan = planEnabledLayerFocus({
     layerId,
     location,
-    nearestCameraId,
-    nearestCameraDistKm,
     hasAlprFocus:
       layerId === 'alpr-cameras' && typeof module?.focusNearest === 'function',
     nearestObject,
   });
-
-  if (plan.mode === 'cctv') {
-    module.focusCamera?.(plan.id, 1.8);
-    return { ok: true, mode: 'cctv', id: plan.id, location };
-  }
 
   if (plan.mode === 'alpr') {
     const destLat = plan.lat ?? location?.lat;
@@ -490,9 +548,6 @@ export async function focusEnabledLayer({ viewer, layerId, module } = {}) {
   }
 
   if (plan.mode === 'venue' || plan.mode === 'operator') {
-    if (layerId === 'cctv') {
-      return focusCctvLiveDestination(viewer, module);
-    }
     flyToLatLon(
       viewer,
       plan.lat ?? location?.lat,
