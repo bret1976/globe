@@ -40,6 +40,8 @@ import { airQualityProxy } from './airQuality.js';
 import { stormReportsProxy } from './stormReports.js';
 import { radiosondesProxy } from './radiosondes.js';
 import { flightRestrictionsProxy } from './flightRestrictions.js';
+import { aviationHazardsProxy } from './aviationHazards.js';
+import { fireballsProxy } from './fireballs.js';
 import { ionosphereProxy } from './ionosphere.js';
 import { oceanCurrentsProxy } from './oceanCurrents.js';
 import { powerPlantsProxy } from './powerPlants.js';
@@ -89,6 +91,8 @@ function localProviderPlugins() {
     stormReportsProxy(),
     radiosondesProxy(),
     flightRestrictionsProxy(),
+    aviationHazardsProxy(),
+    fireballsProxy(),
     ionosphereProxy(),
     oceanCurrentsProxy(),
     powerPlantsProxy(),
