@@ -460,6 +460,56 @@ test('holding the mic records then the following click does not stop voice', asy
   }
 });
 
+test('mic prime starts before preventDefault so the gesture can open the microphone', async () => {
+  const previous = globalThis.window;
+  globalThis.window = {};
+  try {
+    const button = new EventTarget();
+    button.setAttribute = () => {};
+    let pressEvent = null;
+    const seen = [];
+    const ui = {
+      button,
+      root: { dataset: {}, classList: { remove() {} }, remove() {} },
+      status: {},
+      detail: {},
+      tierButton: {},
+      costValue: {},
+      helpDetail: {},
+    };
+    const lifetime = new AbortController();
+    createVoiceCommands({
+      runner: async () => ({ ok: true }),
+      signal: lifetime.signal,
+      createControl: () => ui,
+      createSession() {
+        return {
+          capabilities: { costControls: false, pushToTalk: true },
+          isActive: () => false,
+          primeMic() {
+            seen.push(pressEvent?.defaultPrevented === true ? 'after' : 'before');
+            return true;
+          },
+          cancelHold() {},
+          ignoreButtonClick() {
+            return false;
+          },
+          async start() {},
+          stop() {},
+          sendText() {},
+          sendMapEvent() {},
+        };
+      },
+    });
+    pressEvent = dispatchPointer(button, 'pointerdown');
+    assert.deepEqual(seen, ['before']);
+    assert.equal(pressEvent.defaultPrevented, true);
+    lifetime.abort();
+  } finally {
+    globalThis.window = previous;
+  }
+});
+
 test('a short mic click starts listening and the leftover click does not stop it', async () => {
   const previous = globalThis.window;
   globalThis.window = {};
@@ -473,6 +523,7 @@ test('a short mic click starts listening and the leftover click does not stop it
     let stopped = 0;
     const ui = {
       button,
+      buttonLabel: { textContent: 'TALK' },
       root: { dataset: {}, classList: { remove() {} }, remove() {} },
       status: {},
       detail: {},
@@ -528,6 +579,7 @@ test('a short mic click starts listening and the leftover click does not stop it
     );
     await new Promise((done) => setTimeout(done, 0));
     assert.deepEqual(held, ['prime']);
+    assert.equal(ui.buttonLabel.textContent, 'TALK');
     assert.deepEqual(cancelled, ['cancel']);
     assert.deepEqual(released, []);
     assert.equal(started.length, 1);

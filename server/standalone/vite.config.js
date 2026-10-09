@@ -3,7 +3,11 @@ import { defineConfig, loadEnv } from 'vite';
 import { createBrowserViteConfig } from '../../build/vite.js';
 import { localProviderPlugins } from '../providers/local.js';
 import { apiNotFoundPlugin } from './api-not-found.js';
-import { apiCompressionPlugin, apiKeepWarmPlugin } from './api-performance.js';
+import {
+  apiCompressionPlugin,
+  apiKeepWarmPlugin,
+  apiSwrPlugin,
+} from './api-performance.js';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 
@@ -16,6 +20,7 @@ export default defineConfig(({ mode }) => {
   return createBrowserViteConfig({
     plugins: [
       apiCompressionPlugin(),
+      apiSwrPlugin(),
       ...localProviderPlugins(),
       apiKeepWarmPlugin(),
       apiNotFoundPlugin(),

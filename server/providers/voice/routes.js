@@ -17,6 +17,7 @@ import {
 } from './inference.js';
 import {
   geminiActiveModel,
+  geminiAsrModel,
   geminiConfigured,
   geminiIntent,
   geminiTranscribe,
@@ -73,7 +74,7 @@ export async function handleVoiceStatus(req, res, { fetchImpl } = {}) {
       asr: health.asr
         ? QWEN_ASR_MODEL
         : gemini
-          ? geminiActiveModel()
+          ? geminiAsrModel()
           : BROWSER_ASR_MODEL,
       llm: gemini && !health.configured ? geminiActiveModel() : QWEN_LLM_MODEL,
       tts: health.tts ? KOKORO_TTS_MODEL : BROWSER_TTS_MODEL,

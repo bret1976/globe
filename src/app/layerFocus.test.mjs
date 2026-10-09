@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
-import { focusEnabledLayer } from './layerFocus.js';
+import { focusEnabledLayer, prepareEnabledLayerFocus } from './layerFocus.js';
 import {
   rememberOperatorLocation,
   clearCachedOperatorLocation,
@@ -14,6 +14,9 @@ function mockViewer() {
     camera: {
       flyTo(options) {
         flights.push({ type: 'flyTo', options });
+      },
+      setView(options) {
+        flights.push({ type: 'setView', options });
       },
       flyToBoundingSphere(sphere, options) {
         flights.push({ type: 'sphere', sphere, options });
@@ -225,5 +228,109 @@ test('Live Vessels click then flies to a ship once AIS rows arrive', async () =>
   assert.ok(Math.abs(lat - 33.751) < 0.05, `expected ship lat, got ${lat}`);
   assert.ok(Math.abs(lon + 118.22) < 0.05, `expected ship lon, got ${lon}`);
   assert.ok(carto.height < 12_000, `expected ship height, got ${carto.height}`);
+  clearCachedOperatorLocation();
+});
+
+function destinationLat(flight) {
+  const carto = Cesium.Cartographic.fromCartesian(flight.options.destination);
+  return Cesium.Math.toDegrees(carto.latitude);
+}
+
+test('CCTV prepare holds a terrestrial Austin view instead of snapping to London', async () => {
+  clearCachedOperatorLocation();
+  const viewer = mockViewer();
+  viewer.camera.positionCartographic = Cesium.Cartographic.fromDegrees(
+    -97.7431,
+    30.2672,
+    600,
+  );
+  viewer.camera.setView = (options) => {
+    viewer.flights.push({ type: 'setView', options });
+  };
+  const result = await prepareEnabledLayerFocus({ viewer, layerId: 'cctv' });
+  assert.equal(result.ok, true);
+  assert.equal(result.mode, 'hold');
+  assert.ok(Math.abs(result.location.lat - 30.2672) < 0.01);
+  assert.equal(viewer.flights.length, 0);
+  clearCachedOperatorLocation();
+});
+
+test('CCTV prepare still snaps a space view to the London venue', async () => {
+  clearCachedOperatorLocation();
+  const viewer = mockViewer();
+  viewer.camera.positionCartographic = Cesium.Cartographic.fromDegrees(
+    -97.7431,
+    30.2672,
+    2_000_000,
+  );
+  viewer.camera.setView = (options) => {
+    viewer.flights.push({ type: 'setView', options });
+  };
+  const result = await prepareEnabledLayerFocus({ viewer, layerId: 'cctv' });
+  assert.equal(result.mode, 'venue');
+  assert.equal(viewer.flights.length, 1);
+  assert.ok(Math.abs(destinationLat(viewer.flights[0]) - 51.5055) < 0.01);
+  clearCachedOperatorLocation();
+});
+
+test('CCTV enable over Austin waits for the catalog and does not fly to London', async () => {
+  clearCachedOperatorLocation();
+  const viewer = mockViewer();
+  viewer.camera.positionCartographic = Cesium.Cartographic.fromDegrees(
+    -97.7431,
+    30.2672,
+    600,
+  );
+  let probes = 0;
+  const focused = [];
+  const module = {
+    nearestCameraToLatLon(lat, lon) {
+      probes += 1;
+      assert.ok(Math.abs(lat - 30.2672) < 0.02, `probed ${lat}, expected Austin`);
+      assert.ok(Math.abs(lon + 97.7431) < 0.02, `probed ${lon}, expected Austin`);
+      if (probes < 3) return null;
+      return { id: 'cam-austin', distKm: 0.4, lat: 30.267, lon: -97.743 };
+    },
+    focusCamera(id) {
+      focused.push(id);
+    },
+  };
+  const result = await focusEnabledLayer({ viewer, layerId: 'cctv', module });
+  assert.equal(result.ok, true);
+  assert.equal(result.mode, 'cctv');
+  assert.equal(result.id, 'cam-austin');
+  assert.deepEqual(focused, ['cam-austin']);
+  assert.equal(viewer.flights.length, 0);
+  assert.ok(probes >= 3);
+  clearCachedOperatorLocation();
+});
+
+test('CCTV enable flies to London only after the catalog has no camera within 120 km', async () => {
+  clearCachedOperatorLocation();
+  const viewer = mockViewer();
+  const focused = [];
+  let restarts = [];
+  const module = {
+    nearestCameraToLatLon() {
+      return { id: 'cam-la', distKm: 370, lat: 34.05, lon: -118.24 };
+    },
+    focusCamera(id) {
+      focused.push(id);
+    },
+    focusNearest() {},
+    restartFocusGeometry(origin) {
+      restarts.push(origin);
+    },
+  };
+  const result = await focusEnabledLayer({ viewer, layerId: 'cctv', module });
+  assert.equal(result.ok, true);
+  assert.equal(result.mode, 'venue');
+  assert.deepEqual(restarts, [{ lat: 51.5055, lon: -0.0754 }]);
+  assert.deepEqual(focused, []);
+  assert.ok(viewer.flights.length >= 1);
+  assert.ok(
+    Math.abs(destinationLat(viewer.flights[0]) - 51.5055) < 0.01,
+    'a view with no nearby camera still uses the London venue',
+  );
   clearCachedOperatorLocation();
 });

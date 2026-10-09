@@ -177,6 +177,29 @@ test('surface changes invalidate cached anchors, and disable/disposal release pa
   assert.equal(h.removed, 1);
 });
 
+test('one paint samples two mesh heights and leaves the rest on native markers', (t) => {
+  const h = harness(t, 8);
+  let samples = 0;
+  h.state.viewer.scene.sampleHeightSupported = true;
+  h.state.viewer.scene.sampleHeight = () => {
+    samples += 1;
+    return 187;
+  };
+  h.overlay.sync(h.records);
+  h.paint();
+  assert.equal(samples, 2);
+  assert.equal(
+    h.entities.values.filter((entity) => entity.gevAlprCanvasPosition).length,
+    2,
+  );
+  h.paint();
+  assert.equal(samples, 4);
+  assert.equal(
+    h.entities.values.filter((entity) => entity.gevAlprCanvasPosition).length,
+    4,
+  );
+});
+
 test('an unresolved surface preserves the native marker; the horizon removes overlay hits', (t) => {
   const h = harness(t, 1);
   h.state.viewer.scene.globe.getHeight = () => -15000;

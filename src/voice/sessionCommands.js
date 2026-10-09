@@ -87,6 +87,10 @@ export function createVoiceCommands({
   let holdTimer = null;
   const startPress = (event) => {
     if (event.pointerType === 'mouse' && event.button !== 0) return;
+    // getUserMedia has to start in this pointer gesture. preventDefault
+    // before the mic call drops the gesture and the prompt never appears.
+    adapter.primeMic?.();
+    if (!session.isActive()) void session.start({ pushToTalk: false });
     event.preventDefault();
     try {
       ui.button.setPointerCapture?.(event.pointerId);
@@ -95,10 +99,8 @@ export function createVoiceCommands({
     }
     pressStartedAt = Date.now();
     skipClick = true;
-    // Start listening in the same gesture. The leftover click must not
-    // toggle the session back off — that was swallowing spoken commands.
-    adapter.primeMic?.();
-    if (!session.isActive()) void session.start({ pushToTalk: false });
+    // The leftover click must not toggle the session back off — that was
+    // swallowing spoken commands.
     if (holdTimer) clearTimeout(holdTimer);
     // Delay hold-to-talk so a leftover click does not flush the open mic.
     holdTimer = setTimeout(() => {

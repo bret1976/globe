@@ -111,13 +111,14 @@ export function createLifecycle({
         parts.model.ensureCameraPose(camera);
       }
 
-      // Task 5 (height-datum fix): batch ALL camera coords through the Re:Earth
-      // ellipsoidal ground-prior resolver (network-cached — NOT a scene query;
-      // the catalog's orthometric groundElevationM feeds the geoid fallback
-      // chain). Bounded wait: a warm proxy cache resolves in milliseconds, so
-      // records are normally built WITH their prior (correct first paint in
-      // every regime); a cold/slow upstream loses the race and the batch
-      // applies post-hoc via applyLateGroundPriors instead of hanging init.
+      // Task 5 (height-datum fix): batch the in-view cohort through the
+      // Re:Earth ellipsoidal ground-prior resolver (network-cached — NOT a
+      // scene query; the catalog's orthometric groundElevationM feeds the
+      // geoid fallback chain). One terrain chunk, index-aligned with the
+      // catalog. Bounded wait: a warm proxy cache resolves in milliseconds,
+      // so nearby records are normally built WITH their prior; a cold/slow
+      // upstream loses the race and the batch applies post-hoc via
+      // applyLateGroundPriors instead of hanging init.
       const priorsPromise = parts.ground.resolveGroundPriors(catalog);
       const priors = await Promise.race([
         priorsPromise,
@@ -253,6 +254,7 @@ export function createLifecycle({
           layerState._cameraMoving = false;
           parts.rendering.refreshHorizonCulling();
           parts.cards.refreshAmbientCards();
+          parts.geometryQueue.refreshGeometryForView();
         };
         layerState._viewer.camera.moveEnd.addEventListener(
           layerState._horizonCullListener,

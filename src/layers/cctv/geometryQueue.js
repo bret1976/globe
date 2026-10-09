@@ -6,7 +6,44 @@ import {
   GEO_TRACKING_BATCH_DELAY_MS,
   GEO_LOAD_BATCH_SIZE,
   GEO_LOAD_BATCH_DELAY_MS,
+  GEO_LOAD_FOCUS_KM,
+  GEO_LOAD_FOCUS_MAX,
 } from './policy.js';
+
+/**
+ * Picks the cameras the first-click geometry drain is allowed to wait on:
+ * the active camera, then the nearest cameras inside a city radius, capped.
+ * Everyone else is deferred. Billboards already exist at catalog height, and
+ * coverage only draws the local neighborhood, so a worldwide drain only
+ * delays "camera grid ready".
+ *
+ * @param {Array<{record: Object, distKm: number, active?: boolean}>} ranked
+ * @param {{ radiusKm?: number, maxCount?: number }} [options]
+ * @returns {{ foreground: Object[], deferred: Object[] }}
+ */
+export function selectCctvGeometryCohorts(ranked, options = {}) {
+  const radiusKm = Number.isFinite(options.radiusKm)
+    ? options.radiusKm
+    : GEO_LOAD_FOCUS_KM;
+  const maxCount = Number.isFinite(options.maxCount)
+    ? Math.max(1, Math.floor(options.maxCount))
+    : GEO_LOAD_FOCUS_MAX;
+  const distanceOf = (entry) =>
+    Number.isFinite(entry?.distKm) ? entry.distKm : Number.POSITIVE_INFINITY;
+  const sorted = [...(Array.isArray(ranked) ? ranked : [])].sort((a, b) => {
+    if (!!a?.active !== !!b?.active) return a?.active ? -1 : 1;
+    return distanceOf(a) - distanceOf(b);
+  });
+  const foreground = [];
+  const deferred = [];
+  for (const entry of sorted) {
+    if (!entry?.record) continue;
+    const inFocus = !!entry.active || distanceOf(entry) <= radiusKm;
+    if (inFocus && foreground.length < maxCount) foreground.push(entry.record);
+    else deferred.push(entry.record);
+  }
+  return { foreground, deferred };
+}
 
 export function createGeometryQueue({
   state: layerState,
@@ -308,40 +345,96 @@ export function createGeometryQueue({
   }
 
   /**
-   * Starts the initial staggered load: orders all records active-camera-first,
-   * then by distance from the current viewer position (nearest first, so
-   * cameras likely in view refine before off-screen ones), and exposes
-   * loaded/total progress through uiState()/getStats() while running.
+   * Ranks every record by distance from the current view. The active camera
+   * is flagged so it stays in the foreground cohort even when the operator
+   * focus target sits just outside the city radius.
+   * @returns {Array<{record: Object, distKm: number, active: boolean}>}
    */
 
-  function startGeometryLoadQueue() {
+  function rankedFromViewer(origin) {
+    const active = parts.selection.getActiveRecord();
+    const carto = layerState._viewer?.camera?.positionCartographic;
+    const refLat = Number.isFinite(origin?.lat)
+      ? origin.lat
+      : carto
+        ? Cesium.Math.toDegrees(carto.latitude)
+        : (active?.camera.lat ?? 0);
+    const refLon = Number.isFinite(origin?.lon)
+      ? origin.lon
+      : carto
+        ? Cesium.Math.toDegrees(carto.longitude)
+        : (active?.camera.lon ?? 0);
+    return layerState._records.map((record) => ({
+      record,
+      active: record === active,
+      distKm: parts.model.haversineKm(
+        refLat,
+        refLon,
+        record.camera.lat,
+        record.camera.lon,
+      ),
+    }));
+  }
+
+  /**
+   * Foreground cohort for the current view: active camera plus the nearest
+   * city-radius cameras, capped. This is the only set the loading chip waits
+   * on, and the only set a tiles-ready retry or a later pan refines.
+   * @returns {Object[]}
+   */
+
+  function focusRecords() {
+    return selectCctvGeometryCohorts(rankedFromViewer()).foreground;
+  }
+
+  /**
+   * Quietly queues unresolved cameras in the current focus cohort. Does not
+   * raise `_geoLoading`, so a tiles-ready retry cannot put the chip back on
+   * the worldwide catalog.
+   */
+
+  function enqueueUnresolvedFocusGeometry() {
+    const pending = focusRecords().filter(
+      (record) => !parts.ground.isGroundResolved(record),
+    );
+    if (pending.length) enqueueGeometryRefresh(pending);
+  }
+
+  /**
+   * After the camera settles, refine cameras that just entered the city
+   * radius and have never had a frustum applied. Skipped while the
+   * first-click drain is still walking its own cohort.
+   */
+
+  function refreshGeometryForView() {
+    if (!layerState._enabled || layerState._geoLoading) return;
+    // One pass per camera. A later tiles-ready tick retries the cohort that
+    // is still unresolved; panning must not resample cameras that already
+    // have a frustum.
+    const pending = focusRecords().filter(
+      (record) =>
+        !parts.ground.isGroundResolved(record) && !record.frustumPositions,
+    );
+    if (pending.length) enqueueGeometryRefresh(pending);
+  }
+
+  /**
+   * Starts the initial staggered load for the city in front of the camera
+   * (active camera first, then nearest). Loaded/total on the chip is that
+   * cohort, not the worldwide catalog.
+   */
+
+  function startGeometryLoadQueue(origin) {
     stopGeometryLoadQueue();
     // Fresh drain → fresh one-shot completion pass: re-arm the tiles-ready
     // latch so update() can complete any records this drain leaves unresolved.
     layerState._tilesReadyReenqueued = false;
     if (!layerState._records.length) return;
-    const active = parts.selection.getActiveRecord();
-    const carto = layerState._viewer?.camera?.positionCartographic;
-    const refLat = carto
-      ? Cesium.Math.toDegrees(carto.latitude)
-      : (active?.camera.lat ?? 0);
-    const refLon = carto
-      ? Cesium.Math.toDegrees(carto.longitude)
-      : (active?.camera.lon ?? 0);
-    const pending = layerState._records
-      .filter((record) => record !== active)
-      .map((record) => ({
-        record,
-        distKm: parts.model.haversineKm(
-          refLat,
-          refLon,
-          record.camera.lat,
-          record.camera.lon,
-        ),
-      }))
-      .sort((a, b) => a.distKm - b.distKm)
-      .map((entry) => entry.record);
-    layerState._geoQueue = active ? [active, ...pending] : pending;
+    const foreground = origin
+      ? selectCctvGeometryCohorts(rankedFromViewer(origin)).foreground
+      : focusRecords();
+    if (!foreground.length) return;
+    layerState._geoQueue = foreground;
     layerState._geoLoadTotal = layerState._geoQueue.length;
     layerState._geoLoadDone = 0;
     layerState._geoLoading = true;
@@ -361,6 +454,8 @@ export function createGeometryQueue({
     prioritizeActiveCctvGeometryRecord,
     processGeometryBatch,
     enqueueGeometryRefresh,
+    enqueueUnresolvedFocusGeometry,
+    refreshGeometryForView,
     startGeometryLoadQueue,
   };
 }

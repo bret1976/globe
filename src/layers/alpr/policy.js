@@ -64,5 +64,10 @@ export const MARKER_ICON_SIZE = 38;
 export const SELECTED_MARKER_ICON_SIZE = 60;
 export const MAX_CANVAS_FRUSTUMS = 64;
 
+/** Mesh samples taken inside one overlay paint. The rest stay on the native
+ * billboard and are sampled by the existing 250 ms retry, so the first paint
+ * cannot `sampleHeight` every frustum in a single frame. */
+export const ALPR_HEIGHT_SAMPLES_PER_PAINT = 2;
+
 /** OSM attribution may collapse after five seconds; full credit stays in Data attribution. */
 export const CREDIT_DISPLAY_MS = 5000;
