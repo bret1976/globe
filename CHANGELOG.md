@@ -1,3 +1,9 @@
+## 2026-10-09 — Aviation Hazards (AWC) + Fireballs (NASA JPL)
+
+- New `aviation-hazards` Events toggle: NOAA/NWS Aviation Weather Center SIGMETs, G-AIRMETs, and CWAs as draped outlines colored by hazard family. Proxy `GET /api/aviation-hazards` (5 min TTL, 2 h stale). Awareness only — not for flight planning.
+- New `fireballs` Events toggle: NASA/JPL fireball/bolide events as altitude points sized by energy. Proxy `GET /api/fireballs` (1 h TTL, 24 h stale).
+- Public US government open data — no API keys. Original Bret/GodsEye code. Share tokens `ah` / `fb`.
+
 ## 2026-09-28 — Aurora (NOAA SWPC OVATION)
 
 - New `aurora` Data Layers toggle: NOAA SWPC OVATION 30-minute aurora forecast as intensity-colored ground discs (green → cyan → magenta).

@@ -156,6 +156,8 @@ export const KEEP_WARM_ENDPOINTS = Object.freeze([
   '/api/storm-reports',
   '/api/gpsjam',
   '/api/flight-restrictions',
+  '/api/aviation-hazards',
+  '/api/fireballs',
   '/api/nws-alerts',
   '/api/ndbc-buoys',
   '/api/usgs-gauges',

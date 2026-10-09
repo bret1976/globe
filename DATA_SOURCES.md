@@ -37,6 +37,8 @@ How to read this:
 | **NWS Local Storm Reports (via IEM)**                                                     | Last 48 h of filed storm reports — tornado, hail, wind damage/gusts, flooding, heavy rain/snow                                                                                 | Public GeoJSON `mesonet.agron.iastate.edu/geojson/lsr.php?hours=48` — no key; NWS reports, IEM public domain                                                                                                                           | "National Weather Service / Iowa Environmental Mesonet"                                                                                                                    |
 | **Open-Meteo Marine ocean currents** | Surface ocean current arrows on a global 8° grid (speed + flow direction) | Public JSON `marine-api.open-meteo.com/v1/marine` — no key; CC BY 4.0, batched under the free-tier per-minute limit and cached 6 h | "Open-Meteo / Copernicus Marine" |
 | **WRI Global Power Plant Database** | Utility-scale (≥ 250 MW) power plants colored by fuel, sized by capacity | Public CSV `github.com/wri/global-power-plant-database` — no key; CC BY 4.0, cached 7 days | "World Resources Institute" |
+| **Aviation Weather Center hazards** | SIGMET / G-AIRMET / CWA outlines colored by hazard family | Public JSON `aviationweather.gov/api/data/*` — no key; U.S. Gov public domain; awareness only | "Aviation Weather Center" |
+| **NASA/JPL fireballs** | Bolide / fireball events at reported altitude, sized by energy | Public JSON `ssd-api.jpl.nasa.gov/fireball.api` — no key; public domain | "NASA/JPL Fireball Data API" |
 | **SondeHub radiosondes** | Live weather balloons at their real altitude (ascending / descending), plus landed and last-heard (signal lost > 20 min) markers on the ground, with temperature, humidity and vertical speed | Public JSON `api.v2.sondehub.org/sondes` — no key; [CC BY-SA 2.0](https://creativecommons.org/licenses/by-sa/2.0/), one proxied request per 2 min | "SondeHub" |
 | **FAA Graphic TFRs** | Flight Restrictions layer: live temporary flight restriction outlines (VIP movement, security, hazards/wildfire, air shows & sports, UAS gatherings, space ops) | Public GeoJSON (FAA GeoServer WFS `tfr.faa.gov/geoserver/TFR/ows`, layer `TFR:V_TFR_LOC`) — no key; U.S. Government work (public domain), 5-minute proxy cache. Awareness only, not for flight planning | "Federal Aviation Administration" |
 | **NOAA SWPC GloTEC** | Ionosphere TEC layer: global total electron content grid (5° × 2.5°, 10-minute cadence) drawn at the F2 peak height | Public GeoJSON `services.swpc.noaa.gov/products/glotec/geojson_2d_urt/` (index `geojson_2d_urt.json`) — no key; U.S. Government work (public domain), 5-minute proxy cache | "NOAA Space Weather Prediction Center" |
@@ -243,6 +245,14 @@ acknowledgement.
 ### FAA temporary flight restrictions
 
 > `/api/flight-restrictions` reads the FAA Graphic TFR GeoServer WFS (`TFR:V_TFR_LOC`, GeoJSON, no key) every 5 minutes and draws each active or scheduled TFR outline on the ground, colored by type: VIP (presidential / vice-presidential movement), security, hazards (often wildfire), air shows & sports, UAS public gatherings, space operations. Each outline carries its NOTAM id, title, ARTCC and a link to the official tfr.faa.gov detail page. Rings are decimated to ≤ 72 vertices. U.S. Government work (public domain). For situational awareness only — not for flight planning. Original layer and code. Attribution: Federal Aviation Administration.
+
+### Aviation Weather Center hazards
+
+> `/api/aviation-hazards` merges keyless NOAA/NWS Aviation Weather Center feeds — SIGMETs (`airsigmet`), G-AIRMETs (`gairmet`), and Center Weather Advisories (`cwa`) — every 5 minutes. Outlines are colored by hazard family (turbulence, icing/freezing level, convective, IFR/mountain obscuration, low-level wind shear / surface wind). Rings are decimated to ≤ 72 vertices; G-AIRMET LINE products draw as polylines. U.S. Government work (public domain). Situational awareness only — not for flight planning. Original layer and code. Attribution: NOAA/NWS Aviation Weather Center.
+
+### NASA/JPL fireballs
+
+> `/api/fireballs` reads the [NASA/JPL Fireball Data API](https://ssd-api.jpl.nasa.gov/doc/fireball.html) (no key), keeps the most recent ~250 events with coordinates, and draws each bolide at reported altitude sized/colored by radiated energy (kt TNT equivalent scale). Public domain NASA. Original layer and code. Attribution: NASA Jet Propulsion Laboratory CNEOS.
 
 ### NOAA SWPC GloTEC ionosphere
 

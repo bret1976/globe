@@ -410,6 +410,7 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
     disposition: 'enabled-only',
   }),
   Object.freeze({ id: 'aurora', token: '4', disposition: 'enabled-only' }),
+  Object.freeze({ id: 'aviation-hazards', token: 'ah', disposition: 'enabled-only' }),
   Object.freeze({
     id: 'bhote-koshi-2026',
     token: 'h',
@@ -434,6 +435,7 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
     token: 'k',
     disposition: 'enabled-only',
   }),
+  Object.freeze({ id: 'fireballs', token: 'fb', disposition: 'enabled-only' }),
   Object.freeze({
     id: 'flight-restrictions',
     token: 'fr',

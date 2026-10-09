@@ -137,6 +137,20 @@ export const DATA_CREDITS = [
       '(Federal Aviation Administration, public domain; awareness only, not for flight planning)',
   },
   {
+    key: 'aviation-hazards',
+    html:
+      'Aviation hazards: ' +
+      '<a href="https://aviationweather.gov/" target="_blank" rel="noopener">NOAA/NWS Aviation Weather Center</a> ' +
+      'SIGMETs, G-AIRMETs, and Center Weather Advisories (public domain; awareness only, not for flight planning)',
+  },
+  {
+    key: 'fireballs',
+    html:
+      'Fireballs: ' +
+      '<a href="https://ssd-api.jpl.nasa.gov/doc/fireball.html" target="_blank" rel="noopener">NASA/JPL Fireball Data API</a> ' +
+      '(Jet Propulsion Laboratory CNEOS, public domain)',
+  },
+  {
     key: 'ionosphere',
     html:
       'Ionosphere TEC: ' +

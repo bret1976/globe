@@ -16,6 +16,8 @@ import { createAirQualitySource } from '../layers/airQuality/source.js';
 import { createStormReportsSource } from '../layers/stormReports/source.js';
 import { createRadiosondesSource } from '../layers/radiosondes/source.js';
 import { createFlightRestrictionsSource } from '../layers/flightRestrictions/source.js';
+import { createAviationHazardsSource } from '../layers/aviationHazards/source.js';
+import { createFireballsSource } from '../layers/fireballs/source.js';
 import { createIonosphereSource } from '../layers/ionosphere/source.js';
 import { createUkraineFiresSource } from '../layers/ukraineFires/source.js';
 import { createOceanCurrentsSource } from '../layers/oceanCurrents/source.js';
@@ -44,6 +46,8 @@ export function createReferenceSources() {
     powerPlants: createPowerPlantsSource(),
     radiosondes: createRadiosondesSource(),
     flightRestrictions: createFlightRestrictionsSource(),
+    aviationHazards: createAviationHazardsSource(),
+    fireballs: createFireballsSource(),
     ionosphere: createIonosphereSource(),
     ukraineFires: createUkraineFiresSource(),
   };
