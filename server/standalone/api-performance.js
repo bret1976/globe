@@ -210,6 +210,8 @@ export const SWR_ENDPOINTS = Object.freeze({
       (endpoint) => !['/api/firms', '/api/ukraine-fires'].includes(endpoint),
     ).map((endpoint) => [endpoint, SWR_DEFAULTS]),
   ),
+  // Radio directory (one global catalog; 5 s cold from Singapore).
+  '/api/radio/stations': SWR_DEFAULTS,
   // Live aircraft: refresh on every poll, never serve a copy older than 5 min.
   '/api/adsblol/mil': Object.freeze({
     refreshAfterMs: 8_000,
