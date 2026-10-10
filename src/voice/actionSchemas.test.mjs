@@ -21,7 +21,8 @@ test('the complete Realtime tool payload retains its pre-extraction contract and
     .digest('hex');
   assert.equal(
     digest,
-    '72561cf52d22abd06749b78ec8d20e23104e54f0a752faeeb6919d2d7773afbe',
+    // Re-derived for the additive Cyber HUD layout value and set_cyber_sonar (upstream #706).
+    'fb3df3f6ca2a8c34d6e479ada749c2c559eacb26fe4ae85a380257d22cb0232d',
   );
 });
 

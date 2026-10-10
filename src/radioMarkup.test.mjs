@@ -25,11 +25,11 @@ const css = readStylesheet(new URL('../style.css', import.meta.url));
 
 function realtimeTools() { return GEV_REALTIME_TOOLS; }
 
-test('Realtime schema exposes the authoritative 28-tool inventory', () => {
+test('Realtime schema exposes the authoritative 29-tool inventory', () => {
   const tools = realtimeTools();
-  assert.equal(tools.length, 28);
+  assert.equal(tools.length, 29); // 2026-10-10: + set_cyber_sonar (upstream v0.2.0 Cyber HUD)
   const names = tools.map((tool) => tool.name);
-  assert.equal(new Set(names).size, 28, 'tool names are unique');
+  assert.equal(new Set(names).size, 29, 'tool names are unique');
   assert.ok(names.includes('set_context_mode'));
   assert.ok(names.includes('control_cockpit'));
   assert.ok(names.includes('select_nearest_aircraft'));
@@ -171,6 +171,7 @@ test('no unchanged Realtime tool definition drifts silently', () => {
   // in the mic-test brief which tools moved — the session cache busts on any
   // schema change.
   const TOUCHED = new Set([
+    'set_cyber_sonar',
     'set_context_mode',
     'control_cockpit',
     'set_panel_open',
@@ -189,11 +190,12 @@ test('no unchanged Realtime tool definition drifts silently', () => {
     .slice(0, 16);
   // ALPR, AU Fire and (2026-10-07) every newer layer incl. Aurora / Ukraine
   // War Fires intentionally extend layer enums; retain the complete pin.
-  assert.equal(digest, 'cd1f7c899eb64a00', 'an unchanged Realtime tool definition drifted');
+  // 2026-10-10: set_hud_layout's enum gains 'cyber' (upstream v0.2.0 Cyber HUD).
+  assert.equal(digest, '57f971371e9f9acd', 'an unchanged Realtime tool definition drifted');
 });
 
 test('Radio volume and mission speed share the Sharpen slider visual language', () => {
-  for (const id of ['cockpit-radio-volume', 'context-radio-mini-volume', 'radio-volume']) {
+  for (const id of ['cockpit-radio-volume', 'context-radio-mini-volume', 'radio-volume', 'sdr-volume']) {
     assert.match(
       html,
       new RegExp(`id="${id}"[^>]*class="gev-quantitative-slider"[^>]*type="range"`),
@@ -268,7 +270,10 @@ test('Radio is nested inside Context with separate disclosure and power controls
   assert.match(radioControlsSource, /classList\.remove\('radio-broadcasting'\)/);
   assert.match(radioBindings, /this\.radio\.getTunerStations\(750\)/);
   assert.match(radioBindings, /radioTunerPointerPosition\(/);
-  assert.doesNotMatch(css, /#right-context-rail\s*>\s*#radio-panel/);
+  // Only the Cyber skin promotes Radio to a peer panel. Other themes retain
+  // the embedded Context layout; theme round-trip behavior has separate tests.
+  const baseCss = css.replace(readFileSync(new URL('./ui/styles/cyber.css', import.meta.url), 'utf8'), '');
+  assert.doesNotMatch(baseCss, /#right-context-rail\s*>\s*#radio-panel/);
   assert.match(css, /#global-context-panel #radio-panel\.collapsed/);
   assert.doesNotMatch(css, /\.context-radio-dock\.active:hover \.context-radio-mini/);
   assert.doesNotMatch(css, /\.context-radio-dock\.active:focus-within \.context-radio-mini/);

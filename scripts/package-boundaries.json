@@ -588,6 +588,7 @@
       "src/ui/cockpitContext.js",
       "src/ui/cockpitController.js",
       "src/ui/cockpitDisplayPortal.js",
+      "src/ui/displayPanelScroll.js",
       "src/ui/cockpitInput.js",
       "src/ui/cockpitInstruments.js",
       "src/ui/cockpitLayout.js",
@@ -649,6 +650,7 @@
       "src/styles/surveillance.js",
       "src/styles/thermal.js",
       "src/ui/applicationShell.js",
+      "src/ui/cyberSonarControls.js",
       "src/ui/locationNavigation.js",
       "src/ui/cockpitCoordinator.js",
       "src/ui/cameraOrientationControls.js",
@@ -666,6 +668,7 @@
       "src/ui/cockpitContext.js",
       "src/ui/cockpitController.js",
       "src/ui/cockpitDisplayPortal.js",
+      "src/ui/displayPanelScroll.js",
       "src/ui/cockpitInput.js",
       "src/ui/cockpitInstruments.js",
       "src/ui/cockpitLayout.js",
@@ -1858,6 +1861,7 @@
       "src/styles/surveillance.js",
       "src/styles/thermal.js",
       "src/ui/applicationShell.js",
+      "src/ui/cyberSonarControls.js",
       "src/ui/locationNavigation.js",
       "src/ui/cockpitCoordinator.js",
       "src/ui/cameraOrientationControls.js",
@@ -1875,6 +1879,7 @@
       "src/ui/cockpitContext.js",
       "src/ui/cockpitController.js",
       "src/ui/cockpitDisplayPortal.js",
+      "src/ui/displayPanelScroll.js",
       "src/ui/cockpitInput.js",
       "src/ui/cockpitInstruments.js",
       "src/ui/cockpitLayout.js",
@@ -1946,6 +1951,7 @@
       "src/layers/flights/records.js",
       "src/layers/flights/recordPolicy.js",
       "src/layers/flights/snapshotRenderer.js",
+      "src/layers/flights/modelSpec.js",
       "src/layers/military/records.js",
       "src/layers/military/recordPolicy.js",
       "src/layers/military/snapshotRenderer.js",
@@ -2007,6 +2013,7 @@
       "src/data/contactTrailRenderer.js",
       "src/data/transitProxy.js",
       "src/data/gtfsRealtime.js",
+      "src/data/modelEligibility.js",
       "src/layers/transit/trails.js",
       "src/layers/transit/movement.js",
       "src/layers/transit/qaMetrics.js",
@@ -2092,7 +2099,8 @@
       "egm96-universal",
       "mgrs",
       "pbf",
-      "satellite.js"
+      "satellite.js",
+      "@jtarrio/webrtlsdr"
     ]
   },
   "application-catalog": {
@@ -2426,6 +2434,7 @@
       "src/layers/flights/records.js",
       "src/layers/flights/recordPolicy.js",
       "src/layers/flights/snapshotRenderer.js",
+      "src/layers/flights/modelSpec.js",
       "src/layers/military/records.js",
       "src/layers/military/recordPolicy.js",
       "src/layers/military/snapshotRenderer.js",
@@ -2527,7 +2536,8 @@
       "satellite.js",
       "@mapbox/vector-tile",
       "pbf",
-      "mgrs"
+      "mgrs",
+      "@jtarrio/webrtlsdr"
     ]
   },
   "application-operations": {

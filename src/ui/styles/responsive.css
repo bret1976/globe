@@ -210,6 +210,13 @@
   #right-context-rail #global-context-panel.collapsed {
     width: 100%;
   }
+  /* Collapsed CCTV / Context tabs stay compact at the rail edge like DISPLAY,
+     so the phone globe keeps its lower half; expanded panels still go wide. */
+  #right-context-rail > #cctv-panel.collapsed,
+  #right-context-rail > #global-context-panel.collapsed {
+    width: var(--left-collapsed-width);
+    margin-left: auto;
+  }
   .context-radio-mini {
     right: -38px;
     width: min(244px, calc(100vw - 32px));

@@ -297,6 +297,12 @@ const LAYER_ALIASES = new Map([
   ['license plate readers', 'alpr-cameras'],
   ['license plate cameras', 'alpr-cameras'],
   ['plate readers', 'alpr-cameras'],
+  ['local-adsb', 'local-adsb'],
+  ['local adsb', 'local-adsb'],
+  ['local ads-b', 'local-adsb'],
+  ['my receiver', 'local-adsb'],
+  ['my antenna', 'local-adsb'],
+  ['my sdr', 'local-adsb'],
   ['recent imagery', 'recent-imagery'],
   ['satellite imagery', 'recent-imagery'],
   ['nasa imagery', 'recent-imagery'],
@@ -1195,6 +1201,17 @@ export function createGevActionRunner({
         Object.assign(out, result);
       }
       return { ...out, hud: styleManager.getControlState().hud };
+    }
+
+    if (name === 'set_cyber_sonar') {
+      if (typeof styleManager?.setCyberSonar !== 'function') {
+        return {
+          ok: false,
+          action: 'set_cyber_sonar',
+          error: 'Cyber sonar controls are unavailable.',
+        };
+      }
+      return { action: 'set_cyber_sonar', ...styleManager.setCyberSonar(args) };
     }
 
     if (name === 'set_detection') {
