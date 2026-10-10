@@ -846,6 +846,12 @@ export class LayerStateCoordinator {
       // without sleeping out a 90 s expiry.
       setTimer = (fn, ms) => setTimeout(fn, ms),
       clearTimer = (handle) => clearTimeout(handle),
+      // Phones (iOS Safari especially) kill the page when a share link brings
+      // a dozen data layers up at once: every feed's JSON parse, geometry
+      // build and GPU upload lands in the same few seconds. When set, enabled
+      // layers restore one after another, each given up to
+      // `staggerRestore.stepMs` to settle before the next starts.
+      staggerRestore = null,
     } = {},
   ) {
     if (!dataManager?.registrationsFinalized) {
@@ -858,6 +864,13 @@ export class LayerStateCoordinator {
     this.storage = storage;
     this.restoreGate = restoreGate;
     this.onDurableStateChange = onDurableStateChange;
+    this.staggerRestore =
+      staggerRestore && Number(staggerRestore.stepMs) > 0
+        ? {
+            stepMs: Number(staggerRestore.stepMs),
+            gapMs: Math.max(0, Number(staggerRestore.gapMs) || 0),
+          }
+        : null;
     this.onTrackingRestoreStatus = onTrackingRestoreStatus;
     this.now = now;
     this.setTimer = setTimer;
@@ -1087,8 +1100,7 @@ export class LayerStateCoordinator {
     try {
       await this._waitForRestoreGate();
       const enabled = new Set(this._durableState.enabledLayerIds);
-      const settled = await Promise.allSettled(
-        LAYER_STATE_REGISTRY.map(async (entry) => {
+      const restoreEntry = async (entry) => {
           const controller = this._restoreControllers.get(entry.id);
           const targetEnabled = enabled.has(entry.id);
           const options = layerOptionsForRestore(this._durableState, entry.id);
@@ -1137,8 +1149,10 @@ export class LayerStateCoordinator {
                 : 'ParamsRejected',
               succeeded: paramsSucceeded && result.succeeded,
             }));
-        }),
-      );
+      };
+      const settled = this.staggerRestore
+        ? await this._staggeredRestore(restoreEntry, enabled)
+        : await Promise.allSettled(LAYER_STATE_REGISTRY.map(restoreEntry));
       this.lastRestoreResults = settled.map((result, index) => {
         if (result.status === 'fulfilled') return result.value;
         const entry = LAYER_STATE_REGISTRY[index];
@@ -1161,6 +1175,40 @@ export class LayerStateCoordinator {
       this._restoreControllers.clear();
       this._notifyDurableState();
     }
+  }
+
+  /**
+   * Same per-layer restore as the parallel path, but enabled layers start one
+   * at a time. Disabled targets are cheap and still settle together. Each
+   * enabled layer gets up to `stepMs` before the next one starts (a slow feed
+   * cannot hold the rest back); all of them are still awaited for results.
+   * Results stay index-aligned with LAYER_STATE_REGISTRY.
+   */
+  async _staggeredRestore(restoreEntry, enabled) {
+    const { stepMs, gapMs } = this.staggerRestore;
+    const promises = new Array(LAYER_STATE_REGISTRY.length);
+    LAYER_STATE_REGISTRY.forEach((entry, index) => {
+      if (!enabled.has(entry.id)) promises[index] = restoreEntry(entry);
+    });
+    const wait = (ms) =>
+      new Promise((resolve) => {
+        this.setTimer(resolve, ms);
+      });
+    let first = true;
+    for (let index = 0; index < LAYER_STATE_REGISTRY.length; index++) {
+      const entry = LAYER_STATE_REGISTRY[index];
+      if (!enabled.has(entry.id)) continue;
+      if (this._destroyed) break;
+      if (!first && gapMs) await wait(gapMs);
+      first = false;
+      const promise = restoreEntry(entry);
+      promises[index] = promise;
+      await Promise.race([promise.catch(() => {}), wait(stepMs)]);
+    }
+    LAYER_STATE_REGISTRY.forEach((entry, index) => {
+      if (!promises[index]) promises[index] = restoreEntry(entry);
+    });
+    return Promise.allSettled(promises);
   }
 
   _selectedShareTrackingTarget() {
