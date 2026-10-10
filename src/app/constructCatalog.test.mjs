@@ -39,7 +39,7 @@ test('catalogs construct distinct layers and classification from their supplied 
     signal: b.signal,
     surface: fixtureSurface(b.signal),
   });
-  assert.equal(first.layers.length, 50);
+  assert.equal(first.layers.length, 54);
   assert.ok(first.get('air-quality'));
   assert.ok(first.get('storm-reports'));
   assert.ok(first.get('ocean-currents'));
@@ -50,6 +50,10 @@ test('catalogs construct distinct layers and classification from their supplied 
   assert.ok(first.get('fireballs'));
   assert.ok(first.get('spc-outlook'));
   assert.ok(first.get('airport-delays'));
+  assert.ok(first.get('hurricane-cones'));
+  assert.ok(first.get('weather-radar'));
+  assert.ok(first.get('weather-lightning'));
+  assert.ok(first.get('weather-satellite'));
   assert.ok(first.get('ionosphere'));
   assert.ok(first.get('ukraine-fires'));
   assert.ok(first.get('fire-perimeters'));

@@ -459,6 +459,11 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
     token: 'l',
     disposition: 'enabled-only',
   }),
+  Object.freeze({
+    id: 'hurricane-cones',
+    token: 'hc',
+    disposition: 'enabled-only',
+  }),
   Object.freeze({ id: 'ionosphere', token: 'io', disposition: 'enabled-only' }),
   Object.freeze({ id: 'local-dams', token: 'q', disposition: 'enabled-only' }),
   Object.freeze({
@@ -534,6 +539,21 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
   Object.freeze({
     id: 'weather-cyclones',
     token: 'v',
+    disposition: 'enabled-only',
+  }),
+  Object.freeze({
+    id: 'weather-lightning',
+    token: 'wl',
+    disposition: 'enabled-only',
+  }),
+  Object.freeze({
+    id: 'weather-radar',
+    token: 'wr',
+    disposition: 'enabled-only',
+  }),
+  Object.freeze({
+    id: 'weather-satellite',
+    token: 'ws',
     disposition: 'enabled-only',
   }),
   Object.freeze({ id: 'wind', token: '2', disposition: 'enabled-only' }),

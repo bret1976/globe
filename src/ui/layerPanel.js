@@ -44,7 +44,7 @@ const PANEL_GROUPS = [
   },
   {
     label: 'Weather',
-    ids: ['weather', 'wind', 'weather-cyclones', 'nws-alerts', 'spc-outlook', 'ndbc-buoys', 'usgs-gauges', 'tide-gauges', 'air-quality', 'ocean-currents', 'radiosondes'],
+    ids: ['weather', 'weather-radar', 'weather-lightning', 'weather-satellite', 'wind', 'weather-cyclones', 'hurricane-cones', 'nws-alerts', 'spc-outlook', 'ndbc-buoys', 'usgs-gauges', 'tide-gauges', 'air-quality', 'ocean-currents', 'radiosondes'],
   },
   {
     label: 'Events',
@@ -116,6 +116,10 @@ const PANEL_LABELS = {
   weather: 'Observed Weather',
   wind: 'Wind',
   'weather-cyclones': 'Cyclones',
+  'weather-radar': 'Weather Radar (NOAA)',
+  'weather-lightning': 'Lightning (NOAA)',
+  'weather-satellite': 'Satellite Clouds (GOES)',
+  'hurricane-cones': 'Hurricane Cones (NHC)',
 };
 
 function panelLabel(layer) {

@@ -44,6 +44,7 @@ import { aviationHazardsProxy } from './aviationHazards.js';
 import { fireballsProxy } from './fireballs.js';
 import { spcOutlookProxy } from './spcOutlook.js';
 import { airportDelaysProxy } from './airportDelays.js';
+import { hurricaneConesProxy } from './hurricaneCones.js';
 import { ionosphereProxy } from './ionosphere.js';
 import { oceanCurrentsProxy } from './oceanCurrents.js';
 import { powerPlantsProxy } from './powerPlants.js';
@@ -97,6 +98,7 @@ function localProviderPlugins() {
     fireballsProxy(),
     spcOutlookProxy(),
     airportDelaysProxy(),
+    hurricaneConesProxy(),
     ionosphereProxy(),
     oceanCurrentsProxy(),
     powerPlantsProxy(),

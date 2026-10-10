@@ -55,7 +55,8 @@ export function createApplicationTools({
   // lifetime rather than to whoever last pressed the button.
   const drawTool = initDrawTool({ viewer, annotations });
   defer(() => drawTool?.destroy());
-  dataManager.layers.get('weather')?.module.attachTileset?.(tileset);
+  for (const id of ['weather', 'weather-radar', 'weather-lightning', 'weather-satellite'])
+    dataManager.layers.get(id)?.module.attachTileset?.(tileset);
   const recentImagery = dataManager.layers.get('recent-imagery')?.module;
   if (recentImagery) {
     recentImagery.attachTileset(tileset);

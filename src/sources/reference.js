@@ -20,6 +20,7 @@ import { createAviationHazardsSource } from '../layers/aviationHazards/source.js
 import { createFireballsSource } from '../layers/fireballs/source.js';
 import { createSpcOutlookSource } from '../layers/spcOutlook/source.js';
 import { createAirportDelaysSource } from '../layers/airportDelays/source.js';
+import { createHurricaneConesSource } from '../layers/hurricaneCones/source.js';
 import { createIonosphereSource } from '../layers/ionosphere/source.js';
 import { createUkraineFiresSource } from '../layers/ukraineFires/source.js';
 import { createOceanCurrentsSource } from '../layers/oceanCurrents/source.js';
@@ -52,6 +53,7 @@ export function createReferenceSources() {
     fireballs: createFireballsSource(),
     spcOutlook: createSpcOutlookSource(),
     airportDelays: createAirportDelaysSource(),
+    hurricaneCones: createHurricaneConesSource(),
     ionosphere: createIonosphereSource(),
     ukraineFires: createUkraineFiresSource(),
   };
