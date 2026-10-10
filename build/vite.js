@@ -10,6 +10,7 @@ export function createBrowserViteConfig({
   cesiumToken,
   host = 'localhost',
   port = 4173,
+  command,
 } = {}) {
   return {
     plugins: [
@@ -19,6 +20,22 @@ export function createBrowserViteConfig({
       ...plugins,
     ],
     ...(publicDir === undefined ? {} : { publicDir }),
+    // A production build must not clean the dependency cache a running dev
+    // server is still serving optimized module URLs from.
+    ...(command === 'build' ? { cacheDir: 'node_modules/.vite-build' } : {}),
+    optimizeDeps: {
+      // Keep Transformers.js / Kokoro on their own WASM build (see below).
+      exclude: ['@huggingface/transformers', 'kokoro-js'],
+      // First reached through the SDR worker or a dynamic import. Pre-bundle
+      // them at startup so first use cannot invalidate already-transformed
+      // URLs with Vite's "Outdated Optimize Dep" 504 response.
+      include: [
+        '@jtarrio/signals/demod/demodulator.js',
+        '@jtarrio/signals/demod/modes.js',
+        '@jtarrio/webrtlsdr/rtlsdr.js',
+        'egm96-universal',
+      ],
+    },
     server: {
       host: host || 'localhost',
       port: parseInt(port, 10) || 4173,
@@ -40,10 +57,7 @@ export function createBrowserViteConfig({
       'import.meta.env.CESIUM_ION_TOKEN': JSON.stringify(cesiumToken),
     },
     build: { chunkSizeWarningLimit: 1500 },
-    // Keep Transformers.js / Kokoro on their own WASM build. Do not set
-    // COOP/COEP — that would block Cesium ion tiles on other origins.
-    optimizeDeps: {
-      exclude: ['@huggingface/transformers', 'kokoro-js'],
-    },
+    // Transformers.js / Kokoro stay excluded from optimizeDeps above. Do not
+    // set COOP/COEP — that would block Cesium ion tiles on other origins.
   };
 }

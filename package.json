@@ -49,6 +49,8 @@
   },
   "dependencies": {
     "@huggingface/transformers": "^3.8.1",
+    "@jtarrio/signals": "^0.10.1",
+    "@jtarrio/webrtlsdr": "^3.0.6",
     "@mapbox/vector-tile": "^3.0.0",
     "cesium": "^1.124.0",
     "egm96-universal": "^1.1.1",

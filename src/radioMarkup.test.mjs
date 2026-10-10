@@ -193,7 +193,7 @@ test('no unchanged Realtime tool definition drifts silently', () => {
 });
 
 test('Radio volume and mission speed share the Sharpen slider visual language', () => {
-  for (const id of ['cockpit-radio-volume', 'context-radio-mini-volume', 'radio-volume']) {
+  for (const id of ['cockpit-radio-volume', 'context-radio-mini-volume', 'radio-volume', 'sdr-volume']) {
     assert.match(
       html,
       new RegExp(`id="${id}"[^>]*class="gev-quantitative-slider"[^>]*type="range"`),
