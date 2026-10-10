@@ -1,3 +1,13 @@
+## 2026-10-10 — Upstream v0.2.0 data port: Weather Radar, Lightning, Satellite Clouds, Hurricane Cones
+
+- New `weather-radar` Weather toggle: NOAA nowCOAST MRMS base reflectivity (CONUS, ~4 min) draped as keyless WMS imagery. Share token `wr`.
+- New `weather-lightning` Weather toggle: NOAA nowCOAST 15-minute lightning strike density (derived from Vaisala NLDN/GLD360). Share token `wl`.
+- New `weather-satellite` Weather toggle: NOAA nowCOAST GOES-East/West longwave infrared (~5 min). Share token `ws`.
+- New `hurricane-cones` Weather toggle: NOAA/NHC official forecast cone, track and forecast points; tap for the storm card. Proxy `GET /api/hurricane-cones` (5 min TTL, 3 h stale). Share token `hc`.
+- iPhone/iPad: keep Cesium's per-vertex model atmosphere off Apple Metal (upstream #705) so the render loop is not torn down.
+- TomTom default daily tile budget 40,000 → 6,000 so a free monthly allowance (200k) lasts the month (upstream fix).
+- Data sources and fixes ported from bilawalsidhu/gods-eye-view v0.2.0 (MIT, © 2026 Bilawal Sidhu). No new UI, no keys.
+
 ## 2026-10-10 — SPC Outlook (NOAA) + Airport Delays (FAA)
 
 - New `spc-outlook` Weather toggle: NOAA/NWS Storm Prediction Center Day 1/2 categorical convective outlook polygons colored by risk tier (TSTM → HIGH). Proxy `GET /api/spc-outlook` (15 min TTL, 6 h stale). Share token `sc`.

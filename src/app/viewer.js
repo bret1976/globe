@@ -7,6 +7,7 @@ export {
 import { configureGlobeFraming } from './globeFraming.js';
 import { applyViewerPresentation } from './viewerPresentation.js';
 import { isConstrainedGlobeClient } from './clientCapabilities.js';
+import { applyModelAtmosphereWorkaround } from './atmosphereCompat.js';
 
 const PINCH_ZOOM_MULTIPLIER = 8;
 const MAX_PINCH_PIXEL_DELTA = 120;
@@ -137,6 +138,11 @@ export function createApplicationViewer({ container, creditContainer }) {
   });
   try {
     viewer.targetFrameRate = 60;
+    // Before any tile builds a draw command: Cesium's per-vertex model
+    // atmosphere fails to LINK on Apple's Metal backend and kills the
+    // render loop on iPhone/iPad. Upstream gods-eye-view #705; see
+    // app/atmosphereCompat.js.
+    applyModelAtmosphereWorkaround(viewer.scene);
     applyViewerPresentation(viewer);
     configureGlobeFraming(viewer);
     viewer.scene.skyAtmosphere.show = true;

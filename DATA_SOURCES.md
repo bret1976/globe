@@ -247,6 +247,14 @@ acknowledgement.
 > `/api/flight-restrictions` reads the FAA Graphic TFR GeoServer WFS (`TFR:V_TFR_LOC`, GeoJSON, no key) every 5 minutes and draws each active or scheduled TFR outline on the ground, colored by type: VIP (presidential / vice-presidential movement), security, hazards (often wildfire), air shows & sports, UAS public gatherings, space operations. Each outline carries its NOTAM id, title, ARTCC and a link to the official tfr.faa.gov detail page. Rings are decimated to ≤ 72 vertices. U.S. Government work (public domain). For situational awareness only — not for flight planning. Original layer and code. Attribution: Federal Aviation Administration.
 
 
+### NOAA nowCOAST observed weather (radar, lightning, GOES IR)
+
+> `weather-radar`, `weather-lightning` and `weather-satellite` drape keyless NOAA nowCOAST WMS imagery straight from `https://nowcoast.noaa.gov/geoserver/observations/{weather_radar,lightning_detection,satellite}/ows` (CORS open, no proxy, no key): `conus_base_reflectivity_mosaic` (MRMS dBZ, ~1 km, ~4 min; reflectivity, not rainfall rate; gaps do not mean no precipitation), `ldn_lightning_strike_density` (15-min density on ~8 km grid; NOAA Level-5 product derived from Vaisala NLDN/GLD360 — not raw strikes, not an all-clear) and `goes_longwave_imagery` (GOES-19/18 Band 14, ~5 min; not a cloud mask). WMS 1.1.1 EPSG:4326, max level 6, refreshed in 5-minute frames. Credit: NOAA/NWS nowCOAST, NWS/OAR MRMS, NESDIS GOES. Product choice from bilawalsidhu/gods-eye-view v0.2.0 (MIT); GodsEye drape code.
+
+### NOAA NHC forecast cones
+
+> `/api/hurricane-cones` reads NHC/CPHC tropical weather summary GIS (`mapservices.weather.noaa.gov/.../NHC_tropical_weather_summary/MapServer` layers 5 forecast points, 6 forecast track, 7 forecast cone) every 5 minutes and joins them by basin + storm number with matching advisory numbers. Cone = uncertainty in the forecast centre track, not storm size or a full hazard boundary. Atlantic and East/Central Pacific only. U.S. Government work (public domain); NOAA endorsement not implied. Layer choice from bilawalsidhu/gods-eye-view v0.2.0 (MIT).
+
 ### SPC convective outlook
 
 > `/api/spc-outlook` merges keyless NOAA/NWS Storm Prediction Center Day 1 and Day 2 categorical outlook GeoJSON (`day1otlk_cat.lyr.geojson`, `day2otlk_cat.lyr.geojson`) every 15 minutes. MultiPolygon/Polygon features become draped rings colored by LABEL risk tier (TSTM light green → HIGH magenta). Labels drawn for SLGT and above only. U.S. Government work (public domain). Original layer and code. Attribution: NOAA/NWS Storm Prediction Center.
