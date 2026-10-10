@@ -1,3 +1,9 @@
+## 2026-10-10 — SPC Outlook (NOAA) + Airport Delays (FAA)
+
+- New `spc-outlook` Weather toggle: NOAA/NWS Storm Prediction Center Day 1/2 categorical convective outlook polygons colored by risk tier (TSTM → HIGH). Proxy `GET /api/spc-outlook` (15 min TTL, 6 h stale). Share token `sc`.
+- New `airport-delays` Events toggle: FAA NAS airport closures / ground stops / delays as ground points (coords via AWC). Proxy `GET /api/airport-delays` (2.5 min TTL, 1 h stale). Share token `ad`.
+- Public US government open data — no API keys. Original Bret/GodsEye code. Situational awareness only.
+
 ## 2026-10-09 — Aviation Hazards (AWC) + Fireballs (NASA JPL)
 
 - New `aviation-hazards` Events toggle: NOAA/NWS Aviation Weather Center SIGMETs, G-AIRMETs, and CWAs as draped outlines colored by hazard family. Proxy `GET /api/aviation-hazards` (5 min TTL, 2 h stale). Awareness only — not for flight planning.
