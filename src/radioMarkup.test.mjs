@@ -25,11 +25,11 @@ const css = readStylesheet(new URL('../style.css', import.meta.url));
 
 function realtimeTools() { return GEV_REALTIME_TOOLS; }
 
-test('Realtime schema exposes the authoritative 28-tool inventory', () => {
+test('Realtime schema exposes the authoritative 29-tool inventory', () => {
   const tools = realtimeTools();
-  assert.equal(tools.length, 28);
+  assert.equal(tools.length, 29); // 2026-10-10: + set_cyber_sonar (upstream v0.2.0 Cyber HUD)
   const names = tools.map((tool) => tool.name);
-  assert.equal(new Set(names).size, 28, 'tool names are unique');
+  assert.equal(new Set(names).size, 29, 'tool names are unique');
   assert.ok(names.includes('set_context_mode'));
   assert.ok(names.includes('control_cockpit'));
   assert.ok(names.includes('select_nearest_aircraft'));
@@ -190,7 +190,8 @@ test('no unchanged Realtime tool definition drifts silently', () => {
     .slice(0, 16);
   // ALPR, AU Fire and (2026-10-07) every newer layer incl. Aurora / Ukraine
   // War Fires intentionally extend layer enums; retain the complete pin.
-  assert.equal(digest, 'cd1f7c899eb64a00', 'an unchanged Realtime tool definition drifted');
+  // 2026-10-10: set_hud_layout's enum gains 'cyber' (upstream v0.2.0 Cyber HUD).
+  assert.equal(digest, '57f971371e9f9acd', 'an unchanged Realtime tool definition drifted');
 });
 
 test('Radio volume and mission speed share the Sharpen slider visual language', () => {
