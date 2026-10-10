@@ -14,6 +14,10 @@ import {
 import { boxContains } from './model.js';
 import { createAlprOverlay } from './overlay.js';
 import {
+  isPhoneLite,
+  PHONE_LITE_ALPR_MAX_RENDERED,
+} from '../../app/phoneLite.js';
+import {
   MARKER_IMAGE,
   SELECTED_IMAGE,
   alprDisplayId,
@@ -158,8 +162,21 @@ export function createAlprPresentation({ state, services, source }) {
               east: record.longitude,
             }),
           )
-          .slice(0, MAX_RENDERED)
       : [];
+    const cap = isPhoneLite() ? PHONE_LITE_ALPR_MAX_RENDERED : MAX_RENDERED;
+    if (visible.length > cap && cap < MAX_RENDERED) {
+      // Phone-lite: keep the cameras nearest the view centre.
+      const cLat = (box.south + box.north) / 2;
+      const cLon = (box.west + box.east) / 2;
+      const k = Math.cos((cLat * Math.PI) / 180);
+      visible.sort(
+        (a, b) =>
+          (a.latitude - cLat) ** 2 +
+          ((a.longitude - cLon) * k) ** 2 -
+          ((b.latitude - cLat) ** 2 + ((b.longitude - cLon) * k) ** 2),
+      );
+    }
+    visible.splice(cap);
     visibleRecords = visible;
     // A refresh may retain its own selection, never reclaim one cleared or
     // replaced by an aircraft, another layer, or a voice action.

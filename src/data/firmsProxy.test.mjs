@@ -127,3 +127,23 @@ test('FIRMS distinguishes all-source failure from successful empty sources', asy
     SOURCES.map((source) => ({ source, count: 0, ok: true })),
   );
 });
+
+test('FIRMS ?limit keeps the most intense detections and reports the total (phone-lite)', () => {
+  const s = config.indexOf('  function buildPayload(entry, stale, limit = null) {');
+  assert.notEqual(s, -1, 'buildPayload accepts a limit');
+  const e = config.indexOf('\n  }', s);
+  const build = new Function('filterTrailing24h', 'TTL_MS', 'Date', `return (${config.slice(s, e + 4)});`)(
+    (fires) => fires, 1800000, { now: () => NOW });
+  const fires = Array.from({ length: 5000 }, (_, i) => ({ ...recent, frp: i }));
+  const entry = { at: NOW, sources: [], fires };
+  const full = build(entry, false);
+  assert.equal(full.count, 5000);
+  assert.equal(full.limited, undefined, 'desktop payload unchanged');
+  const lite = build(entry, false, 1000);
+  assert.equal(lite.count, 1000);
+  assert.equal(lite.totalCount, 5000);
+  assert.equal(lite.limited, true);
+  assert.equal(lite.fires[0].frp, 4999);
+  assert.equal(Math.min(...lite.fires.map((f) => f.frp)), 4000);
+  assert.equal(fires[0].frp, 0, 'cache entry is not reordered');
+});
