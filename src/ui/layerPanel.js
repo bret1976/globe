@@ -44,7 +44,7 @@ const PANEL_GROUPS = [
   },
   {
     label: 'Weather',
-    ids: ['weather', 'wind', 'weather-cyclones', 'nws-alerts', 'ndbc-buoys', 'usgs-gauges', 'tide-gauges', 'air-quality', 'ocean-currents', 'radiosondes'],
+    ids: ['weather', 'wind', 'weather-cyclones', 'nws-alerts', 'spc-outlook', 'ndbc-buoys', 'usgs-gauges', 'tide-gauges', 'air-quality', 'ocean-currents', 'radiosondes'],
   },
   {
     label: 'Events',
@@ -62,6 +62,7 @@ const PANEL_GROUPS = [
       'gps-interference',
       'ukraine-fires',
       'flight-restrictions',
+      'airport-delays',
       'aviation-hazards',
       'fireballs',
       'local-firms',
@@ -94,6 +95,7 @@ const PANEL_LABELS = {
   radiation: 'Radiation (Safecast)',
   floods: 'Floods & Droughts (GDACS)',
   'nws-alerts': 'Weather Alerts (NWS)',
+  'spc-outlook': 'SPC Outlook (NOAA)',
   'ndbc-buoys': 'Marine Buoys (NDBC)',
   'usgs-gauges': 'Stream Gauges (USGS)',
   'tide-gauges': 'Tide Gauges (NOAA)',
@@ -104,6 +106,7 @@ const PANEL_LABELS = {
   'power-plants': 'Power Plants (WRI)',
   radiosondes: 'Weather Balloons (SondeHub)',
   'flight-restrictions': 'Flight Restrictions (FAA)',
+  'airport-delays': 'Airport Delays (FAA)',
   'aviation-hazards': 'Aviation Hazards (AWC)',
   fireballs: 'Fireballs (NASA JPL)',
   ionosphere: 'Ionosphere TEC (SWPC)',

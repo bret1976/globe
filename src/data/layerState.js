@@ -394,6 +394,7 @@ export const SHARE_TRACKING_RESTORE_POLICIES = Object.freeze({
  */
 export const LAYER_STATE_REGISTRY = Object.freeze([
   Object.freeze({ id: 'air-quality', token: 'aq', disposition: 'enabled-only' }),
+  Object.freeze({ id: 'airport-delays', token: 'ad', disposition: 'enabled-only' }),
   Object.freeze({
     id: 'ais-live-vessels',
     token: 'a',
@@ -511,6 +512,7 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
     disposition: 'enabled+options',
     optionOwner: 'satellites',
   }),
+  Object.freeze({ id: 'spc-outlook', token: 'sc', disposition: 'enabled-only' }),
   Object.freeze({ id: 'storm-reports', token: 'sr', disposition: 'enabled-only' }),
   Object.freeze({
     id: 'telegeography-submarine-cables',

@@ -246,6 +246,15 @@ acknowledgement.
 
 > `/api/flight-restrictions` reads the FAA Graphic TFR GeoServer WFS (`TFR:V_TFR_LOC`, GeoJSON, no key) every 5 minutes and draws each active or scheduled TFR outline on the ground, colored by type: VIP (presidential / vice-presidential movement), security, hazards (often wildfire), air shows & sports, UAS public gatherings, space operations. Each outline carries its NOTAM id, title, ARTCC and a link to the official tfr.faa.gov detail page. Rings are decimated to ≤ 72 vertices. U.S. Government work (public domain). For situational awareness only — not for flight planning. Original layer and code. Attribution: Federal Aviation Administration.
 
+
+### SPC convective outlook
+
+> `/api/spc-outlook` merges keyless NOAA/NWS Storm Prediction Center Day 1 and Day 2 categorical outlook GeoJSON (`day1otlk_cat.lyr.geojson`, `day2otlk_cat.lyr.geojson`) every 15 minutes. MultiPolygon/Polygon features become draped rings colored by LABEL risk tier (TSTM light green → HIGH magenta). Labels drawn for SLGT and above only. U.S. Government work (public domain). Original layer and code. Attribution: NOAA/NWS Storm Prediction Center.
+
+### FAA airport delays
+
+> `/api/airport-delays` reads the keyless FAA NAS Status XML (`nasstatus.faa.gov/api/airport-status-information`) every ~2.5 minutes, collects closures / ground stops / delays per airport, resolves lat/lon via Aviation Weather Center airport lookup (24 h in-memory coord cache), and draws ground points colored by kind. Situational awareness only — not for flight planning. U.S. Government work (public domain). Original layer and code. Attribution: Federal Aviation Administration; coords NOAA/NWS AWC.
+
 ### Aviation Weather Center hazards
 
 > `/api/aviation-hazards` merges keyless NOAA/NWS Aviation Weather Center feeds — SIGMETs (`airsigmet`), G-AIRMETs (`gairmet`), and Center Weather Advisories (`cwa`) — every 5 minutes. Outlines are colored by hazard family (turbulence, icing/freezing level, convective, IFR/mountain obscuration, low-level wind shear / surface wind). Rings are decimated to ≤ 72 vertices; G-AIRMET LINE products draw as polylines. U.S. Government work (public domain). Situational awareness only — not for flight planning. Original layer and code. Attribution: NOAA/NWS Aviation Weather Center.
