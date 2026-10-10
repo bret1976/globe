@@ -325,6 +325,7 @@ export function createLocalGeoJsonLayer(
     labels = true,
     labelMax = DEFAULT_LABEL_MAX,
     labelGridPx = DEFAULT_LABEL_GRID_PX,
+    phoneLiteFootprints = false,
     screenSpaceEventHandlerFactory = (canvas) =>
       new Cesium.ScreenSpaceEventHandler(canvas),
     projectToWindow = (scene, position) =>
@@ -337,6 +338,8 @@ export function createLocalGeoJsonLayer(
     clearSelectedEntityContextForLayer,
     removeEntityContextsForLayer,
     governorRequestRender,
+    // Host-supplied (phone-lite): may return a lighter feature list.
+    simplifyFootprints = null,
   },
 ) {
   let _dataSource = null;
@@ -607,7 +610,13 @@ export function createLocalGeoJsonLayer(
 
               const geojson = {
                 type: 'FeatureCollection',
-                features,
+                // Phone-lite: footprints become their centre marker (the
+                // stem + point every feature already gets), skipping
+                // thousands of ground-clamped polygons on iPhone.
+                features:
+                  phoneLiteFootprints && simplifyFootprints
+                    ? simplifyFootprints(features)
+                    : features,
               };
 
               // Natively parse into entities and use it as our _dataSource

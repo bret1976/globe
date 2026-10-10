@@ -10,6 +10,7 @@ import {
   setOverlayEntries,
   setOverlaySourceVisible,
 } from '../overlays/worldOverlay.js';
+import { isPhoneLite, footprintToPoint } from './phoneLite.js';
 /** Existing standalone application operations, shared by its local layers. */
 export const localGeoJsonServices = Object.freeze({
   overlayHost: Object.freeze({
@@ -22,4 +23,7 @@ export const localGeoJsonServices = Object.freeze({
   removeEntityContextsForLayer,
   selectEntityContext,
   governorRequestRender,
+  // Phone-lite (draft): datacenter footprints → centre markers on phones only.
+  simplifyFootprints: (features) =>
+    isPhoneLite() ? features.map(footprintToPoint) : features,
 });
