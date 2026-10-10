@@ -7,6 +7,8 @@ import {
   shouldHideCollapsedRightPanels,
 } from './panelRailGeometry.js';
 
+import { displayPanelScroller } from './displayPanelScroll.js';
+
 /**
  * Measure and place the right panel rail for one synchronous layout pass.
  * The caller owns scheduling, obstacle selection, disclosure preferences and
@@ -52,9 +54,35 @@ export function layoutRightPanelRail({
       onCollapse(panel);
     }
   }
+  // Normalize restored state and theme entry without overwriting saved panel
+  // preferences. This marker is distinct from Tactical's space-based collapse.
+  if (hud.variant === 'cyber') {
+    const expanded = panels.filter(
+      (panel) => !panel.classList.contains('collapsed'),
+    );
+    const owner =
+      expanded.find((panel) => panel.id === preferredPanelId) ||
+      expanded.find((panel) => panel.contains(documentRef?.activeElement)) ||
+      expanded[0];
+    for (const panel of expanded) {
+      if (panel === owner) continue;
+      panel.classList.add('collapsed', 'cyber-accordion-collapsed');
+      onCollapse(panel);
+    }
+  } else {
+    for (const panel of panels) {
+      if (!panel.classList.contains('cyber-accordion-collapsed')) continue;
+      panel.classList.remove('collapsed', 'cyber-accordion-collapsed');
+      onCollapse(panel);
+    }
+  }
   const isMobile = windowRef.matchMedia('(max-width: 720px)').matches;
+  // A hidden panel (Weather or Recent Imagery while its layer is off) is not
+  // expanded: counting it hid every collapsed rail tab (Display, CCTV,
+  // Context) in the default Tactical HUD.
   const hasExpandedPanel = panels.some(
     (panel) =>
+      !panel.hidden &&
       !panel.classList.contains('collapsed') &&
       (!isMobile || panel.id !== 'pp-toggles'),
   );
@@ -256,10 +284,11 @@ export function layoutRightPanelRail({
   stack.dataset.expandedCount = String(expandedPanels.length);
 
   if (displayPanel && expandedPanels.includes(displayPanel)) {
+    const scroller = displayPanelScroller(displayPanel);
     const maxScrollTop = Math.max(
       0,
-      displayPanel.scrollHeight - displayPanel.clientHeight,
+      scroller.scrollHeight - scroller.clientHeight,
     );
-    displayPanel.scrollTop = Math.min(displayScrollTop, maxScrollTop);
+    scroller.scrollTop = Math.min(displayScrollTop, maxScrollTop);
   }
 }

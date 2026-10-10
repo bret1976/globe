@@ -171,6 +171,7 @@ test('no unchanged Realtime tool definition drifts silently', () => {
   // in the mic-test brief which tools moved — the session cache busts on any
   // schema change.
   const TOUCHED = new Set([
+    'set_cyber_sonar',
     'set_context_mode',
     'control_cockpit',
     'set_panel_open',
@@ -268,7 +269,10 @@ test('Radio is nested inside Context with separate disclosure and power controls
   assert.match(radioControlsSource, /classList\.remove\('radio-broadcasting'\)/);
   assert.match(radioBindings, /this\.radio\.getTunerStations\(750\)/);
   assert.match(radioBindings, /radioTunerPointerPosition\(/);
-  assert.doesNotMatch(css, /#right-context-rail\s*>\s*#radio-panel/);
+  // Only the Cyber skin promotes Radio to a peer panel. Other themes retain
+  // the embedded Context layout; theme round-trip behavior has separate tests.
+  const baseCss = css.replace(readFileSync(new URL('./ui/styles/cyber.css', import.meta.url), 'utf8'), '');
+  assert.doesNotMatch(baseCss, /#right-context-rail\s*>\s*#radio-panel/);
   assert.match(css, /#global-context-panel #radio-panel\.collapsed/);
   assert.doesNotMatch(css, /\.context-radio-dock\.active:hover \.context-radio-mini/);
   assert.doesNotMatch(css, /\.context-radio-dock\.active:focus-within \.context-radio-mini/);

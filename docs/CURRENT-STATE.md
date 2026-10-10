@@ -834,7 +834,7 @@ Non-object or array-valued properties reject the response instead of being treat
 
 Launch payloads with missing records now say PAYLOAD DATA UNAVAILABLE. Missing names use Unnamed payload; absent or invalid mass stays unknown instead of appearing as 0 KG.
 
-Updated: September 15, 2026
+Updated: September 23, 2026
 
 ## Aircraft and vessel server modules
 
