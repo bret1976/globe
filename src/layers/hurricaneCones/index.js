@@ -80,6 +80,9 @@ export function createHurricaneConesLayer({
       ],
       CARD_HOST_OPTIONS,
     );
+    // An idle (request-render) scene would otherwise leave the new card
+    // uncomposited until the next camera move on WebKit.
+    viewer?.scene?.requestRender?.();
   }
 
   /** `hurricane-cones:<storm>:<kind>:<n>` → { stormId, tau } or null. */
