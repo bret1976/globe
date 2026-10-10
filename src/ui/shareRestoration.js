@@ -2,6 +2,27 @@ import { LayerStateCoordinator } from '../data/layerState.js';
 import { stampInitialShareGesture } from '../navigationPolicy.js';
 import { canPresentDeferredStatusNotice } from '../loadingFeedback.js';
 import { UiLifetime } from './uiLifetime.js';
+import { isConstrainedGlobeClient } from '../app/clientCapabilities.js';
+import {
+  startBootCrashGuard,
+  layerRestorePacing,
+} from '../app/crashLoopGuard.js';
+
+let bootGuard = null;
+function restorePacing() {
+  let constrained = false;
+  try {
+    constrained = isConstrainedGlobeClient();
+  } catch {
+    constrained = false;
+  }
+  if (!constrained) return null;
+  if (!bootGuard) bootGuard = startBootCrashGuard();
+  return layerRestorePacing({
+    constrained,
+    recovering: bootGuard.recovering,
+  });
+}
 
 /** Own initial share restoration, durable layer state and restoration notices. */
 export class ShareRestoration {
@@ -142,6 +163,7 @@ export class ShareRestoration {
           onDurableStateChange: (state) => this.syncModels3d(state),
           onTrackingRestoreStatus: (result) =>
             this._handleShareTrackingRestoreStatus(result),
+          staggerRestore: restorePacing(),
         },
       );
       this._layerStateRestorePromise = this._layerStateCoordinator.start({

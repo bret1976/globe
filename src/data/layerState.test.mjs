@@ -1628,3 +1628,54 @@ test('the owner layer going away revokes the pending watch at any origin', async
     f.coordinator.destroy();
   }
 });
+
+test('phone pacing restores enabled share layers one at a time and still reports every layer', async () => {
+  const active = new Set();
+  let maxConcurrent = 0;
+  const order = [];
+  const release = new Map();
+  const slowEnable = (id) => () => new Promise((resolve) => {
+    active.add(id); order.push(id);
+    maxConcurrent = Math.max(maxConcurrent, active.size);
+    release.set(id, () => { active.delete(id); resolve(true); });
+    // Each layer settles on its own shortly after starting.
+    setTimeout(() => release.get(id)(), 5);
+  });
+  const ids = ['earthquakes', 'flights', 'satellites'];
+  const manager = productionManager(Object.fromEntries(ids.map((id) => [id, { enable: slowEnable(id) }])));
+  const shared = normalizeLayerState({ enabledLayerIds: ids, options: {} });
+  const coordinator = new LayerStateCoordinator(manager, shareSink(), {
+    storage: memoryStorage(),
+    staggerRestore: { stepMs: 1_000, gapMs: 0 },
+  });
+  const results = await coordinator.start({ shareLayerState: shared, allowLocalState: false });
+  assert.equal(maxConcurrent, 1, 'never more than one enabled layer coming up at once');
+  assert.equal(order.length, 3);
+  assert.equal(results.length, LAYER_STATE_REGISTRY.length, 'results stay registry-aligned');
+  for (const id of ids) {
+    assert.equal(results.find((r) => r.layerId === id)?.succeeded, true, `${id} restored`);
+    assert.equal(manager.getAll().find((l) => l.id === id)?.enabled, true);
+  }
+  coordinator.destroy();
+});
+
+test('a slow layer cannot hold the staggered restore hostage', async () => {
+  const started = [];
+  let releaseSlow;
+  const manager = productionManager({
+    earthquakes: { enable: () => { started.push('earthquakes'); return new Promise((r) => { releaseSlow = () => r(true); }); } },
+    flights: { enable: () => { started.push('flights'); return true; } },
+  });
+  const shared = normalizeLayerState({ enabledLayerIds: ['earthquakes', 'flights'], options: {} });
+  const coordinator = new LayerStateCoordinator(manager, shareSink(), {
+    storage: memoryStorage(),
+    staggerRestore: { stepMs: 20, gapMs: 0 },
+  });
+  const done = coordinator.start({ shareLayerState: shared, allowLocalState: false });
+  await new Promise((r) => setTimeout(r, 80));
+  assert.deepEqual([...started].sort(), ['earthquakes', 'flights'], 'next layer started after stepMs');
+  releaseSlow();
+  const results = await done;
+  assert.equal(results.find((r) => r.layerId === 'earthquakes')?.succeeded, true);
+  coordinator.destroy();
+});
