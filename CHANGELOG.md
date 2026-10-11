@@ -1,3 +1,9 @@
+## 2026-10-11 — Tsunami Alerts (NOAA) + NYC TMC Cameras
+
+- New `tsunami-alerts` Events toggle: NOAA/NWS tsunami.gov Atom bulletins from NTWC (PAAQ) and PTWC (PHEB) as category-colored ground discs (Warning → Information). Proxy `GET /api/tsunami-alerts` (5 min TTL, 2 h stale). Share token `ts`.
+- CCTV pack: NYC DOT Traffic Management Center (~980 keyless stills via `webcams.nyctmc.org/api/cameras`) merged into the existing Cameras layer. Kill switch `CCTV_NYCTMC_ENABLED`, per-pack cap `CCTV_NYCTMC_MAX_SOURCES` (default 450).
+- Public US government / NYC DOT open camera data — no API keys. Original Bret/GodsEye code. Situational awareness only.
+
 ## 2026-10-10 — Upstream v0.2.0 data port: Weather Radar, Lightning, Satellite Clouds, Hurricane Cones
 
 - New `weather-radar` Weather toggle: NOAA nowCOAST MRMS base reflectivity (CONUS, ~4 min) draped as keyless WMS imagery. Share token `wr`.
