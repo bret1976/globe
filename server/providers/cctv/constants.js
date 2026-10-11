@@ -377,3 +377,26 @@ export const ICELAND_ANCHORS = Object.freeze([
   { lat: 63.9331, lon: -20.9971 }, // Selfoss
   { lat: 64.2539, lon: -15.2082 }, // Höfn
 ]);
+
+/** NYC DOT Traffic Management Center cameras: keyless JSON catalog of ~980
+ * road cameras across the five boroughs. Stills only via
+ * /api/cameras/{uuid}/image on webcams.nyctmc.org (public traffic cams). */
+export const DEFAULT_NYCTMC_CCTV_URL =
+  'https://webcams.nyctmc.org/api/cameras';
+/** The only origin NYC TMC frames may come from (image API path only). */
+export const NYCTMC_IMAGE_ORIGIN = 'https://webcams.nyctmc.org/api/cameras/';
+export const DEFAULT_NYCTMC_MAX_SOURCES = 450;
+/** Whole city catalog is a few hundred KB; bind an unbounded upstream. */
+export const NYCTMC_MAX_CATALOG_BYTES = 8 * 1024 * 1024;
+/** Prioritization anchors: five boroughs so a shared CCTV cap keeps spread. */
+export const NYC_ANCHORS = Object.freeze([
+  { lat: 40.758, lon: -73.9855 }, // Midtown Manhattan
+  { lat: 40.6892, lon: -73.9857 }, // Downtown Brooklyn
+  { lat: 40.7282, lon: -73.7949 }, // Queens (Flushing)
+  { lat: 40.8448, lon: -73.8648 }, // Bronx
+  { lat: 40.5795, lon: -74.1502 }, // Staten Island
+  { lat: 40.7061, lon: -73.9969 }, // Lower Manhattan / bridges
+  { lat: 40.6501, lon: -73.9496 }, // Flatbush
+  { lat: 40.7614, lon: -73.9776 }, // Upper East / Central Park
+]);
+

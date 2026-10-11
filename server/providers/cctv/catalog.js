@@ -24,6 +24,7 @@ import { loadDdotSourcesFromGis } from './ddot.js';
 import { loadColoradoSourcesFromOpenData } from './colorado.js';
 import { loadIowaDotSourcesFromOpenData } from './iowadot.js';
 import { loadVegagerdinSourcesFromOpenData } from './vegagerdin.js';
+import { loadNycTmcSourcesFromOpenData } from './nyctmc.js';
 
 /** Env kill switch: unset or anything but "0" means enabled. */
 const envEnabled = (name) => String(process.env[name] || '1').trim() !== '0';
@@ -121,6 +122,11 @@ const LIVE_PACKS = [
     name: 'vegagerdin',
     enabled: () => envEnabled('CCTV_VEGAGERDIN_ENABLED'),
     load: loadVegagerdinSourcesFromOpenData,
+  },
+  {
+    name: 'nyctmc',
+    enabled: () => envEnabled('CCTV_NYCTMC_ENABLED'),
+    load: loadNycTmcSourcesFromOpenData,
   },
 ];
 /**
