@@ -16,8 +16,12 @@ export const AWC_AIRPORT_LOOKUP_URL =
 /** Hard cap on airports served to the globe. */
 export const MAX_AIRPORT_DELAYS = 200;
 
+// `restriction` (a partial closure NOTAM, e.g. "AD AP CLSD TO NON SKED
+// TRANSIENT GA" or "CLSD EXC HEL") reuses the existing ground-delay amber —
+// no new palette entry.
 const KIND_COLORS = Object.freeze({
   closure: '#ff3b3b',
+  restriction: '#ffd21a',
   ground_stop: '#ff8c1a',
   ground_delay: '#ffd21a',
   delay: '#38b6ff',
@@ -29,6 +33,7 @@ const KIND_RANK = Object.freeze({
   ground_stop: 3,
   ground_delay: 2,
   delay: 1,
+  restriction: 0.5,
   other: 0,
 });
 
@@ -40,6 +45,66 @@ export function airportDelayKind(delayTypeName) {
   if (t.includes('GROUND DELAY') || t.includes('GROUNDDELAY')) return 'ground_delay';
   if (t.includes('DELAY')) return 'delay';
   return 'other';
+}
+
+// FAA lists partial-closure NOTAMs under "Airport Closures"; a closure
+// whose text carves out traffic ("CLSD TO <class>", "... EXC <class>") is
+// a restriction, not a full closure.
+const RESTRICTION_RE = /\bCL(?:SD|OSED)\s+TO\b|\bEXC(?:EPT)?\b/i;
+
+/**
+ * Refine a Delay_type kind with the NOTAM reason text.
+ * @param {string} kind - Result of airportDelayKind().
+ * @param {?string} reason - FAA Reason text.
+ */
+export function refineAirportDelayKind(kind, reason) {
+  if (kind === 'closure' && RESTRICTION_RE.test(String(reason || '')))
+    return 'restriction';
+  return kind;
+}
+
+const pad2 = (n) => String(n).padStart(2, '0');
+
+function notamStamp(stamp) {
+  const m = /^(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})$/.exec(stamp);
+  if (!m) return null;
+  const [year, month, day, hour, minute] = m.slice(1).map(Number);
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+  if (hour > 24 || minute > 59) return null;
+  const ms = Date.UTC(2000 + year, month - 1, day, hour, minute);
+  const d = new Date(ms);
+  // Reject roll-overs such as Feb 31 (2400 is a valid end-of-day stamp).
+  if (hour < 24 && d.getUTCDate() !== day) return null;
+  return d.toISOString().replace('.000Z', 'Z');
+}
+
+/**
+ * Parse the NOTAM effective range at the end of an FAA closure reason,
+ * e.g. "2605271826-2705281600" or "2610101339-2610102200EST" or
+ * "2601011200-PERM", into full UTC ISO timestamps (with year).
+ * @param {?string} reason
+ * @returns {{startIso: ?string, endIso: ?string, endEstimated: boolean, permanent: boolean}}
+ */
+export function parseNotamRange(reason) {
+  const empty = {
+    startIso: null,
+    endIso: null,
+    endEstimated: false,
+    permanent: false,
+  };
+  const text = String(reason || '');
+  const re = /(?:^|[^\d])(\d{10})-(\d{10}|PERM)(EST)?/g;
+  let last = null;
+  let m;
+  while ((m = re.exec(text))) last = m;
+  if (!last) return empty;
+  const startIso = notamStamp(last[1]);
+  if (!startIso) return empty;
+  const permanent = last[2] === 'PERM';
+  const endIso = permanent ? null : notamStamp(last[2]);
+  if (!permanent && !endIso) return empty;
+  if (endIso && endIso < startIso) return empty;
+  return { startIso, endIso, endEstimated: Boolean(last[3]), permanent };
 }
 
 export function airportDelayColorCss(kind) {
@@ -102,7 +167,7 @@ export function parseAirportStatusXml(xml) {
   while ((dtMatch = delayTypeRe.exec(text))) {
     const block = dtMatch[1];
     const delayType = tagText(block, 'Name') || 'Unknown';
-    const kind = airportDelayKind(delayType);
+    const baseKind = airportDelayKind(delayType);
     const airportRe = /<Airport>([\s\S]*?)<\/Airport>/gi;
     let aMatch;
     while ((aMatch = airportRe.exec(block))) {
@@ -111,15 +176,17 @@ export function parseAirportStatusXml(xml) {
       if (!arpt) continue;
       const icao = arptToIcao(arpt);
       if (!icao) continue;
+      const reason = tagText(aBlock, 'Reason');
       out.push({
         arpt: arpt.toUpperCase(),
         icao,
-        reason: tagText(aBlock, 'Reason'),
+        reason,
         start: tagText(aBlock, 'Start'),
         reopen: tagText(aBlock, 'Reopen'),
         end: tagText(aBlock, 'End'),
+        ...parseNotamRange(reason),
         delayType,
-        kind,
+        kind: refineAirportDelayKind(baseKind, reason),
       });
     }
   }
@@ -193,6 +260,10 @@ export function attachAirportCoords(records, coordByIcao) {
       start: rec.start,
       reopen: rec.reopen,
       end: rec.end,
+      startIso: rec.startIso ?? null,
+      endIso: rec.endIso ?? null,
+      endEstimated: Boolean(rec.endEstimated),
+      permanent: Boolean(rec.permanent),
       name: coords.name,
       lat: coords.lat,
       lon: coords.lon,

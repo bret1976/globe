@@ -8,17 +8,16 @@ import {
   spcOutlookRank,
   LABELED_SPC_LABELS,
 } from './parse.js';
+import { spcOutlookLabel, buildSpcOutlookCard } from './cards.js';
 
 export const SPC_OUTLOOK_LAYER_ID = 'spc-outlook';
 export const SPC_OUTLOOK_OVERLAY_SOURCE_ID = 'spc-outlook';
 export const SPC_OUTLOOK_OVERLAY_COHORT_LIMIT = 24;
 export const SPC_OUTLOOK_OVERLAY_COLLISION_CAPACITY = 16;
 
-export function spcOutlookLabel(row) {
-  const day = row.day === 2 ? 'Day 2' : 'Day 1';
-  const name = row.label2 || row.label || 'SPC';
-  return `${day} · ${name}`;
-}
+export { spcOutlookLabel, buildSpcOutlookCard } from './cards.js';
+
+const PICK_PREFIX = 'spc-outlook:';
 
 function createOverlayEntry(row, position) {
   return {
@@ -53,7 +52,13 @@ function selectOverlayCohort(entries) {
 }
 
 /** Build the SPC convective outlook globe layer. */
-export function createSpcOutlookLayer({ source, overlayHost } = {}) {
+export function createSpcOutlookLayer({
+  source,
+  overlayHost,
+  screenSpaceEventHandlerFactory = null,
+  picking = null,
+  pointer = null,
+} = {}) {
   if (typeof source?.getSnapshot !== 'function')
     throw new TypeError('SPC outlook requires a snapshot source');
   if (!overlayHost) throw new TypeError('SPC outlook requires an overlay host');
@@ -65,6 +70,97 @@ export function createSpcOutlookLayer({ source, overlayHost } = {}) {
   let count = 0;
   let lastUpdate = null;
   let lastError = null;
+  let clickHandler = null;
+  let selectedId = null;
+  /** @type {Array<object>} ambient label entries from the last update */
+  let labelEntries = [];
+  /** @type {Map<string, object>} stableId → row */
+  const rowById = new Map();
+
+  const canSelect = () =>
+    Boolean(overlayHost && screenSpaceEventHandlerFactory && picking);
+
+  /** Publish ambient labels plus (when selected) the info card. */
+  function publishOverlay() {
+    if (!enabled) return;
+    const row = selectedId ? rowById.get(selectedId) : null;
+    if (!row) selectedId = null;
+    const entries = row
+      ? [
+          {
+            ...buildSpcOutlookCard(row),
+            position: Cesium.Cartesian3.fromDegrees(row.lon, row.lat),
+          },
+          ...labelEntries.filter((entry) => entry.id !== String(row.stableId)),
+        ]
+      : labelEntries;
+    overlayHost.setEntries(SPC_OUTLOOK_OVERLAY_SOURCE_ID, entries, {
+      cohortLimit: SPC_OUTLOOK_OVERLAY_COHORT_LIMIT,
+      collisionCapacity: SPC_OUTLOOK_OVERLAY_COLLISION_CAPACITY,
+      moving: false,
+    });
+  }
+
+  function rowIdFromPick(picked) {
+    const pickId = picking.resolvePickId(picked);
+    if (typeof pickId !== 'string' || !pickId.startsWith(PICK_PREFIX))
+      return null;
+    const id = pickId.slice(PICK_PREFIX.length);
+    return rowById.has(id) ? id : null;
+  }
+
+  /** Stacked tiers overlap: prefer the highest risk under the tap, Day 1 first. */
+  function bestRowAt(position, firstId) {
+    let best = rowById.get(firstId);
+    let picks = [];
+    try {
+      picks = viewer?.scene?.drillPick?.(position, 8) || [];
+    } catch {
+      picks = [];
+    }
+    for (const picked of picks) {
+      const id = rowIdFromPick(picked);
+      const row = id ? rowById.get(id) : null;
+      if (!row) continue;
+      const better =
+        spcOutlookRank(row.label) - spcOutlookRank(best.label) ||
+        best.day - row.day;
+      if (better > 0) best = row;
+    }
+    return String(best.stableId);
+  }
+
+  function installClickHandler() {
+    if (!canSelect() || clickHandler || !viewer) return;
+    // Like fire perimeters: large ground polygons are deliberately NOT
+    // registered as pick owners, so sibling layers' cards stay tappable.
+    clickHandler = screenSpaceEventHandlerFactory(viewer);
+    clickHandler.setInputAction((click) => {
+      if (pointer && !pointer.isPointerFree()) return;
+      const picked = viewer.scene.pick(click.position);
+      const id = picked ? rowIdFromPick(picked) : null;
+      if (id) {
+        selectedId = bestRowAt(click.position, id);
+        publishOverlay();
+        return;
+      }
+      if (picked) {
+        const pickId = picking.resolvePickId(picked);
+        if (pickId && picking.isOwnedByOtherLayer(layer.id, pickId)) return;
+      }
+      if (selectedId) {
+        selectedId = null;
+        publishOverlay();
+      }
+    }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+  }
+
+  function removeClickHandler() {
+    if (clickHandler) {
+      clickHandler.destroy();
+      clickHandler = null;
+    }
+  }
 
   const layer = {
     id: SPC_OUTLOOK_LAYER_ID,
@@ -86,12 +182,15 @@ export function createSpcOutlookLayer({ source, overlayHost } = {}) {
       enabled = true;
       if (dataSource) dataSource.show = true;
       overlayHost.setVisible(SPC_OUTLOOK_OVERLAY_SOURCE_ID, true);
+      installClickHandler();
     },
 
     disable() {
       request?.abort();
       request = null;
       enabled = false;
+      selectedId = null;
+      removeClickHandler();
       if (dataSource) dataSource.show = false;
       overlayHost.clearSource(SPC_OUTLOOK_OVERLAY_SOURCE_ID);
       overlayHost.setVisible(SPC_OUTLOOK_OVERLAY_SOURCE_ID, false);
@@ -153,21 +252,19 @@ export function createSpcOutlookLayer({ source, overlayHost } = {}) {
           }
         }
 
-        dataSource.entities.suspendEvents();
+        // No suspendEvents() here: inside a suspended batch, removeAll() +
+        // add() of the SAME ids cancel out, so visualizers keep drawing the
+        // previous Entity objects — which then ignore dataSource.show and
+        // linger after toggle-off. Unsuspended, each swap is a real
+        // remove/add (as in Airport Delays).
         dataSource.entities.removeAll();
         for (const entity of nextEntities) dataSource.entities.add(entity);
-        dataSource.entities.resumeEvents();
-        if (enabled) {
-          overlayHost.setEntries(
-            SPC_OUTLOOK_OVERLAY_SOURCE_ID,
-            selectOverlayCohort(overlayEntries),
-            {
-              cohortLimit: SPC_OUTLOOK_OVERLAY_COHORT_LIMIT,
-              collisionCapacity: SPC_OUTLOOK_OVERLAY_COLLISION_CAPACITY,
-              moving: false,
-            },
-          );
+        rowById.clear();
+        for (const row of rows) {
+          if (row?.stableId != null) rowById.set(String(row.stableId), row);
         }
+        labelEntries = selectOverlayCohort(overlayEntries);
+        if (enabled) publishOverlay();
 
         count = nextEntities.length;
         lastUpdate = Date.now();
@@ -188,6 +285,10 @@ export function createSpcOutlookLayer({ source, overlayHost } = {}) {
     destroy(nextViewer = viewer) {
       request?.abort();
       request = null;
+      removeClickHandler();
+      selectedId = null;
+      labelEntries = [];
+      rowById.clear();
       viewer = null;
       enabled = false;
       overlayHost.clearSource(SPC_OUTLOOK_OVERLAY_SOURCE_ID);

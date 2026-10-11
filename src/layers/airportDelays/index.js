@@ -7,24 +7,19 @@ import {
   airportDelayColorCss,
   airportDelayRank,
 } from './parse.js';
+import { airportDelayLabel, buildAirportDelayCard } from './cards.js';
 
 export const AIRPORT_DELAYS_LAYER_ID = 'airport-delays';
 export const AIRPORT_DELAYS_OVERLAY_SOURCE_ID = 'airport-delays';
 export const AIRPORT_DELAYS_OVERLAY_COHORT_LIMIT = 24;
 export const AIRPORT_DELAYS_OVERLAY_COLLISION_CAPACITY = 16;
 
-const KIND_LABELS = Object.freeze({
-  closure: 'Closed',
-  ground_stop: 'Ground stop',
-  ground_delay: 'Ground delay',
-  delay: 'Delay',
-  other: 'Status',
-});
+export { airportDelayLabel, buildAirportDelayCard } from './cards.js';
 
-export function airportDelayLabel(row) {
-  const kind = KIND_LABELS[row.kind] || 'Status';
-  return `${row.arpt || row.icao} · ${kind}`;
-}
+const PICK_PREFIX = 'airport-delay:';
+/** Kinds that carry an ambient globe label (unchanged look: closures, and
+ * the partial closures that FAA lists under "Airport Closures"). */
+const LABELED_KINDS = new Set(['closure', 'restriction']);
 
 function createOverlayEntry(row, position) {
   return {
@@ -59,7 +54,13 @@ function selectOverlayCohort(entries) {
 }
 
 /** Build the FAA airport delays globe layer. */
-export function createAirportDelaysLayer({ source, overlayHost } = {}) {
+export function createAirportDelaysLayer({
+  source,
+  overlayHost,
+  screenSpaceEventHandlerFactory = null,
+  picking = null,
+  pointer = null,
+} = {}) {
   if (typeof source?.getSnapshot !== 'function')
     throw new TypeError('Airport delays require a snapshot source');
   if (!overlayHost) throw new TypeError('Airport delays require an overlay host');
@@ -71,6 +72,74 @@ export function createAirportDelaysLayer({ source, overlayHost } = {}) {
   let count = 0;
   let lastUpdate = null;
   let lastError = null;
+  let clickHandler = null;
+  let selectedId = null;
+  /** @type {Array<object>} ambient label entries from the last update */
+  let labelEntries = [];
+  /** @type {Map<string, object>} stableId → row */
+  const rowById = new Map();
+
+  const canSelect = () =>
+    Boolean(overlayHost && screenSpaceEventHandlerFactory && picking);
+
+  /** Publish ambient labels plus (when selected) the info card. */
+  function publishOverlay() {
+    if (!enabled) return;
+    const row = selectedId ? rowById.get(selectedId) : null;
+    if (!row) selectedId = null;
+    const entries = row
+      ? [
+          {
+            ...buildAirportDelayCard(row),
+            position: Cesium.Cartesian3.fromDegrees(row.lon, row.lat),
+          },
+          ...labelEntries.filter((entry) => entry.id !== String(row.stableId)),
+        ]
+      : labelEntries;
+    overlayHost.setEntries(AIRPORT_DELAYS_OVERLAY_SOURCE_ID, entries, {
+      cohortLimit: AIRPORT_DELAYS_OVERLAY_COHORT_LIMIT,
+      collisionCapacity: AIRPORT_DELAYS_OVERLAY_COLLISION_CAPACITY,
+      moving: false,
+    });
+  }
+
+  function rowIdFromPick(picked) {
+    const pickId = picking.resolvePickId(picked);
+    if (typeof pickId !== 'string' || !pickId.startsWith(PICK_PREFIX))
+      return null;
+    const id = pickId.slice(PICK_PREFIX.length);
+    return rowById.has(id) ? id : null;
+  }
+
+  function installClickHandler() {
+    if (!canSelect() || clickHandler || !viewer) return;
+    clickHandler = screenSpaceEventHandlerFactory(viewer);
+    clickHandler.setInputAction((click) => {
+      if (pointer && !pointer.isPointerFree()) return;
+      const picked = viewer.scene.pick(click.position);
+      const id = picked ? rowIdFromPick(picked) : null;
+      if (id) {
+        selectedId = id;
+        publishOverlay();
+        return;
+      }
+      if (picked) {
+        const pickId = picking.resolvePickId(picked);
+        if (pickId && picking.isOwnedByOtherLayer(layer.id, pickId)) return;
+      }
+      if (selectedId) {
+        selectedId = null;
+        publishOverlay();
+      }
+    }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+  }
+
+  function removeClickHandler() {
+    if (clickHandler) {
+      clickHandler.destroy();
+      clickHandler = null;
+    }
+  }
 
   const layer = {
     id: AIRPORT_DELAYS_LAYER_ID,
@@ -92,12 +161,15 @@ export function createAirportDelaysLayer({ source, overlayHost } = {}) {
       enabled = true;
       if (dataSource) dataSource.show = true;
       overlayHost.setVisible(AIRPORT_DELAYS_OVERLAY_SOURCE_ID, true);
+      installClickHandler();
     },
 
     disable() {
       request?.abort();
       request = null;
       enabled = false;
+      selectedId = null;
+      removeClickHandler();
       if (dataSource) dataSource.show = false;
       overlayHost.clearSource(AIRPORT_DELAYS_OVERLAY_SOURCE_ID);
       overlayHost.setVisible(AIRPORT_DELAYS_OVERLAY_SOURCE_ID, false);
@@ -122,7 +194,8 @@ export function createAirportDelaysLayer({ source, overlayHost } = {}) {
             airportDelayColorCss(row.kind),
           );
           const position = Cesium.Cartesian3.fromDegrees(row.lon, row.lat);
-          const isClosure = row.kind === 'closure';
+          // Partial closures keep the closure marker size (look unchanged).
+          const isClosure = LABELED_KINDS.has(row.kind);
           const size = isClosure ? 12 : row.kind === 'ground_stop' ? 10 : 8;
           nextEntities.push(
             new Cesium.Entity({
@@ -146,26 +219,24 @@ export function createAirportDelaysLayer({ source, overlayHost } = {}) {
                 start: row.start,
                 reopen: row.reopen,
                 end: row.end,
+                startIso: row.startIso ?? null,
+                endIso: row.endIso ?? null,
                 name: row.name,
               },
             }),
           );
-          if (isClosure) overlayEntries.push(createOverlayEntry(row, position));
+          if (LABELED_KINDS.has(row.kind))
+            overlayEntries.push(createOverlayEntry(row, position));
         }
 
         dataSource.entities.removeAll();
         for (const entity of nextEntities) dataSource.entities.add(entity);
-        if (enabled) {
-          overlayHost.setEntries(
-            AIRPORT_DELAYS_OVERLAY_SOURCE_ID,
-            selectOverlayCohort(overlayEntries),
-            {
-              cohortLimit: AIRPORT_DELAYS_OVERLAY_COHORT_LIMIT,
-              collisionCapacity: AIRPORT_DELAYS_OVERLAY_COLLISION_CAPACITY,
-              moving: false,
-            },
-          );
+        rowById.clear();
+        for (const row of rows) {
+          if (row?.stableId != null) rowById.set(String(row.stableId), row);
         }
+        labelEntries = selectOverlayCohort(overlayEntries);
+        if (enabled) publishOverlay();
 
         count = nextEntities.length;
         lastUpdate = Date.now();
@@ -186,6 +257,10 @@ export function createAirportDelaysLayer({ source, overlayHost } = {}) {
     destroy(nextViewer = viewer) {
       request?.abort();
       request = null;
+      removeClickHandler();
+      selectedId = null;
+      labelEntries = [];
+      rowById.clear();
       viewer = null;
       enabled = false;
       overlayHost.clearSource(AIRPORT_DELAYS_OVERLAY_SOURCE_ID);
@@ -212,6 +287,8 @@ export {
   normalizeAirportDelays,
   parseAirportStatusXml,
   airportDelayKind,
+  refineAirportDelayKind,
+  parseNotamRange,
   airportDelayColorCss,
   arptToIcao,
   FAA_AIRPORT_STATUS_URL,

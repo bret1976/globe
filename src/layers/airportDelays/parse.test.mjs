@@ -73,7 +73,9 @@ test('parseAirportStatusXml extracts airports across delay types', () => {
   assert.equal(records.length, 4);
   const pns = records.find((r) => r.arpt === 'PNS');
   assert.equal(pns.icao, 'KPNS');
-  assert.equal(pns.kind, 'closure');
+  // "CLOSED EXC HEL" is a partial closure → restriction.
+  assert.equal(pns.kind, 'restriction');
+  assert.equal(records.find((r) => r.arpt === 'LAX').kind, 'closure');
   assert.ok(pns.reason.includes('CLOSED'));
   assert.ok(pns.start.includes('13:39'));
   assert.equal(records.find((r) => r.arpt === 'PHL').kind, 'ground_stop');
@@ -96,7 +98,8 @@ test('AWC index + attach coords skips missing and sorts by severity', () => {
   assert.ok(Number.isFinite(rows[0].lat) && Number.isFinite(rows[0].lon));
   assert.equal(rows.some((r) => r.arpt === 'SAN'), false);
   assert.match(awcAirportLookupUrl(['KLAX', 'KPHL']), /ids=KLAX%2CKPHL|ids=KLAX,KPHL/);
-  assert.equal(countAirportDelayKinds(rows).closure, 2);
+  assert.equal(countAirportDelayKinds(rows).closure, 1);
+  assert.equal(countAirportDelayKinds(rows).restriction, 1);
 });
 
 test('normalizeAirportDelays end-to-end with fixture XML', () => {
