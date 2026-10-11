@@ -1,3 +1,6 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   DEFAULT_NYCTMC_CCTV_URL,
   NYCTMC_IMAGE_ORIGIN,
@@ -14,6 +17,11 @@ import {
   cameraDisplayCode,
 } from './normalize.js';
 import { readResponseJsonCapped } from '../common/http.js';
+
+const NYCTMC_SNAPSHOT_PATH = path.join(
+  path.dirname(fileURLToPath(import.meta.url)),
+  'nyctmc.snapshot.json',
+);
 
 function isRetryableNetworkError(error) {
   return (
@@ -156,63 +164,107 @@ export function nycTmcCameraToSource(camera) {
  *
  * @returns {Promise<Array<object>>}
  */
+
+/** Cap + prioritize a normalized NYC camera list. */
+function capNycTmcSources(cameras) {
+  const maxRaw = Number(
+    process.env.CCTV_NYCTMC_MAX_SOURCES || DEFAULT_NYCTMC_MAX_SOURCES,
+  );
+  const maxCount = Number.isFinite(maxRaw)
+    ? Math.max(8, Math.min(1200, Math.floor(maxRaw)))
+    : DEFAULT_NYCTMC_MAX_SOURCES;
+  return prioritizeSources(cameras, maxCount, NYC_ANCHORS);
+}
+
+/**
+ * Read the shipped NYC TMC catalog snapshot (used when Railway/Asia cannot
+ * reach webcams.nyctmc.org). Same shape as the live API rows.
+ */
+export function loadNycTmcSnapshotRows() {
+  try {
+    if (!fs.existsSync(NYCTMC_SNAPSHOT_PATH)) return [];
+    const raw = fs.readFileSync(NYCTMC_SNAPSHOT_PATH, 'utf8');
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (error) {
+    console.warn(
+      '[CCTV] NYC TMC snapshot read failed:',
+      error?.message || error,
+    );
+    return [];
+  }
+}
+
+/** Normalize a list of raw NYC TMC camera objects into catalog sources. */
+export function sourcesFromNycTmcRows(rows) {
+  const cameras = [];
+  const seen = new Set();
+  for (const item of Array.isArray(rows) ? rows : []) {
+    const camera = nycTmcCameraToSource(item);
+    if (!camera || seen.has(camera.id)) continue;
+    seen.add(camera.id);
+    cameras.push(camera);
+  }
+  cameras.sort((a, b) => Number(b.online) - Number(a.online));
+  return cameras;
+}
+
 export async function loadNycTmcSourcesFromOpenData() {
   try {
     const endpoint = process.env.CCTV_NYCTMC_URL || DEFAULT_NYCTMC_CCTV_URL;
     const resp = await fetchCatalogWithRetry(endpoint);
-    const discard = async () => {
+    const discardBody = async () => {
       try {
         await resp.body?.cancel();
       } catch {
         /* no-op */
       }
-      return [];
     };
     if (resp.status >= 300 && resp.status < 400) {
       console.warn(
         '[CCTV] NYC TMC catalog redirected; redirects are not followed',
       );
-      return discard();
-    }
-    if (!resp.ok) {
+      await discardBody();
+    } else if (!resp.ok) {
       console.warn('[CCTV] NYC TMC camera download failed:', resp.status);
-      return discard();
+      await discardBody();
+    } else {
+      const payload = await readResponseJsonCapped(
+        resp,
+        NYCTMC_MAX_CATALOG_BYTES,
+      );
+      const list = Array.isArray(payload)
+        ? payload
+        : Array.isArray(payload?.cameras)
+          ? payload.cameras
+          : [];
+      const cameras = sourcesFromNycTmcRows(list);
+      if (cameras.length) {
+        const prioritized = capNycTmcSources(cameras);
+        console.log(
+          `[CCTV] Loaded NYC TMC camera sources: ${cameras.length} live (using nearest ${prioritized.length})`,
+        );
+        return prioritized;
+      }
+      console.warn('[CCTV] NYC TMC live catalog was empty');
     }
-    const payload = await readResponseJsonCapped(
-      resp,
-      NYCTMC_MAX_CATALOG_BYTES,
-    );
-    const list = Array.isArray(payload)
-      ? payload
-      : Array.isArray(payload?.cameras)
-        ? payload.cameras
-        : [];
-    const cameras = [];
-    const seen = new Set();
-    for (const item of list) {
-      const camera = nycTmcCameraToSource(item);
-      if (!camera || seen.has(camera.id)) continue;
-      // Prefer online cameras when building the capped set: push online first.
-      seen.add(camera.id);
-      cameras.push(camera);
-    }
-    cameras.sort((a, b) => Number(b.online) - Number(a.online));
-    const maxRaw = Number(
-      process.env.CCTV_NYCTMC_MAX_SOURCES || DEFAULT_NYCTMC_MAX_SOURCES,
-    );
-    const maxCount = Number.isFinite(maxRaw)
-      ? Math.max(8, Math.min(1200, Math.floor(maxRaw)))
-      : DEFAULT_NYCTMC_MAX_SOURCES;
-    const prioritized = prioritizeSources(cameras, maxCount, NYC_ANCHORS);
-    console.log(
-      `[CCTV] Loaded NYC TMC camera sources: ${cameras.length} (using nearest ${prioritized.length})`,
-    );
-    return prioritized;
   } catch (error) {
     console.warn(
       '[CCTV] NYC TMC camera download error:',
       describeFetchError(error),
     );
-    return [];
   }
+  // Railway Asia (and some other egress regions) often cannot open a TCP
+  // session to webcams.nyctmc.org — same class of failure as Vegagerðin.
+  // Fall back to the shipped catalog so NYC still appears on the globe;
+  // frame fetches may still miss from those regions, but markers remain.
+  const snapshot = sourcesFromNycTmcRows(loadNycTmcSnapshotRows());
+  if (snapshot.length) {
+    const prioritized = capNycTmcSources(snapshot);
+    console.warn(
+      `[CCTV] NYC TMC using bundled snapshot: ${snapshot.length} cameras (using nearest ${prioritized.length})`,
+    );
+    return prioritized;
+  }
+  return [];
 }
