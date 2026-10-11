@@ -33,7 +33,7 @@ function titleCase(name) {
 }
 
 /** NOTAM body without the "!LAX 05/277 LAX" header and trailing range. */
-export function notamSummary(reason, max = 120) {
+export function notamSummary(reason, max = 60) {
   let text = String(reason || '').replace(/\s+/g, ' ').trim();
   text = text.replace(/^!\S+\s+\d+\/\d+\s+\S+\s+/, '');
   text = text.replace(/\s*\d{10}-(?:\d{10}|PERM)(?:EST)?\s*$/, '');
