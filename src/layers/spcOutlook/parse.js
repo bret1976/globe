@@ -154,6 +154,12 @@ export function parseSpcOutlookFeature(feature, day, polyIndex = 0) {
       : props.VALID != null
         ? String(props.VALID).slice(0, 40)
         : null;
+  const expire =
+    props.EXPIRE_ISO != null
+      ? String(props.EXPIRE_ISO).slice(0, 40)
+      : props.EXPIRE != null
+        ? String(props.EXPIRE).slice(0, 40)
+        : null;
   const dayNum = day === 2 ? 2 : 1;
   const stableId = [
     'spc',
@@ -175,6 +181,7 @@ export function parseSpcOutlookFeature(feature, day, polyIndex = 0) {
     dn,
     issue,
     valid,
+    expire,
     lat: center.lat,
     lon: center.lon,
     ring,
