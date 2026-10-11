@@ -83,7 +83,7 @@ test('bad geometry, ids and frames are dropped', () => {
   assert.equal(nycTmcCameraToSource(null), null);
 });
 
-test('the loader dedupes, prioritizes and degrades to an empty pack', async (t) => {
+test('the loader dedupes and prioritizes live catalog rows', async (t) => {
   t.mock.method(console, 'log', () => {});
   t.mock.method(console, 'warn', () => {});
   const requested = [];
@@ -115,15 +115,26 @@ test('the loader dedupes, prioritizes and degrades to an empty pack', async (t) 
   assert.ok(requested[0].includes('webcams.nyctmc.org'));
   assert.equal(DEFAULT_NYCTMC_CCTV_URL, 'https://webcams.nyctmc.org/api/cameras');
   fetchMock.mock.restore();
-
-  // Upstream failure → empty pack (catalog still merges other packs).
-  t.mock.method(globalThis, 'fetch', async () => {
-    throw new TypeError('fetch failed');
-  });
-  assert.deepEqual(await loadNycTmcSourcesFromOpenData(), []);
 });
 
 test('NYC TMC pack is registered in the live catalog list', () => {
   // Smoke: createCctvCatalog exists and LIVE_PACKS includes nyctmc via import side.
   assert.equal(typeof createCctvCatalog, 'function');
+});
+
+test('bundled snapshot loads when live fetch fails', async (t) => {
+  t.mock.method(console, 'log', () => {});
+  t.mock.method(console, 'warn', () => {});
+  t.mock.method(globalThis, 'fetch', async () => {
+    throw new TypeError('fetch failed');
+  });
+  const { loadNycTmcSourcesFromOpenData, loadNycTmcSnapshotRows } = await import(
+    '../../server/providers/cctv/nyctmc.js'
+  );
+  const rows = loadNycTmcSnapshotRows();
+  assert.ok(rows.length > 100, `expected snapshot rows, got ${rows.length}`);
+  const sources = await loadNycTmcSourcesFromOpenData();
+  assert.ok(sources.length > 0, 'snapshot fallback must return cameras');
+  assert.ok(sources.every((s) => s.sourceKind === 'nyctmc-open-data'));
+  assert.ok(sources.every((s) => s.cityId === 'nyc'));
 });

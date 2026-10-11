@@ -1,3 +1,7 @@
+## 2026-10-11 — NYC TMC CCTV snapshot fallback
+
+- When Railway egress cannot reach `webcams.nyctmc.org` (connect timeout from Asia), the NYC TMC pack falls back to a shipped catalog snapshot (`nyctmc.snapshot.json`, 982 cameras) so NYC markers still appear — same pattern as Maryland CHART.
+
 ## 2026-10-11 — Tsunami Alerts (NOAA) + NYC TMC Cameras
 
 - New `tsunami-alerts` Events toggle: NOAA/NWS tsunami.gov Atom bulletins from NTWC (PAAQ) and PTWC (PHEB) as category-colored ground discs (Warning → Information). Proxy `GET /api/tsunami-alerts` (5 min TTL, 2 h stale). Share token `ts`.
