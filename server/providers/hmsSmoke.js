@@ -107,7 +107,7 @@ export function hmsSmokeProxy({
         res.writeHead(status, {
           'Content-Type': 'application/json',
           'Cache-Control': 'no-store',
-          ...(stale ? { 'X-GodsEye-Stale': '1' } : {}),
+          ...(stale ? { 'X-Data-Stale': 'true' } : {}),
         });
         res.end(JSON.stringify(body));
       };
@@ -135,6 +135,7 @@ export function hmsSmokeProxy({
 
   return {
     name: 'local-hms-smoke-proxy',
-    installMiddleware,
+    configureServer: installMiddleware,
+    configurePreviewServer: installMiddleware,
   };
 }
