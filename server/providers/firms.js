@@ -59,10 +59,12 @@ export function firmsProxy() {
   // re-filter the trailing 24 h at most once a minute, and keep the gzip.
   const SERIALIZED_TTL_MS = 60_000;
   const gzipAsync = promisify(zlib.gzip);
-  /** @type {?{entry: object, stale: boolean, at: number, json: Buffer, gz: Promise<?Buffer>}} */
-  let serialized = null;
-  function serializedPayload(entry, stale) {
+  /** One memo per requested limit (full payload = key 0). */
+  const serializedByLimit = new Map();
+  function serializedPayload(entry, stale, limit = null) {
     const now = Date.now();
+    const key = limit || 0;
+    const serialized = serializedByLimit.get(key);
     if (
       serialized &&
       serialized.entry === entry &&
@@ -70,13 +72,27 @@ export function firmsProxy() {
       now - serialized.at < SERIALIZED_TTL_MS
     )
       return serialized;
-    const json = Buffer.from(JSON.stringify(buildPayload(entry, stale)));
+    const json = Buffer.from(
+      JSON.stringify(buildPayload(entry, stale, limit)),
+    );
     const gz = gzipAsync(json, { level: 6 }).catch(() => null);
-    serialized = { entry, stale, at: now, json, gz };
-    return serialized;
+    const next = { entry, stale, at: now, json, gz };
+    serializedByLimit.set(key, next);
+    return next;
+  }
+  /** `?limit=` accepted only as an integer 1000..200000; anything else = full. */
+  function requestedLimit(req) {
+    try {
+      const raw = new URL(req.url || '/', 'http://x').searchParams.get('limit');
+      if (raw === null) return null;
+      const n = Number(raw);
+      return Number.isInteger(n) && n >= 1000 && n <= 200_000 ? n : null;
+    } catch {
+      return null;
+    }
   }
   async function sendPayload(req, res, entry, stale) {
-    const out = serializedPayload(entry, stale);
+    const out = serializedPayload(entry, stale, requestedLimit(req));
     const wantsGzip = /\bgzip\b/i.test(
       String(req.headers?.['accept-encoding'] || ''),
     );
@@ -168,14 +184,23 @@ export function firmsProxy() {
    * Cache entry → response payload. Fires are RE-filtered to the trailing
    * 24 h at serve time so a stale cache never serves >24h-old detections.
    */
-  function buildPayload(entry, stale) {
-    const fires = filterTrailing24h(entry.fires, Date.now());
+  function buildPayload(entry, stale, limit = null) {
+    let fires = filterTrailing24h(entry.fires, Date.now());
+    const totalCount = fires.length;
+    // Phone-lite (`?limit=N`): keep the N most intense detections (highest
+    // FRP) so a phone never parses ~180K records. Same shape, fewer rows.
+    if (limit && fires.length > limit) {
+      fires = [...fires]
+        .sort((a, b) => (Number(b.frp) || 0) - (Number(a.frp) || 0))
+        .slice(0, limit);
+    }
     return {
       fetchedAt: entry.at,
       stale,
       ttlMs: TTL_MS,
       sources: entry.sources,
       count: fires.length,
+      ...(fires.length < totalCount ? { totalCount, limited: true } : {}),
       fires,
     };
   }

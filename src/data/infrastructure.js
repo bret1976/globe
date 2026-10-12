@@ -25,6 +25,7 @@ export function createInfrastructureLayers(services) {
       labels: true,
       labelMax: 700,
       labelGridPx: 138,
+      phoneLiteFootprints: true,
     },
     services,
   );
