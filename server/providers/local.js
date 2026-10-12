@@ -51,6 +51,7 @@ import { oceanCurrentsProxy } from './oceanCurrents.js';
 import { powerPlantsProxy } from './powerPlants.js';
 import { ukraineFiresProxy } from './ukraineFires.js';
 import { tsunamiAlertsProxy } from './tsunamiAlerts.js';
+import { hmsSmokeProxy } from './hmsSmoke.js';
 
 /** Construct the local provider plugins in their established order. */
 function localProviderPlugins() {
@@ -107,6 +108,7 @@ function localProviderPlugins() {
     powerPlantsProxy(),
     ukraineFiresProxy(),
     tsunamiAlertsProxy(),
+    hmsSmokeProxy(),
     keySetupEndpoint(),
   ];
 }
