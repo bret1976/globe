@@ -16,6 +16,7 @@ import { validateSceneDataPacks } from './packs/manifest.js';
 import { validateSceneCameras } from './cameraDocument.js';
 export { SCENE_DOCUMENT_LIMITS, SceneDocumentError } from './documentFields.js';
 import { validateSceneInteractions } from './interactions/document.js';
+import { validateShotStory } from './story.js';
 export const SCENE_DOCUMENT_VERSION = 6;
 
 function visual(value, path, legacy) {
@@ -128,6 +129,7 @@ export function validateSceneDocument(project) {
         ...(version >= 4 ? ['move'] : []),
         ...(version >= 5 ? ['dataPackIds'] : []),
         ...(version >= 6 ? ['interactions'] : []),
+        'story',
       ]);
       uniqueId(shot, at, shotIds);
       optional(shot, 'title', at, (v, p) => string(v, p, 4096));
@@ -140,6 +142,7 @@ export function validateSceneDocument(project) {
       );
       optional(shot, 'holdSec', at, (v, p) => number(v, p, 0, 86400, legacy));
       optional(shot, 'visual', at, (v, p) => visual(v, p, legacy));
+      optional(shot, 'story', at, validateShotStory);
       optional(shot, 'layers', at, (layers, field) => {
         object(layers, field);
         for (const [id, entry] of Object.entries(layers)) {
