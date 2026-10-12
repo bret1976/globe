@@ -459,6 +459,7 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
     token: 'l',
     disposition: 'enabled-only',
   }),
+  Object.freeze({ id: 'hms-smoke', token: 'hs', disposition: 'enabled-only' }),
   Object.freeze({
     id: 'hurricane-cones',
     token: 'hc',

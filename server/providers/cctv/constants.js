@@ -400,3 +400,23 @@ export const NYC_ANCHORS = Object.freeze([
   { lat: 40.7614, lon: -73.9776 }, // Upper East / Central Park
 ]);
 
+
+/** Oregon TripCheck (ODOT) cameras: keyless ArcGIS inventory (~337). Stills on
+ * www.tripcheck.com/roadcams/cams/*.jpg (public highway cams). */
+export const DEFAULT_OREGON_CCTV_URL =
+  'https://gis.odot.state.or.us/arcgis1006/rest/services/trip_check/Trip_Check_Terrain/MapServer/1/query?where=1%3D1&outFields=device_name,latitude,longitude,cctv_url,route_designator,organization_name,device_id&returnGeometry=false&f=json&resultRecordCount=1000';
+/** The only origin Oregon TripCheck frames may come from. */
+export const OREGON_IMAGE_ORIGIN = 'https://www.tripcheck.com/roadcams/cams/';
+export const DEFAULT_OREGON_MAX_SOURCES = 300;
+export const OREGON_MAX_CATALOG_BYTES = 4 * 1024 * 1024;
+/** Metro + coast + I-5 corridor so a shared CCTV cap keeps statewide spread. */
+export const OREGON_ANCHORS = Object.freeze([
+  { lat: 45.5152, lon: -122.6784 }, // Portland
+  { lat: 44.9429, lon: -123.0351 }, // Salem
+  { lat: 44.0521, lon: -123.0868 }, // Eugene
+  { lat: 42.3265, lon: -122.8756 }, // Medford
+  { lat: 45.8612, lon: -119.2597 }, // Pendleton / I-84
+  { lat: 44.0582, lon: -121.3153 }, // Bend
+  { lat: 45.994, lon: -123.922 }, // Astoria / coast
+  { lat: 43.216, lon: -123.341 }, // Roseburg
+]);
