@@ -19,6 +19,9 @@ import { SceneControls } from '../ui/scenes.js';
 import { buildPlaybackQueue, playSceneQueue } from '../director/playback.js';
 import { createScenePlaybackAdapter } from './playbackAdapter.js';
 import * as Cesium from 'cesium';
+import { cancelCameraArrival } from '../data/cameraArrival.js';
+import { createStoryRuntime } from './storyRuntime.js';
+import { mountStoryTools } from '../ui/storyTools.js';
 import {
   SCENE_APPEND_RECIPES,
   SCENE_RECIPES,
@@ -103,6 +106,7 @@ export class SceneDirector {
       },
     });
     this._sharing = createSceneSharing(this);
+    this._story = createStoryRuntime(viewer);
     this._interactionTransitions = 0;
     this._interactions = createSceneInteractions(viewer, {
       available: () =>
@@ -231,6 +235,8 @@ export class SceneDirector {
     this._removeCameraInput?.();
     this._cameraMotion?.destroy();
     this._sharing?.destroy();
+    this._removeStoryTools?.();
+    this._story?.destroy();
     this._bundleAssets?.clear();
     this._interactions?.destroy();
     this._dataPacks?.destroy();
@@ -385,6 +391,8 @@ export class SceneDirector {
    */
   _initUI() {
     this._sharing?.mount();
+    this._removeStoryTools?.();
+    this._removeStoryTools = mountStoryTools(this);
     this._controls = new SceneControls({
       subscribe: (listener) => this.subscribe(listener),
       read: () => ({
@@ -1551,6 +1559,7 @@ export class SceneDirector {
    * @returns {boolean} False when the camera is unavailable (Cockpit/disposed).
    */
   _claimCameraOwnership() {
+    cancelCameraArrival(this.viewer);
     // Older/headless style managers may predate the facade — proceed then.
     if (typeof this.styleManager?.runImmediateNavigation !== 'function')
       return true;
@@ -1827,6 +1836,7 @@ export class SceneDirector {
    * @param {string} [reason='Stopped'] - Human-readable cancellation reason
    */
   stopScene(reason = 'Stopped') {
+    this._story?.end();
     this._setSceneMediaPlayback();
     this._interactions?.clear();
     this._dataPacks?.clear();
@@ -2371,6 +2381,7 @@ export class SceneDirector {
    * and resets UI buttons to the idle state.
    */
   _finishRun() {
+    this._story?.end();
     this._setSceneMediaPlayback();
     this._clock.finish();
     this._setPlaybackKeyboardEnabled(false);

@@ -4,6 +4,7 @@ export function createScenePlaybackAdapter(director, defaultShotDurationSec) {
   let travel;
   return {
     async releaseScene(scene, token) {
+      director._story?.end();
       const released = await director._releaseSceneLayers(scene, token);
       if (!token || released) director._loadedSceneId = null;
       return released;
@@ -49,16 +50,24 @@ export function createScenePlaybackAdapter(director, defaultShotDurationSec) {
       timing = director._startSceneClockTicker(scene, shot, token);
       travel = director._beginShotTravel(scene, shot, duration);
       const flight = director._flyShotCamera(scene, shot, duration, token);
+      director._story?.begin(
+        shot,
+        duration + director._effectiveShotHoldSec(scene, shot),
+      );
       director._publishShotTravel(scene, shot, travel);
       return flight;
     },
     settle({ scene, shot, token }) {
       director._settleShotLayerStates(scene, shot, token, travel);
     },
-    hold({ scene, shot, token }) {
-      return director._holdShot(scene, shot, token);
+    async hold({ scene, shot, token }) {
+      await Promise.all([
+        director._holdShot(scene, shot, token),
+        director._story?.narrationDone(token),
+      ]);
     },
     completeShot({ scene, shot, index }) {
+      director._story?.end();
       director._clock.stopSceneTimer();
       director._publishSceneClock(scene, shot, timing.endElapsedSec, {
         running: true,

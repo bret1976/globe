@@ -1,3 +1,4 @@
+import { estimateNarrationSec } from '../director/story.js';
 const DEFAULT_SHOT_DURATION_SEC = 4;
 const clamp01 = (value) => Math.max(0, Math.min(1, value));
 const deepClone = (value) => JSON.parse(JSON.stringify(value));
@@ -98,6 +99,9 @@ export function visualStateForShot(shot, packs, isMapStackAvailable) {
     ...sceneBeatState?.params?.sceneControls,
     ...sourceRecipe?.runtimeControlsByBeat?.[sceneBeatState?.params?.beatId],
   };
+  if (shot?.story?.compare) {
+    return { ...(shot.visual || {}), mapStack: 'esri-imagery' };
+  }
   if (controls.imageryComparison === true) {
     return { ...(shot.visual || {}), mapStack: 'esri-imagery' };
   }
@@ -145,7 +149,12 @@ export function effectiveShotHoldSec(
           : 0,
       );
     },
-    Math.max(packs.minimumHoldSec(states), authoredHoldSec),
+    Math.max(
+      packs.minimumHoldSec(states),
+      authoredHoldSec,
+      estimateNarrationSec(shot?.story) -
+        (Number(shot?.durationSec) || DEFAULT_SHOT_DURATION_SEC),
+    ),
   );
 }
 
