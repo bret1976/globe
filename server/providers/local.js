@@ -52,6 +52,7 @@ import { powerPlantsProxy } from './powerPlants.js';
 import { ukraineFiresProxy } from './ukraineFires.js';
 import { tsunamiAlertsProxy } from './tsunamiAlerts.js';
 import { hmsSmokeProxy } from './hmsSmoke.js';
+import { worldSigmetsProxy } from './worldSigmets.js';
 
 /** Construct the local provider plugins in their established order. */
 function localProviderPlugins() {
@@ -99,6 +100,7 @@ function localProviderPlugins() {
     radiosondesProxy(),
     flightRestrictionsProxy(),
     aviationHazardsProxy(),
+    worldSigmetsProxy(),
     fireballsProxy(),
     spcOutlookProxy(),
     airportDelaysProxy(),

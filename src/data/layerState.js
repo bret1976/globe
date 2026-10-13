@@ -559,6 +559,7 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
     disposition: 'enabled-only',
   }),
   Object.freeze({ id: 'wind', token: '2', disposition: 'enabled-only' }),
+  Object.freeze({ id: 'world-sigmets', token: 'is', disposition: 'enabled-only' }),
 ]);
 
 export const REGISTERED_LAYER_IDS = Object.freeze(

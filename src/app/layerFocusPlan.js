@@ -35,6 +35,7 @@ export const LAYER_FOCUS_HEIGHT_M = Object.freeze({
   radiosondes: 3_000_000,
   'flight-restrictions': 2_500_000,
   'aviation-hazards': 2_500_000,
+  'world-sigmets': 14_000_000,
   fireballs: 12_000_000,
   ionosphere: 12_000_000,
   'ukraine-fires': 1_800_000,
@@ -257,6 +258,12 @@ export const LAYER_LIVE_DESTINATIONS = Object.freeze({
     heightM: 4_500_000,
     label: 'U.S. aviation weather hazards (AWC)',
   }),
+  'world-sigmets': Object.freeze({
+    lat: 10.0,
+    lon: -30.0,
+    heightM: 16_000_000,
+    label: 'Worldwide international SIGMETs (AWC)',
+  }),
   fireballs: Object.freeze({
     lat: 20.0,
     lon: -30.0,
@@ -395,6 +402,7 @@ export const FEATURED_DESTINATION_LAYER_IDS = Object.freeze([
   'radiosondes',
   'flight-restrictions',
   'aviation-hazards',
+  'world-sigmets',
   'fireballs',
   'ionosphere',
   'ukraine-fires',

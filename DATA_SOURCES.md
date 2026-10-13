@@ -273,6 +273,10 @@ acknowledgement.
 
 > `/api/aviation-hazards` merges keyless NOAA/NWS Aviation Weather Center feeds — SIGMETs (`airsigmet`), G-AIRMETs (`gairmet`), and Center Weather Advisories (`cwa`) — every 5 minutes. Outlines are colored by hazard family (turbulence, icing/freezing level, convective, IFR/mountain obscuration, low-level wind shear / surface wind). Rings are decimated to ≤ 72 vertices; G-AIRMET LINE products draw as polylines. U.S. Government work (public domain). Situational awareness only — not for flight planning. Original layer and code. Attribution: NOAA/NWS Aviation Weather Center.
 
+### Aviation Weather Center international SIGMETs
+
+> `/api/world-sigmets` reads the keyless NOAA/NWS Aviation Weather Center international SIGMET feed (`isigmet`) every 5 minutes — volcanic ash (VA), tropical cyclone (TC), thunderstorm (TS), turbulence and icing SIGMETs issued by FIRs worldwide. Distinct from the domestic `/api/aviation-hazards` layer. Outlines are colored by hazard family (ash purple, cyclone magenta, convective red, turbulence orange, icing teal), rings decimated to ≤ 72 vertices and unwrapped across the antimeridian, multi-area (`AREAS`) SIGMETs split per ring, capped at 250 outlines with VA/TC kept first. U.S. Government work (public domain). Situational awareness only — not for flight planning. Original layer and code. Attribution: NOAA/NWS Aviation Weather Center.
+
 ### NASA/JPL fireballs
 
 > `/api/fireballs` reads the [NASA/JPL Fireball Data API](https://ssd-api.jpl.nasa.gov/doc/fireball.html) (no key), keeps the most recent ~250 events with coordinates, and draws each bolide at reported altitude sized/colored by radiated energy (kt TNT equivalent scale). Public domain NASA. Original layer and code. Attribution: NASA Jet Propulsion Laboratory CNEOS.
