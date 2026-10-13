@@ -473,6 +473,18 @@ export const DATA_CREDITS = [
       '<a href="https://www.cotrip.org/" target="_blank" rel="noopener">Colorado Department of Transportation — COtrip</a> (courtesy)',
   },
   {
+    key: 'wsdot-cctv',
+    html:
+      'CCTV cameras &amp; frames (Washington State): ' +
+      '<a href="https://www.wsdot.wa.gov/" target="_blank" rel="noopener">Washington State Department of Transportation</a> — Travel Info cameras',
+  },
+  {
+    key: 'hongkong-td-cctv',
+    html:
+      'CCTV cameras &amp; frames (Hong Kong): ' +
+      '<a href="https://data.gov.hk/en-data/dataset/hk-td-tis-traffic-snapshot-images" target="_blank" rel="noopener">DATA.GOV.HK / Hong Kong Transport Department</a> — traffic snapshot images',
+  },
+  {
     key: 'osm-submarine-cables',
     html:
       'Submarine cables: © OpenStreetMap contributors — ' +

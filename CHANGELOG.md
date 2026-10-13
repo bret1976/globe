@@ -1,3 +1,8 @@
+## 2026-10-13 — WSDOT + Hong Kong TD CCTV packs
+
+- CCTV packs: Washington State DOT Travel Info (~1631 stills on `images.wsdot.wa.gov`, TripCheck URLs dropped) and Hong Kong Transport Department / DATA.GOV.HK (~1013 stills on `tdcctv.data.one.gov.hk`). Kill switches `CCTV_WSDOT_ENABLED` / `CCTV_HONGKONG_ENABLED`; per-pack caps default 300 / 250. Bundled snapshots for Railway Asia fallback (same pattern as Oregon / NYC TMC).
+- Raised `DEFAULT_CCTV_MAX_SOURCES` 4000 → 8000 (ceiling 5000 → 10000) so the sum of default per-pack caps still fits without silently thinning via round-robin.
+
 ## 2026-10-13 — World SIGMETs (AWC)
 
 - New `world-sigmets` Events toggle: NOAA/NWS Aviation Weather Center international SIGMETs (volcanic ash, tropical cyclone, thunderstorm, turbulence, icing) as draped outlines colored by hazard family; click an outline for a card with FIR, levels, movement and validity. Proxy `GET /api/world-sigmets` (5 min TTL, 2 h stale). Share token `is`. Awareness only — not for flight planning.

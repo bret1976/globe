@@ -17,6 +17,17 @@ import {
   DEFAULT_TALLINN_MAX_SOURCES,
   DEFAULT_TARKTEE_MAX_SOURCES,
   DEFAULT_NSW_MAX_SOURCES,
+  DEFAULT_CALGARY_MAX_SOURCES,
+  DEFAULT_MDCHART_MAX_SOURCES,
+  DEFAULT_DDOT_MAX_SOURCES,
+  DEFAULT_COLORADO_MAX_SOURCES,
+  DEFAULT_VEGVESEN_MAX_SOURCES,
+  DEFAULT_IOWADOT_MAX_SOURCES,
+  DEFAULT_VEGAGERDIN_MAX_SOURCES,
+  DEFAULT_NYCTMC_MAX_SOURCES,
+  DEFAULT_OREGON_MAX_SOURCES,
+  DEFAULT_WSDOT_MAX_SOURCES,
+  DEFAULT_HONGKONG_MAX_SOURCES,
   DRIVEBC_WEBCAMS_URL,
 } from '../../server/providers/cctv/constants.js';
 import {
@@ -193,6 +204,13 @@ test('CCTV catalog merges DriveBC cameras and CCTV_DRIVEBC_ENABLED=0 skips the r
     CCTV_TFL_ENABLED: undefined,
     CCTV_DRIVEBC_ENABLED: undefined,
     CCTV_MDCHART_ENABLED: '0',
+    // Snapshot-backed packs still answer after a 503; kill them so this test
+    // isolates DriveBC merge / kill-switch behavior.
+    CCTV_NYCTMC_ENABLED: '0',
+    CCTV_OREGON_ENABLED: '0',
+    CCTV_WSDOT_ENABLED: '0',
+    CCTV_HONGKONG_ENABLED: '0',
+    CCTV_VEGAGERDIN_ENABLED: '0',
     CCTV_DRIVEBC_MAX_SOURCES: undefined,
   });
   const requested = [];
@@ -223,7 +241,7 @@ test('CCTV catalog merges DriveBC cameras and CCTV_DRIVEBC_ENABLED=0 skips the r
 });
 
 test('default per-pack camera caps fit inside the default catalog cap', () => {
-  // Every default pack at its own cap (Warendorf ships 1 curated camera).
+  // Every LIVE_PACKS entry at its own default cap (Warendorf ships 1 curated camera).
   const packs =
     DEFAULT_AUSTIN_MAX_SOURCES +
     DEFAULT_CALTRANS_MAX_SOURCES +
@@ -235,6 +253,17 @@ test('default per-pack camera caps fit inside the default catalog cap', () => {
     DEFAULT_TALLINN_MAX_SOURCES +
     DEFAULT_TARKTEE_MAX_SOURCES +
     DEFAULT_NSW_MAX_SOURCES +
+    DEFAULT_CALGARY_MAX_SOURCES +
+    DEFAULT_MDCHART_MAX_SOURCES +
+    DEFAULT_DDOT_MAX_SOURCES +
+    DEFAULT_COLORADO_MAX_SOURCES +
+    DEFAULT_VEGVESEN_MAX_SOURCES +
+    DEFAULT_IOWADOT_MAX_SOURCES +
+    DEFAULT_VEGAGERDIN_MAX_SOURCES +
+    DEFAULT_NYCTMC_MAX_SOURCES +
+    DEFAULT_OREGON_MAX_SOURCES +
+    DEFAULT_WSDOT_MAX_SOURCES +
+    DEFAULT_HONGKONG_MAX_SOURCES +
     1;
   assert.ok(
     packs <= DEFAULT_CCTV_MAX_SOURCES,
