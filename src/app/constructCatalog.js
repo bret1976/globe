@@ -45,6 +45,7 @@ import { createApplicationSpcOutlook } from './layers/spcOutlook.js';
 import { createApplicationAirportDelays } from './layers/airportDelays.js';
 import { createApplicationTsunamiAlerts } from './layers/tsunamiAlerts.js';
 import { createApplicationHmsSmoke } from './layers/hmsSmoke.js';
+import { createApplicationWorldSigmets } from './layers/worldSigmets.js';
 import { createApplicationHurricaneCones } from './layers/hurricaneCones.js';
 import {
   createApplicationWeatherRadar,
@@ -100,6 +101,7 @@ const SOURCE_METHODS = Object.freeze({
   radiosondes: ['getSnapshot'],
   flightRestrictions: ['getSnapshot'],
   aviationHazards: ['getSnapshot'],
+  worldSigmets: ['getSnapshot'],
   fireballs: ['getSnapshot'],
   spcOutlook: ['getSnapshot'],
   airportDelays: ['getSnapshot'],
@@ -220,6 +222,7 @@ export function createApplicationCatalog({
         createApplicationRadiosondes({ source: sources.radiosondes }),
         createApplicationFlightRestrictions({ source: sources.flightRestrictions }),
         createApplicationAviationHazards({ source: sources.aviationHazards }),
+        createApplicationWorldSigmets({ source: sources.worldSigmets }),
         createApplicationFireballs({ source: sources.fireballs }),
         createApplicationSpcOutlook({ source: sources.spcOutlook }),
         createApplicationAirportDelays({ source: sources.airportDelays }),

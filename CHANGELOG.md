@@ -1,3 +1,7 @@
+## 2026-10-13 — World SIGMETs (AWC)
+
+- New `world-sigmets` Events toggle: NOAA/NWS Aviation Weather Center international SIGMETs (volcanic ash, tropical cyclone, thunderstorm, turbulence, icing) as draped outlines colored by hazard family; click an outline for a card with FIR, levels, movement and validity. Proxy `GET /api/world-sigmets` (5 min TTL, 2 h stale). Share token `is`. Awareness only — not for flight planning.
+
 ## 2026-10-11 — NYC TMC CCTV snapshot fallback
 
 - When Railway egress cannot reach `webcams.nyctmc.org` (connect timeout from Asia), the NYC TMC pack falls back to a shipped catalog snapshot (`nyctmc.snapshot.json`, 982 cameras) so NYC markers still appear — same pattern as Maryland CHART.

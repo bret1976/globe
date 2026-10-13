@@ -144,6 +144,13 @@ export const DATA_CREDITS = [
       'SIGMETs, G-AIRMETs, and Center Weather Advisories (public domain; awareness only, not for flight planning)',
   },
   {
+    key: 'world-sigmets',
+    html:
+      'World SIGMETs: ' +
+      '<a href="https://aviationweather.gov/" target="_blank" rel="noopener">NOAA/NWS Aviation Weather Center</a> ' +
+      'international SIGMETs incl. volcanic ash and tropical cyclone (public domain; awareness only, not for flight planning)',
+  },
+  {
     key: 'fireballs',
     html:
       'Fireballs: ' +

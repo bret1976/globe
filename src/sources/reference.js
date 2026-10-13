@@ -22,6 +22,7 @@ import { createSpcOutlookSource } from '../layers/spcOutlook/source.js';
 import { createAirportDelaysSource } from '../layers/airportDelays/source.js';
 import { createTsunamiAlertsSource } from '../layers/tsunamiAlerts/source.js';
 import { createHmsSmokeSource } from '../layers/hmsSmoke/source.js';
+import { createWorldSigmetsSource } from '../layers/worldSigmets/source.js';
 import { createHurricaneConesSource } from '../layers/hurricaneCones/source.js';
 import { createIonosphereSource } from '../layers/ionosphere/source.js';
 import { createUkraineFiresSource } from '../layers/ukraineFires/source.js';
@@ -52,6 +53,7 @@ export function createReferenceSources() {
     radiosondes: createRadiosondesSource(),
     flightRestrictions: createFlightRestrictionsSource(),
     aviationHazards: createAviationHazardsSource(),
+    worldSigmets: createWorldSigmetsSource(),
     fireballs: createFireballsSource(),
     spcOutlook: createSpcOutlookSource(),
     airportDelays: createAirportDelaysSource(),
