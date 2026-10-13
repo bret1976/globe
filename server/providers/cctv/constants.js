@@ -11,9 +11,9 @@ export const DEFAULT_AUSTIN_MAX_SOURCES = 250;
  * cap.js) so no region is silently dropped. Sized above the sum of the
  * default per-pack caps so a default install never trims.
  */
-export const DEFAULT_CCTV_MAX_SOURCES = 4000;
+export const DEFAULT_CCTV_MAX_SOURCES = 8000;
 /** Hard upper bound for CCTV_MAX_SOURCES; also sizes the health map. */
-export const CCTV_MAX_SOURCES_CEILING = 5000;
+export const CCTV_MAX_SOURCES_CEILING = 10000;
 /** Reference point for Austin camera prioritization (Congress & 6th). */
 export const AUSTIN_DOWNTOWN = { lat: 30.2672, lon: -97.7431 };
 /** Caltrans CCTV: one JSON feed per district, identical schema statewide. */
@@ -419,4 +419,40 @@ export const OREGON_ANCHORS = Object.freeze([
   { lat: 44.0582, lon: -121.3153 }, // Bend
   { lat: 45.994, lon: -123.922 }, // Astoria / coast
   { lat: 43.216, lon: -123.341 }, // Roseburg
+]);
+
+
+/** Washington State DOT (WSDOT) Travel Info cameras: keyless ArcGIS FeatureServer
+ * (~1700). Keep only stills on images.wsdot.wa.gov; TripCheck/Oregon URLs in the
+ * same feed belong to the oregon pack and are dropped here. */
+export const DEFAULT_WSDOT_CCTV_URL =
+  'https://data.wsdot.wa.gov/arcgis/rest/services/TravelInformation/TravelInfoCamerasWeather/FeatureServer/0/query?where=1%3D1&outFields=*&f=geojson&resultRecordCount=2000';
+/** The only origin WSDOT frames may come from. */
+export const WSDOT_IMAGE_ORIGIN = 'https://images.wsdot.wa.gov/';
+export const DEFAULT_WSDOT_MAX_SOURCES = 300;
+export const WSDOT_MAX_CATALOG_BYTES = 8 * 1024 * 1024;
+/** Metro anchors so a shared CCTV cap keeps I-5 / I-90 corridor spread. */
+export const WSDOT_ANCHORS = Object.freeze([
+  { lat: 47.6062, lon: -122.3321 }, // Seattle downtown
+  { lat: 47.6588, lon: -117.426 }, // Spokane
+  { lat: 45.6387, lon: -122.6615 }, // Vancouver WA
+  { lat: 47.2529, lon: -122.4443 }, // Tacoma
+  { lat: 47.0379, lon: -122.9007 }, // Olympia
+  { lat: 48.7519, lon: -122.4787 }, // Bellingham
+]);
+
+/** Hong Kong Transport Department traffic snapshot cameras: keyless DATA.GOV.HK
+ * XML inventory (~1013). Stills on tdcctv.data.one.gov.hk/{KEY}.JPG. */
+export const DEFAULT_HONGKONG_CCTV_URL =
+  'https://static.data.gov.hk/td/traffic-snapshot-images/code/Traffic_Camera_Locations_En.xml';
+/** The only origin Hong Kong TD frames may come from. */
+export const HONGKONG_IMAGE_ORIGIN = 'https://tdcctv.data.one.gov.hk/';
+export const DEFAULT_HONGKONG_MAX_SOURCES = 250;
+export const HONGKONG_MAX_CATALOG_BYTES = 4 * 1024 * 1024;
+/** Central HK plus a couple districts so a shared CCTV cap keeps spread. */
+export const HONGKONG_ANCHORS = Object.freeze([
+  { lat: 22.281, lon: 114.155 }, // Central
+  { lat: 22.3193, lon: 114.1694 }, // Kowloon / Mong Kok
+  { lat: 22.3964, lon: 114.1095 }, // Tsuen Wan / New Territories
+  { lat: 22.2783, lon: 114.1827 }, // Causeway Bay / Wan Chai
 ]);

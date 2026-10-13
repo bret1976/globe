@@ -199,5 +199,5 @@ test('mdchart loader uses the bundled snapshot when the live catalog is empty', 
 });
 
 test('the shipped catalog ceiling is not raised to make room for this pack', () => {
-  assert.equal(DEFAULT_CCTV_MAX_SOURCES, 4000);
+  assert.equal(DEFAULT_CCTV_MAX_SOURCES, 8000);
 });

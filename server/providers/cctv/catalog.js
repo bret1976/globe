@@ -26,6 +26,8 @@ import { loadIowaDotSourcesFromOpenData } from './iowadot.js';
 import { loadVegagerdinSourcesFromOpenData } from './vegagerdin.js';
 import { loadNycTmcSourcesFromOpenData } from './nyctmc.js';
 import { loadOregonSourcesFromOpenData } from './oregon.js';
+import { loadWsdotSourcesFromOpenData } from './wsdot.js';
+import { loadHongKongSourcesFromOpenData } from './hongkong.js';
 
 /** Env kill switch: unset or anything but "0" means enabled. */
 const envEnabled = (name) => String(process.env[name] || '1').trim() !== '0';
@@ -133,6 +135,16 @@ const LIVE_PACKS = [
     name: 'oregon',
     enabled: () => envEnabled('CCTV_OREGON_ENABLED'),
     load: loadOregonSourcesFromOpenData,
+  },
+  {
+    name: 'wsdot',
+    enabled: () => envEnabled('CCTV_WSDOT_ENABLED'),
+    load: loadWsdotSourcesFromOpenData,
+  },
+  {
+    name: 'hongkong',
+    enabled: () => envEnabled('CCTV_HONGKONG_ENABLED'),
+    load: loadHongKongSourcesFromOpenData,
   },
 ];
 /**
