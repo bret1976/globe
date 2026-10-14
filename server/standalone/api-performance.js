@@ -161,6 +161,8 @@ export const KEEP_WARM_ENDPOINTS = Object.freeze([
   '/api/flight-restrictions',
   '/api/aviation-hazards',
   '/api/world-sigmets',
+  '/api/coral-bleaching',
+  '/api/canada-alerts',
   '/api/fireballs',
   '/api/tsunami-alerts',
   '/api/hms-smoke',

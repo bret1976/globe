@@ -25,6 +25,13 @@ import * as Cesium from 'cesium';
  * follows DATA_SOURCES.md (live sources, then bundled snapshots).
  * @type {{ key: string, html: string }[]}
  */
+/** NYC DOT asks every application that uses its data to carry this
+ * disclaimer verbatim (nyc.gov/html/dot/html/about/datafeeds.shtml). */
+export const NYC_DOT_DISCLAIMER =
+  'This application may contain and/or utilize information which was originally compiled by the New York City Department of Transportation (NYC DOT) for governmental purposes; the information may subsequently been modified by entity/entities other than NYC DOT. ' +
+  'NYC DOT and the City of New York make no representation as to the accuracy or usefulness of the information provided by this application or the information&#39;s suitability for any purpose and disclaim any liability for omissions or errors that may be contained therein. ' +
+  'The public is advised to observe posted signage for compliance with applicable laws and regulations.';
+
 export const DATA_CREDITS = [
   // ── Live sources ────────────────────────────────────────────────
   {
@@ -149,6 +156,20 @@ export const DATA_CREDITS = [
       'World SIGMETs: ' +
       '<a href="https://aviationweather.gov/" target="_blank" rel="noopener">NOAA/NWS Aviation Weather Center</a> ' +
       'international SIGMETs incl. volcanic ash and tropical cyclone (public domain; awareness only, not for flight planning)',
+  },
+  {
+    key: 'coral-bleaching',
+    html:
+      'Coral bleaching heat stress: ' +
+      '<a href="https://coralreefwatch.noaa.gov/product/vs/map.php" target="_blank" rel="noopener">NOAA Coral Reef Watch</a> ' +
+      'Daily 5km Regional Virtual Stations (public domain; satellite heat-stress outlook, not field survey)',
+  },
+  {
+    key: 'canada-alerts',
+    html:
+      'Canada weather alerts — Data Source: ' +
+      '<a href="https://weather.gc.ca/" target="_blank" rel="noopener">Environment and Climate Change Canada</a> ' +
+      '(MSC GeoMet; <a href="https://eccc-msc.github.io/open-data/licence/readme_en/" target="_blank" rel="noopener">ECCC Data Servers End-use Licence</a>)',
   },
   {
     key: 'fireballs',
@@ -483,6 +504,13 @@ export const DATA_CREDITS = [
     html:
       'CCTV cameras &amp; frames (Hong Kong): ' +
       '<a href="https://data.gov.hk/en-data/dataset/hk-td-tis-traffic-snapshot-images" target="_blank" rel="noopener">DATA.GOV.HK / Hong Kong Transport Department</a> — traffic snapshot images',
+  },
+  {
+    key: 'nyctmc-cctv',
+    html:
+      'CCTV cameras &amp; frames (New York City): ' +
+      '<a href="https://webcams.nyctmc.org/" target="_blank" rel="noopener">NYC DOT Traffic Management Center</a>. ' +
+      NYC_DOT_DISCLAIMER,
   },
   {
     key: 'osm-submarine-cables',

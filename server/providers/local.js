@@ -54,6 +54,8 @@ import { ukraineFiresProxy } from './ukraineFires.js';
 import { tsunamiAlertsProxy } from './tsunamiAlerts.js';
 import { hmsSmokeProxy } from './hmsSmoke.js';
 import { worldSigmetsProxy } from './worldSigmets.js';
+import { coralBleachingProxy } from './coralBleaching.js';
+import { canadaAlertsProxy } from './canadaAlerts.js';
 
 /** Construct the local provider plugins in their established order. */
 function localProviderPlugins() {
@@ -103,6 +105,8 @@ function localProviderPlugins() {
     flightRestrictionsProxy(),
     aviationHazardsProxy(),
     worldSigmetsProxy(),
+    coralBleachingProxy(),
+    canadaAlertsProxy(),
     fireballsProxy(),
     spcOutlookProxy(),
     airportDelaysProxy(),
