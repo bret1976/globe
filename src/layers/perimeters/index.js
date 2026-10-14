@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { budgetPerimeterPolygons } from './budget.js';
 import {
   PERIMETER_OVERLAY_SOURCE_ID,
   perimeterAnchorDegrees,
@@ -305,9 +306,10 @@ export function createFirePerimetersLayer({
         abortLinkVerification();
         const nextEntities = [];
         _rowById.clear();
-        for (const row of rows) {
+        const keptPolygons = budgetPerimeterPolygons(rows);
+        for (const [rowIndex, row] of rows.entries()) {
           const color = containmentColor(row.containedPct);
-          for (const [index, rings] of row.polygons.entries()) {
+          for (const [index, rings] of keptPolygons[rowIndex].entries()) {
             const [outer, ...holes] = rings;
             const outerPositions = ringPositions(outer);
             nextEntities.push(

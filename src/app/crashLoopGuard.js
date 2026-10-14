@@ -60,16 +60,70 @@ export function startBootCrashGuard({
 }
 
 /**
- * Restore pacing for the layer-state coordinator. Desktop keeps the parallel
- * restore; phones start one enabled layer at a time, and a phone recovering
- * from a crash during the previous boot spaces them further apart.
+ * Restore pacing for the layer-state coordinator. Every client now starts
+ * enabled layers one at a time (desktop used to restore all of them in
+ * parallel and could lock the main thread); phones space them further apart.
  */
 export function layerRestorePacing({ constrained, recovering }) {
-  if (!constrained) return null;
+  if (!constrained) return { stepMs: 1_500, gapMs: 400 };
   // `enable()` usually resolves before the feed's download/parse/GPU upload
   // finishes, so the gap (not the settle wait) is what actually spaces the
   // heavy work out. 14 layers ≈ 17 s normally, ≈ 45 s after a crash.
   return recovering
     ? { stepMs: 6_000, gapMs: 3_000 }
     : { stepMs: 3_000, gapMs: 1_200 };
+}
+
+/** Saved layers beyond this many wait for a tap instead of auto-restoring. */
+export const AUTO_RESTORE_LAYER_CAP = 5;
+/** Layers held back from auto-restore, offered as "tap to resume". */
+export const DEFERRED_LAYERS_KEY = 'gev.deferredLayers.v1';
+
+/**
+ * Decide what the saved local layer state may auto-restore this boot.
+ * Pure: takes the raw stored string (`{ v, l, o }`) and returns the string to
+ * store back plus the layer ids held for "tap to resume".
+ *
+ * - `safe` (?safe=1): drop saved layers entirely, nothing offered.
+ * - `recovering` (previous boot died before it was stable): start with no
+ *   layers and offer all of them.
+ * - otherwise keep the first `cap` and offer the rest.
+ *
+ * @returns {{ raw: string|null, deferred: string[], changed: boolean }}
+ */
+export function planLocalLayerRestore({
+  raw,
+  recovering = false,
+  safe = false,
+  cap = AUTO_RESTORE_LAYER_CAP,
+} = {}) {
+  if (safe) return { raw: null, deferred: [], changed: raw != null };
+  let parsed;
+  try {
+    parsed = typeof raw === 'string' && raw ? JSON.parse(raw) : null;
+  } catch {
+    parsed = null;
+  }
+  if (!parsed || !Array.isArray(parsed.l))
+    return { raw, deferred: [], changed: false };
+  const ids = parsed.l.map(String);
+  const keep = recovering ? [] : ids.slice(0, Math.max(0, cap));
+  const deferred = ids.slice(keep.length);
+  if (deferred.length === 0) return { raw, deferred: [], changed: false };
+  return {
+    raw: JSON.stringify({ ...parsed, l: keep }),
+    deferred,
+    changed: true,
+  };
+}
+
+/** True when the page URL asks for a safe (no saved layers) boot. */
+export function isSafeBootRequested(loc = globalThis.location) {
+  try {
+    const q = new URLSearchParams(loc?.search || '');
+    const v = q.get('safe');
+    return v === '1' || v === 'true';
+  } catch {
+    return false;
+  }
 }

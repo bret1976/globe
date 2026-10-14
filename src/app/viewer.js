@@ -129,8 +129,8 @@ export function createApplicationViewer({ container, creditContainer }) {
     infoBox: false,
     baseLayer: false,
     creditContainer,
-    // Desktop keeps MSAA 8; phones drop to 1 so WebKit can keep the context.
-    msaaSamples: constrained ? 1 : 8,
+    // Desktop MSAA 4 (upstream); phones drop to 1 so WebKit can keep the context.
+    msaaSamples: constrained ? 1 : 4,
     useBrowserRecommendedResolution: false,
     // preserveDrawingBuffer doubles peak framebuffer memory — recording still
     // works on desktop; phones need the headroom more than a still capture.

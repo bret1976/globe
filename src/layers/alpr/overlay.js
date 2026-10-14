@@ -13,6 +13,10 @@ import {
   paintDirectionWedge,
   validAlprGroundHeight,
 } from './visuals.js';
+import {
+  sampleHeightBudgeted,
+  heightBudgetSpent,
+} from '../../services/heightBudget.js';
 
 /** Per-layer presentation on a caller-owned overlay; Cesium remains the fallback. */
 export function createAlprOverlay({ state, services }) {
@@ -88,10 +92,15 @@ export function createAlprOverlay({ state, services }) {
       // sample would never run. Leave it unresolved for the 250 ms retry.
       return null;
     }
+    // Frame-wide sampling budget spent (shared with other layers): leave it
+    // unresolved for the 250 ms retry rather than latching a fallback height.
+    if (scene.sampleHeightSupported && heightBudgetSpent(scene)) return null;
     if (scene.sampleHeightSupported) {
       heightSamplesRemaining -= 1;
       try {
-        height = scene.sampleHeight(location, [entity]);
+        height = sampleHeightBudgeted(scene, location, [entity], {
+          useCache: false,
+        });
       } catch {
         /* streaming tiles */
       }

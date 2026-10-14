@@ -1,10 +1,13 @@
 import { isConstrainedGlobeClient } from '../app/clientCapabilities.js';
 const clean = (value) => String(value || '').trim();
 
-/** Sharper than Cesium's default 16 so cockpit windshields stay readable. */
-export const PHOTOREAL_MAXIMUM_SCREEN_SPACE_ERROR = 4;
+/**
+ * Cesium's / upstream's default. 4 requested roughly an order of magnitude more
+ * tiles (~1000 tile requests/min idle) and was the main desktop GPU load.
+ */
+export const PHOTOREAL_MAXIMUM_SCREEN_SPACE_ERROR = 16;
 /** Phones keep a coarser error so fewer tiles fight for GPU memory. */
-export const PHOTOREAL_MOBILE_SCREEN_SPACE_ERROR = 12;
+export const PHOTOREAL_MOBILE_SCREEN_SPACE_ERROR = 16;
 /** Desktop ion cache (bytes). Matches prior production budget. */
 export const PHOTOREAL_DESKTOP_CACHE_BYTES = 1536 * 1024 * 1024;
 export const PHOTOREAL_DESKTOP_CACHE_OVERFLOW_BYTES = 1024 * 1024 * 1024;

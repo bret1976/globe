@@ -201,6 +201,12 @@ export async function initKeySetup({
   const doFetch = fetchImpl || globalThis.fetch?.bind(globalThis);
 
   let status = null;
+  // The setup endpoints exist only on the local dev server; a production
+  // build skips the probe instead of logging a 404 on every visit.
+  if (!fetchImpl && import.meta.env?.PROD === true) {
+    destroy();
+    return null;
+  }
   try {
     const response = await doFetch('/api/setup/status', {
       cache: 'no-store',

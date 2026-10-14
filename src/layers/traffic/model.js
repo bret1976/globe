@@ -11,6 +11,7 @@ import {
   JAM_DOT_FAR_SCALE,
   JAM_DOT_DEPTH_PUNCH,
 } from './policy.js';
+import { sampleHeightBudgeted } from '../../services/heightBudget.js';
 
 export function createModel({ state: layerState, services, parts, source }) {
   /** Build scene waypoints from source records; thinning and terrain remain rendering policy. */
@@ -20,6 +21,7 @@ export function createModel({ state: layerState, services, parts, source }) {
     }
 
     const roads = [];
+    let lastRoadHeight = 0;
     for (const road of roadData.roads) {
       if (!road.coordinates || road.coordinates.length < 2) continue;
 
@@ -48,15 +50,21 @@ export function createModel({ state: layerState, services, parts, source }) {
       const oneway = road.oneway;
 
       // Sample terrain height once at the road start to avoid per-vertex cost
-      let baseHeight = 0;
+      // Budgeted + cached: a synchronous pick per road froze the page for
+      // minutes on city-sized road sets. Roads past the per-frame budget
+      // reuse the nearest cached cell, then the last sampled height.
+      let baseHeight = lastRoadHeight;
       const firstCoord = coords[0];
-      if (layerState._viewer?.scene?.sampleHeightSupported && firstCoord) {
+      if (layerState._viewer?.scene && firstCoord) {
         const carto = Cesium.Cartographic.fromDegrees(
           firstCoord[0],
           firstCoord[1],
         );
-        const sampled = layerState._viewer.scene.sampleHeight(carto);
-        if (Number.isFinite(sampled)) baseHeight = sampled;
+        const sampled = sampleHeightBudgeted(layerState._viewer.scene, carto);
+        if (Number.isFinite(sampled)) {
+          baseHeight = sampled;
+          lastRoadHeight = sampled;
+        }
       }
 
       // Pre-compute Cartesian3 waypoints (lon, lat, height) for fast lerp animation

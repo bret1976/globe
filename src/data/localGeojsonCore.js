@@ -5,6 +5,7 @@ import {
   applyInfraEvictionGrace,
   shouldRecomputeInfraLod,
 } from './localGeojsonLod.js';
+import { sampleHeightBudgeted } from '../services/heightBudget.js';
 
 const DEFAULT_LABEL_MAX = 900;
 const DEFAULT_LABEL_GRID_PX = 132;
@@ -535,7 +536,9 @@ export function createLocalGeoJsonLayer(
 
     getAllPositions(maxCount = 2_000) {
       const cap =
-        Number.isFinite(maxCount) && maxCount > 0 ? Math.floor(maxCount) : 2_000;
+        Number.isFinite(maxCount) && maxCount > 0
+          ? Math.floor(maxCount)
+          : 2_000;
       const result = [];
       for (const record of _stemRecords) {
         if (result.length >= cap) break;
@@ -1148,12 +1151,17 @@ function sampleLocalGroundHeight(viewer, record, now) {
   record.lastGroundSampleMs = now;
   const globe = viewer.scene.globe;
   if (globe?.show && globe.tilesLoaded === false) return false;
-  let sampled;
-  try {
-    sampled = viewer.scene.sampleHeight(record.carto, [record.entity]);
-  } catch {
-    return false; // tiles not ready; retry on a later bounded update
-  }
+  // Per-frame time budget: records past it stay unsampled and retry on a
+  // later bounded update instead of stalling the main thread.
+  let sampled = sampleHeightBudgeted(
+    viewer.scene,
+    record.carto,
+    [record.entity],
+    {
+      useCache: false,
+    },
+  );
+  if (sampled === undefined) return false;
   if (
     !Number.isFinite(sampled) ||
     Math.abs(sampled) > GROUND_SAMPLE_MAX_ABS_HEIGHT_M

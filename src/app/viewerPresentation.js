@@ -9,8 +9,10 @@ export function viewerResolutionScale(
   if (!Number.isFinite(ratio) || ratio <= 0) return 1;
   // Phones already multiply by window.devicePixelRatio; a further 2× scale
   // builds a ~6× framebuffer (e.g. 2340×5064 on an iPhone) that Safari kills.
-  if (constrained) return 1;
-  return Math.min(2, Math.max(1, ratio));
+  // Desktop also stays at 1: Cesium already renders at native devicePixelRatio
+  // (useBrowserRecommendedResolution = false), so >1 supersampled on top of it.
+  void constrained;
+  return 1;
 }
 
 /** Force native-resolution rendering instead of Cesium's performance downsample. */
@@ -30,8 +32,8 @@ export function applyViewerPresentation(
     { constrained: isConstrained },
   );
   if (viewer.scene) {
-    // MSAA 8 × a retina phone framebuffer OOMs WebKit; keep desktop sharp.
-    viewer.scene.msaaSamples = isConstrained ? 1 : 8;
+    // MSAA 8 × a retina phone framebuffer OOMs WebKit; desktop matches upstream (4).
+    viewer.scene.msaaSamples = isConstrained ? 1 : 4;
     if (viewer.scene.postProcessStages?.fxaa) {
       viewer.scene.postProcessStages.fxaa.enabled = true;
     }
