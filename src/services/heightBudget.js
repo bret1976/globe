@@ -9,6 +9,13 @@
  * `undefined`.
  */
 const FRAME_BUDGET_MS = 4;
+/**
+ * Rolling cap across frames. A single pick can cost 100+ ms on a weak or
+ * software GPU, so a per-frame budget alone still allowed one stall per
+ * frame. Spending is tracked over a 1 s window.
+ */
+const ROLLING_WINDOW_MS = 1000;
+const ROLLING_BUDGET_MS = 30;
 const CELL_DEG = 0.002; // ~200 m
 const CACHE_MAX = 4096;
 const CACHE_TTL_MS = 120_000;
@@ -20,6 +27,8 @@ const cache = new Map();
 let windowStart = -Infinity;
 let spentMs = 0;
 let lastFrame = -1;
+let rollingStart = -Infinity;
+let rollingSpent = 0;
 
 function cellKey(carto) {
   const deg = 180 / Math.PI;
@@ -37,7 +46,12 @@ function budgetOpen(scene, budgetMs) {
     windowStart = t;
     spentMs = 0;
   }
-  return spentMs < budgetMs;
+  if (t - rollingStart > ROLLING_WINDOW_MS) {
+    // Carry any overspend forward so one 300 ms pick blocks the next ~10 s.
+    rollingSpent = Math.max(0, rollingSpent - ROLLING_BUDGET_MS);
+    rollingStart = t;
+  }
+  return spentMs < budgetMs && rollingSpent < ROLLING_BUDGET_MS;
 }
 
 /** True when this frame's sampling budget is already spent. */
@@ -62,14 +76,14 @@ export function sampleHeightBudgeted(
   scene,
   carto,
   excluded,
-  { budgetMs = FRAME_BUDGET_MS, useCache = true } = {},
+  { budgetMs = FRAME_BUDGET_MS, useCache = true, requireSupported = true } = {},
 ) {
   if (!scene || !carto) return undefined;
   if (useCache) {
     const c = cachedHeight(carto);
     if (c !== undefined) return c;
   }
-  if (!scene.sampleHeightSupported) return undefined;
+  if (requireSupported && !scene.sampleHeightSupported) return undefined;
   if (!budgetOpen(scene, budgetMs)) return undefined;
   const t0 = now();
   let h;
@@ -80,7 +94,9 @@ export function sampleHeightBudgeted(
   } catch {
     h = undefined;
   }
-  spentMs += now() - t0;
+  const cost = now() - t0;
+  spentMs += cost;
+  rollingSpent += cost;
   if (!Number.isFinite(h)) return undefined;
   if (useCache) {
     if (cache.size >= CACHE_MAX) cache.delete(cache.keys().next().value);
@@ -95,4 +111,6 @@ export function _resetHeightBudget() {
   windowStart = -Infinity;
   spentMs = 0;
   lastFrame = -1;
+  rollingStart = -Infinity;
+  rollingSpent = 0;
 }
