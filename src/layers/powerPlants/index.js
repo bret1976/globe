@@ -3,6 +3,9 @@
  * sized by capacity. Infrastructure group toggle.
  */
 import * as Cesium from 'cesium';
+
+/** Largest plants keep exact ground clamping; see update(). */
+export const MAX_CLAMPED_PLANTS = 1500;
 import { powerPlantColorCss, powerPlantPixelSize } from './parse.js';
 
 export const POWER_PLANTS_LAYER_ID = 'power-plants';
@@ -60,8 +63,23 @@ export function createPowerPlantsLayer({ source } = {}) {
           return false;
         const rows = Array.isArray(payload?.rows) ? payload.rows : [];
         const next = [];
+        // Ground-clamping re-queries the photoreal mesh for every clamped
+        // point on every tile load; ~4.8k clamped points pinned the main
+        // thread. Clamp only the largest plants; the rest draw unclamped and
+        // ignore depth so they read the same from regional/global altitude.
+        const clampIds = new Set(
+          rows
+            .filter((r) => Number.isFinite(r.lat) && Number.isFinite(r.lon))
+            .sort(
+              (x, y) =>
+                (Number(y.capacityMw) || 0) - (Number(x.capacityMw) || 0),
+            )
+            .slice(0, MAX_CLAMPED_PLANTS)
+            .map((r) => r.stableId),
+        );
         for (const row of rows) {
           if (!Number.isFinite(row.lat) || !Number.isFinite(row.lon)) continue;
+          const clamped = clampIds.has(row.stableId);
           const color = Cesium.Color.fromCssColorString(
             powerPlantColorCss(row.kind),
           );
@@ -75,7 +93,12 @@ export function createPowerPlantsLayer({ source } = {}) {
                 color: color.withAlpha(0.85),
                 outlineColor: Cesium.Color.BLACK.withAlpha(0.6),
                 outlineWidth: 1,
-                heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+                heightReference: clamped
+                  ? Cesium.HeightReference.CLAMP_TO_GROUND
+                  : Cesium.HeightReference.NONE,
+                disableDepthTestDistance: clamped
+                  ? undefined
+                  : Number.POSITIVE_INFINITY,
                 scaleByDistance: new Cesium.NearFarScalar(
                   2.0e5,
                   1.4,

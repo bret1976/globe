@@ -12,6 +12,7 @@ import {
   MAX_TOTAL_POINTS,
   COLOR_OUTLINE,
 } from './policy.js';
+import { sampleHeightBudgeted } from '../../services/heightBudget.js';
 
 export function createRendering({
   state: layerState,
@@ -102,7 +103,7 @@ export function createRendering({
     // Sample terrain height so points sit on ground rather than at ellipsoid level
     if (layerState._viewer?.scene?.sampleHeightSupported) {
       const carto = Cesium.Cartographic.fromDegrees(lon, lat);
-      const sampled = layerState._viewer.scene.sampleHeight(carto);
+      const sampled = sampleHeightBudgeted(layerState._viewer.scene, carto);
       if (Number.isFinite(sampled)) {
         height = sampled + POINT_HEIGHT_OFFSET_M;
       }

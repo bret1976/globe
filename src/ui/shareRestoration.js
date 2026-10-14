@@ -7,9 +7,18 @@ import { isPhoneLite } from '../app/phoneLite.js';
 import {
   startBootCrashGuard,
   layerRestorePacing,
+  planLocalLayerRestore,
+  isSafeBootRequested,
+  DEFERRED_LAYERS_KEY,
 } from '../app/crashLoopGuard.js';
+import { LAYER_STATE_STORAGE_KEY } from '../data/layerState.js';
+import { showDeferredLayersChip } from './deferredLayersChip.js';
 
 let bootGuard = null;
+function ensureBootGuard() {
+  if (!bootGuard) bootGuard = startBootCrashGuard();
+  return bootGuard;
+}
 function restorePacing() {
   let constrained = false;
   try {
@@ -17,12 +26,50 @@ function restorePacing() {
   } catch {
     constrained = false;
   }
-  if (!constrained) return null;
-  if (!bootGuard) bootGuard = startBootCrashGuard();
   return layerRestorePacing({
     constrained,
-    recovering: bootGuard.recovering,
+    recovering: ensureBootGuard().recovering,
   });
+}
+
+/**
+ * Trim the saved local layer set before the coordinator reads it: ?safe=1
+ * clears it, a crashed previous boot starts empty, and more than the
+ * auto-restore cap waits for a tap. Returns the layer ids held back.
+ */
+function prepareLocalLayerRestore() {
+  let storage = null;
+  try {
+    storage = globalThis.localStorage || null;
+  } catch {
+    storage = null;
+  }
+  if (!storage) return [];
+  try {
+    const safe = isSafeBootRequested();
+    const plan = planLocalLayerRestore({
+      raw: storage.getItem(LAYER_STATE_STORAGE_KEY),
+      recovering: ensureBootGuard().recovering,
+      safe,
+    });
+    if (safe) storage.removeItem(DEFERRED_LAYERS_KEY);
+    if (!plan.changed) {
+      // Still offer layers held back on an earlier boot until resumed/dismissed.
+      try {
+        const prior = JSON.parse(storage.getItem(DEFERRED_LAYERS_KEY) || '[]');
+        return Array.isArray(prior) ? prior.map(String) : [];
+      } catch {
+        return [];
+      }
+    }
+    if (plan.raw == null) storage.removeItem(LAYER_STATE_STORAGE_KEY);
+    else storage.setItem(LAYER_STATE_STORAGE_KEY, plan.raw);
+    if (plan.deferred.length)
+      storage.setItem(DEFERRED_LAYERS_KEY, JSON.stringify(plan.deferred));
+    return plan.deferred;
+  } catch {
+    return [];
+  }
 }
 
 /** Own initial share restoration, durable layer state and restoration notices. */
@@ -157,6 +204,9 @@ export class ShareRestoration {
     this._layerStateCoordinator = null;
     this._layerStateRestorePromise = null;
     if (this._dataManager) {
+      const deferredLayers = this._initialShareState
+        ? []
+        : prepareLocalLayerRestore();
       this._layerStateCoordinator = new LayerStateCoordinator(
         this._dataManager,
         this.shareLinkManager,
@@ -182,6 +232,33 @@ export class ShareRestoration {
       }
       void this._layerStateRestorePromise.then(() => {
         this.syncModels3d(this._layerStateCoordinator?.getDurableState());
+        if (deferredLayers.length && !this._disposed) {
+          const dataManager = this._dataManager;
+          this._deferredChip?.remove?.();
+          this._deferredChip = showDeferredLayersChip({
+            layerIds: deferredLayers,
+            onResume: async (ids) => {
+              try {
+                globalThis.localStorage?.removeItem(DEFERRED_LAYERS_KEY);
+              } catch {
+                /* best effort */
+              }
+              // Paced like the restore so a tap cannot re-create the freeze.
+              for (const id of ids) {
+                if (this._disposed) break;
+                try {
+                  await Promise.race([
+                    dataManager.setEnabled(id, true, { origin: 'user' }),
+                    new Promise((r) => setTimeout(r, 1500)),
+                  ]);
+                } catch {
+                  /* one bad layer must not stop the rest */
+                }
+                await new Promise((r) => setTimeout(r, 400));
+              }
+            },
+          });
+        }
       });
     }
   }

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { BOOT_MARKER_KEY, BOOT_STABLE_MS, layerRestorePacing, startBootCrashGuard } from './crashLoopGuard.js';
+import { BOOT_MARKER_KEY, BOOT_STABLE_MS, layerRestorePacing, startBootCrashGuard, planLocalLayerRestore, isSafeBootRequested } from './crashLoopGuard.js';
 
 function store() {
   const m = new Map();
@@ -44,8 +44,34 @@ test('stale markers and broken storage do not trigger recovery', () => {
 });
 
 test('desktop keeps the parallel restore; phones stagger, more when recovering', () => {
-  assert.equal(layerRestorePacing({ constrained: false, recovering: true }), null);
+  assert.deepEqual(layerRestorePacing({ constrained: false, recovering: true }), { stepMs: 1500, gapMs: 400 });
   const normal = layerRestorePacing({ constrained: true, recovering: false });
   const gentle = layerRestorePacing({ constrained: true, recovering: true });
   assert.ok(normal.stepMs > 0 && gentle.stepMs > normal.stepMs && gentle.gapMs > normal.gapMs);
+});
+
+test('planLocalLayerRestore caps auto-restore and defers the rest', () => {
+  const raw = JSON.stringify({ v: 2, l: ['a', 'b', 'c', 'd', 'e', 'f', 'g'], o: { x: 1 } });
+  const plan = planLocalLayerRestore({ raw, cap: 5 });
+  assert.equal(plan.changed, true);
+  assert.deepEqual(JSON.parse(plan.raw), { v: 2, l: ['a', 'b', 'c', 'd', 'e'], o: { x: 1 } });
+  assert.deepEqual(plan.deferred, ['f', 'g']);
+  assert.equal(planLocalLayerRestore({ raw: JSON.stringify({ v: 2, l: ['a'] }) }).changed, false);
+});
+
+test('planLocalLayerRestore starts empty after a crashed boot and clears on safe', () => {
+  const raw = JSON.stringify({ v: 2, l: ['a', 'b'], o: {} });
+  const rec = planLocalLayerRestore({ raw, recovering: true });
+  assert.deepEqual(JSON.parse(rec.raw).l, []);
+  assert.deepEqual(rec.deferred, ['a', 'b']);
+  const safe = planLocalLayerRestore({ raw, safe: true });
+  assert.equal(safe.raw, null);
+  assert.deepEqual(safe.deferred, []);
+  assert.deepEqual(planLocalLayerRestore({ raw: 'garbage' }).deferred, []);
+});
+
+test('isSafeBootRequested reads ?safe=1', () => {
+  assert.equal(isSafeBootRequested({ search: '?safe=1' }), true);
+  assert.equal(isSafeBootRequested({ search: '?x=1' }), false);
+  assert.equal(isSafeBootRequested(null), false);
 });
