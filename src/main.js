@@ -2,6 +2,7 @@ import { createStandaloneApplication } from './standalone/application.js';
 import { describeError } from './standalone/errors.js';
 import { initShortsPack, SHORTS_PACK_VERSION } from './data/shortsPack.js';
 import { primeOperatorLocation } from './data/operatorLocation.js';
+import { initReplay } from './replay/index.js';
 
 const application = createStandaloneApplication({
   googleApiKey:
@@ -19,6 +20,11 @@ application
     const viewer = components?.scene?.viewer;
     const dataManager = components?.data?.dataManager;
     primeOperatorLocation();
+    try {
+      initReplay({ viewer });
+    } catch (error) {
+      console.warn('[replay] init failed', error);
+    }
     const { pack, promise } = initShortsPack({ viewer, dataManager });
     if (pack) {
       console.info(`[shorts-pack ${SHORTS_PACK_VERSION}] launching`, pack);

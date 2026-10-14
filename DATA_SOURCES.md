@@ -358,3 +358,13 @@ Douglas-Peucker simplification, 6-decimal rounding).
 ## In-app attribution
 
 The required Google Maps / Cesium credit renders on the on-globe credit line (`#cesium-credits`, bottom-left) and must stay visible — including in clean-view and recording modes (the whole line, logo + "Google Maps" + the "Data attribution" link, stays on screen; only the GEV panels/HUD fade). The layer-specific credits (adsb.lol, OpenStreetMap cables, OSM datacenters/dams/roads, NASA FIRMS, CelesTrak, USGS, City of Austin, Fintraffic, GBFS, Radio Browser, OpenSky, AISStream) are registered into the expandable **"Data attribution"** popover on that credit line via `viewer.creditDisplay.addStaticCredit(new Cesium.Credit(html, /* showOnScreen */ false))` — see `src/data/dataCredits.js`. When you add a new data source, add its license and attribution to this file **and** append an entry to `DATA_CREDITS` in `src/data/dataCredits.js` so it surfaces in the app.
+
+---
+
+## Replay (historical reconstruction)
+
+| Data | Source | License / terms | Notes |
+|---|---|---|---|
+| Historical ADS-B | [ADSB.lol `globe_history_<year>`](https://github.com/adsblol) daily GitHub releases (readsb `trace_full` files) | ODbL 1.0 (ADSB.lol); releases also carry a CC0 LICENSE file. Credit "ADS-B: ADSB.lol (ODbL)" shown on the replay bar. | ~3 GB per UTC day, streamed and clipped server-side; never interpolated across gaps > 2 min. |
+| Historical AIS | [NOAA / BOEM MarineCadastre](https://coast.noaa.gov/htdata/CMSP/AISDataHandler/) daily US AIS | US Government public domain | US waters only; published through 2024 at time of writing — newer dates show "no ship history". |
+| Historical wind | [Open-Meteo historical forecast API](https://open-meteo.com/en/docs/historical-forecast-api) (`gfs_hrrr`, GFS fallback) | CC BY 4.0 (Open-Meteo); model data NOAA | Hourly 10 m wind on a 4×4 grid. |

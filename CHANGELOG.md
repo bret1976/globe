@@ -1,3 +1,9 @@
+## 2026-10-13 — REPLAY: historical event reconstruction
+
+- New **REPLAY** button (⟲, top action row) and deep link `#replay=<event>` (`sf-fleet-week-2025`, `sf-fleet-week-2024`, `custom`, `custom-<key>`). Opens a replay screen with a RECONSTRUCTED / HISTORICAL badge, event picker, timeline scrubber + clock (event-local time), play/pause, 1/3/10/60/300× speeds, click-to-chase (CHASE / ORBIT) with a fading recorded-track trail, hourly HRRR wind arrows, and a data-notes drawer. The Cesium clock is set to the event time so sun lighting matches. Live layers are hidden while replaying and restored on exit.
+- Pre-baked from real recordings: `public/replay/sf-fleet-week-2025.json` (Sat Oct 11 2025, 409 aircraft incl. Snowbirds, Patriots L-39, T-33, P-51, Su-26s, United 777 flyby; no ship history — NOAA AIS not yet published for 2025) and `sf-fleet-week-2024.json` (Sat Oct 12 2024, 395 aircraft incl. Blue Angels C-130J "Fat Albert" BERT10, 499 AIS vessels). Blue Angels F/A-18s do not broadcast ADS-B and are not in either record.
+- `GET /api/replay/custom?bbox=w,s,e,n&t0=&t1=` reconstructs any area (≤2.5°) and window (≤3 h, 2023 → ~2 days ago) from ADSB.lol `globe_history` daily dumps (streamed in a worker thread, resumable) plus NOAA MarineCadastre AIS for ≤2024 US dates and Open-Meteo HRRR wind; cached on disk under `.gev-cache/replay/`. Rebuild events with `node scripts/replay-prebake.mjs <id>`.
+
 ## 2026-10-13 — WSDOT + Hong Kong TD CCTV packs
 
 - CCTV packs: Washington State DOT Travel Info (~1631 stills on `images.wsdot.wa.gov`, TripCheck URLs dropped) and Hong Kong Transport Department / DATA.GOV.HK (~1013 stills on `tdcctv.data.one.gov.hk`). Kill switches `CCTV_WSDOT_ENABLED` / `CCTV_HONGKONG_ENABLED`; per-pack caps default 300 / 250. Bundled snapshots for Railway Asia fallback (same pattern as Oregon / NYC TMC).

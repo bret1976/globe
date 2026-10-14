@@ -25,6 +25,7 @@ import { keySetupEndpoint } from '../standalone/key-setup.js';
 import { auFireProxy } from './auFire.js';
 import { firePerimetersProxy } from './firePerimeters.js';
 import { windProxy } from './wind.js';
+import { replayProxy } from './replay/index.js';
 import { cyclonesProxy } from './cyclones.js';
 import { earthquakesProxy } from './earthquakes.js';
 import { gpsjamProxy } from './gpsjam.js';
@@ -82,6 +83,7 @@ function localProviderPlugins() {
     googlePlacesContextProxy(),
     auFireProxy(),
     windProxy(),
+    replayProxy(),
     cyclonesProxy(),
     firePerimetersProxy(),
     earthquakesProxy(),
