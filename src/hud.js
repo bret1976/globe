@@ -138,7 +138,11 @@ export class IntelHUD {
     this._geoidReady = false;
     // The 1.85 MB EGM96 grid is not needed for first paint; fetch it after
     // boot settles (the readout shows the uncorrected height until then).
-    this._geoidNotBefore = Date.now() + 15_000;
+    // Browser-only (headless test hosts have no requestIdleCallback).
+    this._geoidNotBefore =
+      typeof globalThis.requestIdleCallback === 'function'
+        ? Date.now() + 15_000
+        : 0;
     this._geoidCellKey = null;
     this._geoidN = null;
     // Whether the LAST painted tick actually had N. The grid resolves mid-

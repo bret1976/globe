@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { sampleHeightBudgeted } from '../../services/heightBudget.js';
 import {
   TRAFFIC_TIMING_ENABLED,
   MAX_WAYPOINTS_PER_ROAD,
@@ -245,6 +246,7 @@ export function createTiming({ state: layerState, services, parts, source }) {
     }
 
     const roads = [];
+    let lastRoadHeight = 0;
     /* TRACE_ONLY_BEGIN */
     const _trafficTimingSampledCells = new Set();
     let _trafficTimingSampleHeightCalls = 0;
@@ -274,9 +276,9 @@ export function createTiming({ state: layerState, services, parts, source }) {
       const type = road.type;
       const oneway = road.oneway;
 
-      let baseHeight = 0;
+      let baseHeight = lastRoadHeight;
       const firstCoord = coords[0];
-      if (layerState._viewer?.scene?.sampleHeightSupported && firstCoord) {
+      if (layerState._viewer?.scene && firstCoord) {
         /* TRACE_ONLY_BEGIN */
         _trafficTimingSampleHeightCalls += 1;
         _trafficTimingSampledCells.add(
@@ -290,12 +292,15 @@ export function createTiming({ state: layerState, services, parts, source }) {
         /* TRACE_ONLY_BEGIN */
         const _trafficTimingSampleStart = performance.now();
         /* TRACE_ONLY_END */
-        const sampled = layerState._viewer.scene.sampleHeight(carto);
+        const sampled = sampleHeightBudgeted(layerState._viewer.scene, carto);
         /* TRACE_ONLY_BEGIN */
         _trafficTimingSampleHeightMs +=
           performance.now() - _trafficTimingSampleStart;
         /* TRACE_ONLY_END */
-        if (Number.isFinite(sampled)) baseHeight = sampled;
+        if (Number.isFinite(sampled)) {
+          baseHeight = sampled;
+          lastRoadHeight = sampled;
+        }
       }
 
       /* TRACE_ONLY_BEGIN */
