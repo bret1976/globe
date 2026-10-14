@@ -104,7 +104,8 @@ test('share-follow failures use the universal top-center status instead of the b
   assert.doesNotMatch(handler, /pushCockpitSignal/);
   assert.match(handler, /result\.classification === 'pending'/);
   assert.match(handler, /state: 'acquiring'/);
-  assert.match(handler, /persistent: true/);
+  // Desktop stays persistent; phones get a timed (auto-dismissing) notice.
+  assert.match(handler, /persistent: !isPhoneLite\(\)/);
   assert.match(handler, /this\._shareTrackingNoticeGeneration \+= 1/);
   assert.match(handler, /canPresentDeferredStatusNotice\(/);
   assert.match(handler, /if \(this\._shareTrackingAcquiringKey\) return/);

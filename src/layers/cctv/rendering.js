@@ -1,6 +1,10 @@
 import * as Cesium from 'cesium';
 import { horizonOccluder } from '../../data/iconOrientation.js';
 import {
+  isPhoneLite,
+  PHONE_LITE_CCTV_MAX_RENDERED,
+} from '../../app/phoneLite.js';
+import {
   ACTIVE_CAMERA_COLOR,
   IDLE_CAMERA_COLOR,
   ACTIVE_COVERAGE_CENTER,
@@ -142,10 +146,36 @@ export function createRendering({
     )
       return;
     const occluder = horizonOccluder(layerState._viewer.camera);
+    // Phone lite: draw only the cameras nearest the eye (the active camera
+    // always stays). Desktop keeps every horizon-visible icon.
+    let keep = null;
+    if (
+      isPhoneLite() &&
+      layerState._records.length > PHONE_LITE_CCTV_MAX_RENDERED
+    ) {
+      const eye = layerState._viewer.camera.positionWC;
+      const ranked = [];
+      for (const record of layerState._records) {
+        const bb = record.billboard;
+        if (!bb?.position || !occluder.isPointVisible(bb.position)) continue;
+        ranked.push({
+          record,
+          d: Cesium.Cartesian3.distanceSquared(bb.position, eye),
+        });
+      }
+      ranked.sort((a, b) => a.d - b.d);
+      keep = new Set(
+        ranked.slice(0, PHONE_LITE_CCTV_MAX_RENDERED).map((r) => r.record),
+      );
+    }
     for (const record of layerState._records) {
       const bb = record.billboard;
       if (!bb) continue;
-      const visible = occluder.isPointVisible(bb.position);
+      const visible =
+        occluder.isPointVisible(bb.position) &&
+        (!keep ||
+          keep.has(record) ||
+          record.camera?.id === layerState._activeCameraId);
       if (bb.show !== visible) bb.show = visible;
     }
   }

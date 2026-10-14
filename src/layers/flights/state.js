@@ -127,6 +127,8 @@ export function createFlightState({ source, services }) {
   /** @type {string|null} ICAO24 of the currently tracked aircraft */
 
   flightState._trackedIcao = null;
+  /** Phone-only billboard clusterer (null on desktop). */
+  flightState._phoneCluster = null;
 
   flightState._pendingTrackingRestore = null;
 

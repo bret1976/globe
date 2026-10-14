@@ -1,5 +1,7 @@
 import * as Cesium from 'cesium';
 import { PLANE_MODEL_URL } from './policy.js';
+import { isPhoneLite } from '../../app/phoneLite.js';
+import { createPhoneBillboardClusterer } from '../../app/phoneClusters.js';
 
 export function createLifecycle({
   flightState,
@@ -51,6 +53,18 @@ export function createLifecycle({
       flightState._billboardCollection = new Cesium.BillboardCollection();
       viewer.scene.primitives.add(flightState._billboardCollection);
       registerSpriteCollection('flights', flightState._billboardCollection);
+      // Phone only: cluster dense fleet icons into cyan count badges.
+      if (isPhoneLite()) {
+        flightState._phoneCluster = createPhoneBillboardClusterer({
+          viewer,
+          color: '#00d4ff',
+          items: function* () {
+            for (const [key, bb] of flightState._billboards) yield { key, bb };
+          },
+          isActive: () => flightState._billboardCollection?.show === true,
+          isExcluded: (icao24) => icao24 === flightState._trackedIcao,
+        });
+      }
       flightState._modelCollection = new Cesium.PrimitiveCollection();
       viewer.scene.primitives.add(flightState._modelCollection);
       // Warm the glTF cache so the tracked plane's model instantiates instantly when first needed
@@ -281,6 +295,8 @@ export function createLifecycle({
         flightState._moveEndRemove();
         flightState._moveEndRemove = null;
       }
+      flightState._phoneCluster?.destroy();
+      flightState._phoneCluster = null;
       parts.rendering._releaseModels();
       if (flightState._billboardCollection) {
         viewer.scene.primitives.remove(flightState._billboardCollection);

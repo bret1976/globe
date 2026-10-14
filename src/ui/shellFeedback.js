@@ -9,6 +9,7 @@ import {
   reduceTrafficSyncFeedback,
 } from '../loadingFeedback.js';
 import { setSplitFlapText, disposeSplitFlap } from '../splitFlap.js';
+import { installPhoneDeclutter } from './phoneDeclutter.js';
 export class ShellFeedback {
   constructor({ readLayers }) {
     this.readLayers = readLayers;
@@ -36,6 +37,8 @@ export class ShellFeedback {
       'traffic-sync-progress',
     );
     this._toast = document.getElementById('toast');
+    // Phone-only (no-op on desktop): one status notice at a time.
+    this._disposePhoneDeclutter = installPhoneDeclutter();
   }
   observeVisibility() {
     if (this.destroyed || this._loadingVisibilityHandler) return;
@@ -190,6 +193,7 @@ export class ShellFeedback {
   destroy() {
     if (this.destroyed) return;
     this.destroyed = true;
+    this._disposePhoneDeclutter?.();
     this._stopLoadingFeedbackTicker();
     clearInterval(this._trafficChipTicker);
     clearTimeout(this._toastTimer);

@@ -1,0 +1,84 @@
+/* ── Phone declutter (2026-10-13) ─────────────────────────────────────────
+   Every rule is scoped to html.gev-phone-lite, which only phone-class clients
+   get (src/ui/phoneDeclutter.js → isPhoneLite()), AND to a narrow viewport.
+   Desktop never matches either, so its layout is untouched. */
+
+/* 1. Only the newest status notice is shown (see phoneDeclutter.js). */
+html.gev-phone-lite .phone-toast-suppressed {
+  display: none !important;
+}
+
+@media (max-width: 768px) {
+  /* 5a. Nearest-place summary: wrap to at most two lines inside the screen
+     instead of running off the right edge under the rails. */
+  html.gev-phone-lite #intel-hud .hud-top-left .hud-summary-wrap {
+    max-width: calc(100vw - 72px);
+  }
+  html.gev-phone-lite #intel-hud .hud-top-left .hud-summary {
+    white-space: normal;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    font-size: 10px;
+    line-height: 1.35;
+  }
+  html.gev-phone-lite #intel-hud .hud-top-left .hud-classification,
+  html.gev-phone-lite #intel-hud .hud-top-left .hud-system,
+  html.gev-phone-lite #intel-hud .hud-top-left .hud-mode {
+    max-width: calc(100vw - 72px);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* 5b. Coordinate HUD: the right block (GSD / ALT / AIS) sat on top of the
+     left block (MGRS / lat-lon). Lift the right block one block-height above
+     the left one so the two never share a row. */
+  html.gev-phone-lite #intel-hud .hud-bottom-left .hud-content,
+  html.gev-phone-lite #intel-hud .hud-bottom-right .hud-content {
+    font-size: 11px;
+    letter-spacing: 1.2px;
+  }
+  html.gev-phone-lite #intel-hud[data-variant='tactical'] .hud-bottom-left,
+  html.gev-phone-lite #intel-hud[data-variant='operator'] .hud-bottom-left {
+    bottom: calc(2vh + 7.3rem + 20px);
+  }
+  html.gev-phone-lite #intel-hud[data-variant='tactical'] .hud-bottom-right,
+  html.gev-phone-lite #intel-hud[data-variant='operator'] .hud-bottom-right {
+    bottom: calc(2vh + 7.3rem + 20px + 52px);
+    left: 16px;
+    right: auto;
+  }
+  html.gev-phone-lite #intel-hud .hud-ais-vessel {
+    max-width: calc(100vw - 72px);
+  }
+
+  /* 5c. Command dock: the Talk/AI box was taller than the dock and spilled
+     over the LOCATION / VISUAL PRESETS wings. Size the dock to the voice box
+     and give each wing the remaining width so labels read in full. */
+  html.gev-phone-lite #command-dock {
+    --dock-side-compact: calc((100vw - 24px - 8.75rem - 0.4rem) / 2);
+    width: calc(100vw - 24px);
+    max-width: calc(100vw - 24px);
+    min-height: 6.55rem;
+    align-items: stretch;
+  }
+  html.gev-phone-lite #command-dock > #gev-voice-control {
+    margin: 0;
+  }
+  html.gev-phone-lite #command-dock .panel-title,
+  html.gev-phone-lite #command-dock .location-toolbar-label {
+    max-width: none;
+    white-space: normal;
+    text-align: center;
+    line-height: 1.3;
+  }
+
+  /* Attribution stays visible just above the taller dock. */
+  html.gev-phone-lite
+    body:not(.ui-clean-view):not(.recording-mode)
+    #cesium-credits {
+    bottom: calc(2vh + 7.3rem);
+  }
+}

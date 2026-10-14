@@ -1,4 +1,5 @@
 import { UiLifetime } from './uiLifetime.js';
+import { isPhoneLite } from '../app/phoneLite.js';
 import { displayPanelScroller } from './displayPanelScroll.js';
 import { PanelPositionControls } from './panelPositionControls.js';
 import { PanelLayoutController } from './panelLayoutController.js';
@@ -144,6 +145,27 @@ export class PanelChrome {
     this._initCommandDockPins();
     this._initCommandDockTrayMetrics();
     this._maybeNotifyLayoutReset();
+    this._phoneCollapseRightRail();
+  }
+
+  /**
+   * Phone only: the right rail (Display / CCTV / Context / Weather / Imagery)
+   * starts as collapsed tabs, whatever a saved preference or share link says,
+   * until the user taps one open. Presentation only — like the responsive
+   * auto-collapse it is never persisted or written into share links.
+   */
+  _phoneCollapseRightRail() {
+    if (this._phoneRightRailTouched || !this._rightPanelStack) return;
+    if (!isPhoneLite()) return;
+    let changed = false;
+    for (const panel of this._rightPanelStack.children) {
+      if (!panel.matches('[data-panel-id]')) continue;
+      if (panel.classList.contains('collapsed')) continue;
+      panel.classList.add('collapsed', 'phone-start-collapsed');
+      this._syncPanelCollapseButton(panel);
+      changed = true;
+    }
+    if (changed) this._scheduleRightPanelLayout();
   }
 
   _collapsePanelOnEscape(event, panelId) {
@@ -348,7 +370,8 @@ export class PanelChrome {
       // restore the user's explicit expanded preference at its own viewport.
       const collapsed =
         panelEl.classList.contains('layout-auto-collapsed') ||
-        panelEl.classList.contains('cyber-accordion-collapsed')
+        panelEl.classList.contains('cyber-accordion-collapsed') ||
+        panelEl.classList.contains('phone-start-collapsed')
           ? false
           : panelEl.classList.contains('collapsed');
       const entry = { id: spec.id, collapsed };
@@ -380,6 +403,7 @@ export class PanelChrome {
         syncShare: false,
       });
     }
+    this._phoneCollapseRightRail();
     this.shareLinkManager?.onPanelStateChange?.();
   }
 
@@ -402,7 +426,16 @@ export class PanelChrome {
     const nextCollapsed = Boolean(collapsed);
     const wasAutoCollapsed =
       panelEl.classList.contains('layout-auto-collapsed') ||
-      panelEl.classList.contains('cyber-accordion-collapsed');
+      panelEl.classList.contains('cyber-accordion-collapsed') ||
+      panelEl.classList.contains('phone-start-collapsed');
+    // Phone: the first explicit tap on a right-rail tab hands the rail back
+    // to the user (see _phoneCollapseRightRail).
+    if (
+      explicit &&
+      !restore &&
+      (panelId === 'radio-panel' || this._rightPanelStack?.contains(panelEl))
+    )
+      this._phoneRightRailTouched = true;
     // A user opening a Cyber rail panel owns the whole accordion, including
     // peers that were only presentation-collapsed during a saved-state restore.
     if (
@@ -490,6 +523,7 @@ export class PanelChrome {
     panelEl.classList.remove(
       'layout-auto-collapsed',
       'cyber-accordion-collapsed',
+      'phone-start-collapsed',
     );
     if (
       !nextCollapsed &&
