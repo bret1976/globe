@@ -12,6 +12,7 @@
  */
 import * as Cesium from 'cesium';
 import './replay.css';
+import { recordRun, recordingSupported } from '../scenes/storyRecorder.js';
 import { holdContinuousRender, releaseContinuousRender } from '../renderGovernor.js';
 import { classifyAircraft, CLASS_MODEL_REAL, CLASS_MODEL_URL } from '../data/aircraftClass.js';
 import { REPLAY_SPEEDS, splitSegments, parseReplayHash, clampBbox, formatClock, formatDate, speedLabel } from './model.js';
@@ -78,6 +79,7 @@ export function initReplay({ viewer }) {
         <button class="replay-play" type="button" aria-label="Play">▶</button>
         <input class="replay-scrub" type="range" min="0" max="1000" value="0" step="1" aria-label="Timeline">
         <div class="replay-speeds" role="group" aria-label="Playback speed"></div>
+        <button class="replay-rec" type="button" aria-pressed="false" title="Record this replay to a video file (uses the Director recorder)">● REC</button>
       </div>
       <div class="replay-credits"></div>
     </div>`;
@@ -140,6 +142,7 @@ export function initReplay({ viewer }) {
 
   function close() {
     if (!state.open) return;
+    stopRec?.();
     state.open = false;
     state.loadToken++;
     state.customToken++;
@@ -567,6 +570,39 @@ export function initReplay({ viewer }) {
     await load(poll().then((r) => ({ ...r, tz: Intl.DateTimeFormat().resolvedOptions().timeZone, subtitle: `${formatDate(t0)} · ${new Date(t0 * 1000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}–${new Date(t1 * 1000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', timeZoneName: 'short' })} · ${bbox.map((x) => x.toFixed(2)).join(', ')}` })));
     if (mine === state.customToken && state.replay?.id?.startsWith('custom-')) { toggleCustom(false); setHash(state.replay.id); }
   }
+
+  // ---------- record (reuses the Director story recorder) ----------
+  let stopRec = null;
+  const recBtn = $('.replay-rec');
+  recBtn.addEventListener('click', async () => {
+    if (stopRec) { stopRec(); return; }
+    if (!recordingSupported()) { status('Recording is not supported in this browser — use the device screen recorder.', 'error'); return; }
+    recBtn.setAttribute('aria-pressed', 'true');
+    recBtn.textContent = '■ STOP';
+    status('Recording… press STOP to finish.');
+    try {
+      const result = await recordRun(viewer, () => {
+        const clock = $('.replay-clock');
+        const r = clock.getBoundingClientRect();
+        const w = Math.max(260, r.width + 40);
+        return { caption: { rect: { left: r.right - w, top: r.top, width: w, height: r.height + 60 },
+          title: `${$('.replay-clock-time').textContent}  ·  ${$('.replay-clock-speed').textContent}`,
+          text: `RECONSTRUCTED / HISTORICAL · ${state.selected ? state.selected.name + ' · ' : ''}${$('.replay-credits').textContent.split(' · ').slice(0, 3).join(' · ')}` } };
+      }, () => new Promise((resolve) => { stopRec = resolve; }));
+      const a = document.createElement('a');
+      a.href = result.url;
+      a.download = result.fileName.replace('godseye-story', `godseye-replay-${state.replay?.id || 'event'}`);
+      document.body.appendChild(a); a.click(); a.remove();
+      state.lastRecording = { size: result.blob.size, type: result.type, durationMs: result.durationMs, fileName: a.download };
+      status(`Recorded ${(result.blob.size / 1048576).toFixed(1)} MB ${result.type} — downloaded ${a.download}`);
+    } catch (err) {
+      status(`Recording failed: ${err.message}`, 'error');
+    } finally {
+      stopRec = null;
+      recBtn.setAttribute('aria-pressed', 'false');
+      recBtn.textContent = '● REC';
+    }
+  });
 
   // ---------- wiring ----------
   btn.addEventListener('click', () => (state.open ? close() : open(sel.value && sel.value !== '__custom' ? sel.value : DEFAULT_EVENT)));
