@@ -47,6 +47,7 @@
  */
 
 import * as Cesium from 'cesium';
+import { sampleHeightBudgeted, heightBudgetSpent } from './heightBudget.js';
 
 /** Taxi threshold: a cached snap answers directly for moves up to this far from
  *  the sampled spot (m). Past it the value is demoted to a held last-known and a
@@ -336,6 +337,9 @@ export function createGroundSnap({ groundFloor }) {
       return heldSnapM(next, surfacePos);
     };
     if (!_tilesReady(viewer)) return miss();
+    // Shared frame/rolling pick budget (no retry stamp, like the window cap).
+    if (viewer.scene?.sampleHeightSupported && heightBudgetSpent(viewer.scene))
+      return heldSnapM(entry, surfacePos);
     windowCount += 1;
     let sampled;
     try {
@@ -345,9 +349,11 @@ export function createGroundSnap({ groundFloor }) {
         scratchCarto,
       );
       // sampleHeight throws when unsupported (no depth textures) — that's a miss.
-      sampled = viewer.scene.sampleHeight(
+      sampled = sampleHeightBudgeted(
+        viewer.scene,
         carto,
         getExclusions ? getExclusions() : undefined,
+        { useCache: false, requireSupported: false },
       );
     } catch {
       sampled = undefined;

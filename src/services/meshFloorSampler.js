@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { sampleHeightBudgeted, heightBudgetSpent } from './heightBudget.js';
 
 /** Construct an instance-owned meshFloorSampler service with explicit dependencies. */
 export function createMeshFloorSampler({
@@ -124,6 +125,8 @@ export function createMeshFloorSampler({
     const attempted = new Set();
     for (const p of points) {
       if (sampled >= MAX_SAMPLES_PER_CALL) break;
+      // Shared frame/rolling pick budget: stop for this poll once spent.
+      if (heightBudgetSpent(scene)) break;
       if (!Number.isFinite(p?.lat) || !Number.isFinite(p?.lon)) continue;
       const cell = coarseFloorCoord(p.lat, p.lon);
       const key = `${cell.lat},${cell.lon}`;
@@ -145,7 +148,10 @@ export function createMeshFloorSampler({
           0,
           _scratchProbe,
         );
-        height = scene.sampleHeight(carto, excludeObjects);
+        height = sampleHeightBudgeted(scene, carto, excludeObjects, {
+          useCache: false,
+          requireSupported: false,
+        });
         sampled += 1;
       } catch {
         continue; // scene mid-teardown — try again next poll
