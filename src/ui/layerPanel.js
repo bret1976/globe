@@ -45,7 +45,7 @@ const PANEL_GROUPS = [
   },
   {
     label: 'Weather',
-    ids: ['weather', 'weather-radar', 'weather-lightning', 'weather-satellite', 'wind', 'weather-cyclones', 'hurricane-cones', 'nws-alerts', 'spc-outlook', 'ndbc-buoys', 'usgs-gauges', 'tide-gauges', 'air-quality', 'ocean-currents', 'radiosondes'],
+    ids: ['weather', 'weather-radar', 'weather-lightning', 'weather-satellite', 'wind', 'weather-cyclones', 'hurricane-cones', 'nws-alerts', 'canada-alerts', 'spc-outlook', 'ndbc-buoys', 'usgs-gauges', 'tide-gauges', 'air-quality', 'ocean-currents', 'coral-bleaching', 'radiosondes'],
   },
   {
     label: 'Events',
@@ -113,6 +113,8 @@ const PANEL_LABELS = {
   'airport-delays': 'Airport Delays (FAA)',
   'aviation-hazards': 'Aviation Hazards (AWC)',
   'world-sigmets': 'World SIGMETs (AWC)',
+  'coral-bleaching': 'Coral Bleaching (NOAA CRW)',
+  'canada-alerts': 'Canada Weather Alerts (ECCC)',
   fireballs: 'Fireballs (NASA JPL)',
   'tsunami-alerts': 'Tsunami Alerts (NOAA)',
   'hms-smoke': 'Smoke Plumes (NOAA HMS)',

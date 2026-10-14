@@ -1,3 +1,9 @@
+## 2026-10-14 — Coral Bleaching (NOAA CRW) + Canada Weather Alerts (ECCC)
+
+- New `coral-bleaching` Weather toggle: NOAA Coral Reef Watch Daily 5km Regional Virtual Stations (~214 reef regions worldwide) draped as region outlines plus a station disc, colored by bleaching heat-stress alert (No Stress → Watch → Warning → Alert Level 1 → Alert Level 2). Click for DHW, HotSpot, SST and anomaly, 7-day trend and satellite day. Proxy `GET /api/coral-bleaching` (3 h TTL, 48 h stale; product is daily). Share token `cb`.
+- New `canada-alerts` Weather toggle: Environment and Climate Change Canada public weather alerts (warnings, watches, advisories, statements) from the keyless MSC GeoMet OGC API, draped as region outlines colored by ECCC risk colour. Click for type, risk, impact, confidence, area, summary and validity. Expired / ended alerts dropped. Proxy `GET /api/canada-alerts` (5 min TTL, 2 h stale). Share token `ca`. Complements the U.S.-only NWS alerts layer.
+- NYC TMC camera credit now carries NYC DOT's requested application disclaimer.
+
 ## 2026-10-13 — REPLAY: historical event reconstruction
 
 - New **REPLAY** button (⟲, top action row) and deep link `#replay=<event>` (`sf-fleet-week-2025`, `sf-fleet-week-2024`, `custom`, `custom-<key>`). Opens a replay screen with a RECONSTRUCTED / HISTORICAL badge, event picker, timeline scrubber + clock (event-local time), play/pause, 1/3/10/60/300× speeds, click-to-chase (CHASE / ORBIT) with a fading recorded-track trail, hourly HRRR wind arrows, and a data-notes drawer. The Cesium clock is set to the event time so sun lighting matches. Live layers are hidden while replaying and restored on exit.

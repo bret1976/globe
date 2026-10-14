@@ -35,6 +35,8 @@ test('reference factories retain compatibility without starting acquisition or s
     'flightRestrictions',
     'aviationHazards',
     'worldSigmets',
+    'coralBleaching',
+    'canadaAlerts',
     'fireballs',
     'spcOutlook',
     'airportDelays',
@@ -67,6 +69,8 @@ test('reference factories retain compatibility without starting acquisition or s
   assert.notEqual(first.ionosphere, second.ionosphere);
   assert.notEqual(first.ukraineFires, second.ukraineFires);
   assert.notEqual(first.worldSigmets, second.worldSigmets);
+  assert.notEqual(first.coralBleaching, second.coralBleaching);
+  assert.notEqual(first.canadaAlerts, second.canadaAlerts);
   assert.equal(typeof first.earthquakes.getSnapshot, 'function');
   assert.equal(typeof first['fire-perimeters'].getSnapshot, 'function');
   assert.equal(typeof first.auFire.getSnapshot, 'function');
