@@ -13,6 +13,10 @@ import { isConstrainedGlobeClient } from './clientCapabilities.js';
 
 export const PHONE_LITE_FIRMS_LIMIT = 40_000;
 export const PHONE_LITE_ALPR_MAX_RENDERED = 300;
+/** CCTV camera icons drawn on phones: the nearest to the camera eye. */
+export const PHONE_LITE_CCTV_MAX_RENDERED = 300;
+/** Flight text labels on phones: only the nearest contacts carry one. */
+export const PHONE_LITE_FLIGHT_LABELS = 15;
 
 let cached = null;
 /** @returns {boolean} */

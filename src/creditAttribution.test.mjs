@@ -246,6 +246,10 @@ function ownBoxEntries() {
       const compound = lastCompound(part);
       if (!ELEMENT_KEYS.some((key) => compound.includes(key))) continue;
       if (compound.includes('::')) continue; // a pseudo-element is its own box
+      // Phone-only declutter rules (phone-declutter.css) are gated on a class
+      // only phone-class clients ever get, so they never touch the desktop
+      // geometry this model pins; the phone layout is verified headlessly.
+      if (part.startsWith('html.gev-phone-lite ')) continue;
       entries.push({ rule, part });
     }
   }

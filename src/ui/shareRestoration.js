@@ -3,6 +3,7 @@ import { stampInitialShareGesture } from '../navigationPolicy.js';
 import { canPresentDeferredStatusNotice } from '../loadingFeedback.js';
 import { UiLifetime } from './uiLifetime.js';
 import { isConstrainedGlobeClient } from '../app/clientCapabilities.js';
+import { isPhoneLite } from '../app/phoneLite.js';
 import {
   startBootCrashGuard,
   layerRestorePacing,
@@ -213,7 +214,9 @@ export class ShareRestoration {
       this.showStatus('ACQUIRING', {
         state: 'acquiring',
         detail: `SHARED ${String(result.label || 'SUBJECT').toUpperCase()}`,
-        persistent: true,
+        // Phones: a timed notice (auto-dismisses) so it never parks over the
+        // globe; desktop keeps the persistent acquiring chip.
+        persistent: !isPhoneLite(),
       });
       return;
     }

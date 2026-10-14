@@ -1450,6 +1450,8 @@ function _drawOverlay(frame) {
       if (bracketAlpha > 0) protectedVisibleCount++;
       continue;
     }
+    // Phone lite: bracket only, no text label (set only on phone clients).
+    if (obj.phoneNoLabel) continue;
 
     const primary = String(obj.id || '');
     const micro = String(obj.metric || '');

@@ -1,4 +1,6 @@
 import * as Cesium from 'cesium';
+import { isPhoneLite } from '../../app/phoneLite.js';
+import { createPhoneBillboardClusterer } from '../../app/phoneClusters.js';
 import { viewshedColors, cameraHue } from '../../data/cctvViewshed.js';
 import { CCTV_OVERLAY_SOURCE_ID } from '../../data/cctvCards.js';
 import { GIZMO_ID_PREFIX } from '../../data/cctvGizmo.js';
@@ -77,6 +79,22 @@ export function createLifecycle({
       layerState._billboards = new Cesium.BillboardCollection();
       layerState._viewer.scene.primitives.add(layerState._billboards);
       registerSpriteCollection('cctv', layerState._billboards);
+      // Phone only: fold dense camera icons into cyan count badges.
+      layerState._phoneCluster?.destroy();
+      layerState._phoneCluster = isPhoneLite()
+        ? createPhoneBillboardClusterer({
+            viewer: layerState._viewer,
+            color: '#6be8ff',
+            items: function* () {
+              for (const record of layerState._records)
+                if (record.billboard)
+                  yield { key: record.camera?.id, bb: record.billboard };
+            },
+            isActive: () =>
+              layerState._enabled && layerState._billboards?.show !== false,
+            isExcluded: (id) => id === layerState._activeCameraId,
+          })
+        : null;
 
       const sources = await parts.catalog.loadCameraSources();
       const catalogFromSources = parts.catalog.buildCatalogFromSources(sources);
@@ -490,6 +508,8 @@ export function createLifecycle({
       parts.geometryQueue.stopGeometryLoadQueue();
       parts.cards.teardownAmbientCards();
       parts.geometry.destroyCoverageEntities();
+      layerState._phoneCluster?.destroy();
+      layerState._phoneCluster = null;
       if (layerState._billboards && teardownViewer) {
         teardownViewer.scene.primitives.remove(layerState._billboards);
         layerState._billboards = null;

@@ -1,6 +1,7 @@
 import { approxDistanceKm as _approxDistanceKm } from './recordPolicy.js';
 import { displayedKinematics } from '../../data/motionModel.js';
 import * as Cesium from 'cesium';
+import { isPhoneLite, PHONE_LITE_FLIGHT_LABELS } from '../../app/phoneLite.js';
 import { isExplicitLayerStateOrigin } from '../../data/layerState.js';
 import { modelVisualAnchor } from '../../data/modelVisualAnchor.js';
 import {
@@ -424,6 +425,8 @@ export function createQueries({
         const model = flightState._models.get(icao24);
         const modelOwnsVisual = parts.rendering._modelOwnsVisual(icao24);
         if (!isTracked && !bb.show && !modelOwnsVisual) continue;
+        // Phone clustering: an icon folded into a count badge gets no bracket.
+        if (!isTracked && flightState._phoneCluster?.isHidden(bb)) continue;
         const info = flightState.records.data.get(icao24);
         let object = flightState._detectionObjects.get(icao24);
         if (!object) {
@@ -459,6 +462,7 @@ export function createQueries({
         if (!pos) continue;
         object.position = pos;
         object.skipLabel = isTracked;
+        object.phoneNoLabel = false;
         // Card text only — declutter/cohort identity is `object.sourceId` (icao24).
         const id = _contactLabel(icao24, info);
         if (object.id !== id) object.id = id;
@@ -469,6 +473,22 @@ export function createQueries({
         }
         result.push(object);
         if (result.length >= maxCount) break;
+      }
+      // Phone lite: only the nearest few contacts carry a text label; the rest
+      // keep their icon/bracket. The tracked contact has its own label.
+      if (isPhoneLite() && result.length > PHONE_LITE_FLIGHT_LABELS) {
+        const eye = flightState._viewer?.camera?.positionWC;
+        if (eye) {
+          const ranked = result
+            .filter((o) => !o.skipLabel)
+            .map((o) => ({
+              o,
+              d: Cesium.Cartesian3.distanceSquared(o.position, eye),
+            }))
+            .sort((a, b) => a.d - b.d);
+          for (let i = PHONE_LITE_FLIGHT_LABELS; i < ranked.length; i++)
+            ranked[i].o.phoneNoLabel = true;
+        }
       }
       if (
         flightState._detectionObjects.size >
