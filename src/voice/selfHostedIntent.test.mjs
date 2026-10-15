@@ -249,7 +249,11 @@ test('turn off all layers is one clear, including reset and an empty viewport', 
     'reset the globe',
   ]) {
     const plan = planSelfHostedVoiceTurn(text, { viewport });
-    assert.deepEqual(plan.calls, [{ name: 'clear_layers', arguments: {} }], text);
+    assert.deepEqual(
+      plan.calls,
+      [{ name: 'clear_layers', arguments: {} }],
+      text,
+    );
     assert.equal(plan.speech, 'Turning off all layers.');
   }
   const none = planSelfHostedVoiceTurn('turn off all layers', {
@@ -320,4 +324,27 @@ test('two layers in one on or off clause keep that polarity', () => {
   assert.equal(on.calls[0].name, 'fly_to_location');
   assert.equal(on.calls[1].arguments.layerId, 'flights');
   assert.equal(on.calls[1].arguments.enabled, true);
+});
+
+test('camera-only turns and "show <layer> over <place>" plan locally', () => {
+  assert.deepEqual(planSelfHostedVoiceTurn('Zoom in').calls, [
+    {
+      name: 'adjust_camera_zoom',
+      arguments: { direction: 'in', amount: 'medium' },
+    },
+  ]);
+  assert.deepEqual(
+    planSelfHostedVoiceTurn(
+      'Go to full globe view and then turn on the radio.',
+    ).calls.map((c) => c.name),
+    ['zoom_to_globe', 'set_layer_visibility'],
+  );
+  const la = planSelfHostedVoiceTurn('show flights over Los Angeles').calls;
+  assert.equal(la[0].name, 'fly_to_location');
+  assert.equal(la[0].arguments.query, 'los angeles');
+  assert.equal(la[1].arguments.layerId, 'flights');
+  assert.equal(
+    planSelfHostedVoiceTurn('zoom in on Paris').calls[0].name,
+    'fly_to_location',
+  );
 });

@@ -344,7 +344,7 @@ function matchAliasPlace(normalized) {
 }
 
 const NAVIGATE_TO =
-  /(?:take me (?:over |back )?to|fly me (?:over )?to|fly (?:over )?to|go (?:over )?to|head (?:over )?to|navigate to|zoom (?:in )?(?:to|on|onto|into|over)|center (?:on|over)|show me)\s+(.+)$/;
+  /(?:take me (?:over |back )?to|fly me (?:over )?to|fly (?:over )?to|go (?:over )?to|head (?:over )?to|navigate to|zoom (?:in )?(?:to|on|onto|into|over)|center (?:on|over)|show me|(?:show|display|turn on|switch on)\s+[a-z ]+?\s+(?:over|above|around|near|across))\s+(.+)$/;
 const PLACE_PHRASE_END =
   /\s+(?:and|then|so|where|with|to see|while|because)\b|\s*[.;]\s*/;
 
@@ -567,7 +567,8 @@ export function planSelfHostedVoiceTurn(text, context = {}) {
       const plan = planSelfHostedVoiceTurn(clause, cursor);
       if (!plan.calls?.length) continue;
       calls.push(...plan.calls);
-      if (plan.speech && !/I heard/.test(plan.speech)) speeches.push(plan.speech);
+      if (plan.speech && !/I heard/.test(plan.speech))
+        speeches.push(plan.speech);
       if (plan.locationQuery) locationQuery = plan.locationQuery;
       if (plan.place) place = plan.place;
       cursor = {
@@ -584,6 +585,48 @@ export function planSelfHostedVoiceTurn(text, context = {}) {
         speech: speeches.join(' '),
       };
     }
+  }
+  // Camera-only turns: "full globe view", "zoom in", "zoom out a lot".
+  if (/\b(full|whole|entire) (globe|earth|world)\b/.test(normalized)) {
+    const rest = normalized
+      .replace(
+        /^.*?\b(?:full|whole|entire) (?:globe|earth|world)(?: view)?\b/,
+        '',
+      )
+      .replace(/^[\s,.;]*(?:and then|and|then)?\s*/, '')
+      .trim();
+    const next = rest ? planSelfHostedVoiceTurn(rest, context) : null;
+    const more = next?.calls?.length ? next : null;
+    return {
+      calls: [{ name: 'zoom_to_globe', arguments: {} }, ...(more?.calls || [])],
+      locationQuery: more?.locationQuery || context.lastLocationQuery || null,
+      place: more?.place || context.lastPlace || null,
+      speech: ['Showing the full globe.', more?.speech]
+        .filter(Boolean)
+        .join(' '),
+    };
+  }
+  const zoom = normalized.match(
+    /^(?:please )?zoom (in|out)(?: (?:a )?(little|bit|lot|more))?(?: please)?$/,
+  );
+  if (zoom) {
+    const amount =
+      zoom[2] === 'lot'
+        ? 'lot'
+        : zoom[2] === 'little' || zoom[2] === 'bit'
+          ? 'little'
+          : 'medium';
+    return {
+      calls: [
+        {
+          name: 'adjust_camera_zoom',
+          arguments: { direction: zoom[1], amount },
+        },
+      ],
+      locationQuery: context.lastLocationQuery || null,
+      place: context.lastPlace || null,
+      speech: zoom[1] === 'in' ? 'Zooming in.' : 'Zooming out.',
+    };
   }
   const calls = [];
   const spokenPlace = matchPlace(normalized);
