@@ -316,10 +316,14 @@ export async function geocodeKeylessWithOutcome(
   cache.delete(memoKey);
 
   /** One request: the feature array Photon returned, or null if it did not answer. */
+  // One deadline for every ask: the biased and unbiased requests share the
+  // budget, so a stalled Photon cannot spend the whole place-search chain
+  // (12s) and starve the local /api/geocode fallback behind it.
+  const deadline = AbortSignal.timeout(PHOTON_TIMEOUT_MS);
   const ask = async (url) => {
     try {
       signal?.throwIfAborted();
-      const deadline = AbortSignal.timeout(PHOTON_TIMEOUT_MS);
+      if (deadline.aborted) return null;
       const requestSignal = signal
         ? AbortSignal.any([signal, deadline])
         : deadline;

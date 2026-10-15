@@ -36,7 +36,8 @@ export function createVoiceCommands({
   if (ui.costValue) ui.costValue.hidden = !capabilities.costControls;
   if (!capabilities.costControls) {
     if (ui.helpDetail)
-      ui.helpDetail.textContent = 'Click the mic, then talk — or type a command';
+      ui.helpDetail.textContent =
+        'Click the mic, then talk — or type a command';
   }
   ui.button?.setAttribute?.(
     'aria-label',
@@ -192,6 +193,52 @@ export function createVoiceCommands({
     },
     { once: true },
   );
+  // Self-hosted voice: holding Space from idle starts a push-to-talk turn
+  // (the adapter's own Space handler only works once a session is live).
+  const SPACE_HOLD_MS = 400;
+  let spaceTimer = null;
+  let spaceTalking = false;
+  const editingTarget = (target) =>
+    Boolean(
+      target?.isContentEditable ||
+      /^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test(target?.tagName || ''),
+    );
+  const spaceDown = (event) => {
+    if (event.code !== 'Space' || event.repeat || spaceTimer || spaceTalking)
+      return;
+    if (session.isActive() || editingTarget(event.target)) return;
+    if (event.ctrlKey || event.metaKey || event.altKey) return;
+    spaceTimer = setTimeout(() => {
+      spaceTimer = null;
+      spaceTalking = true;
+      adapter.primeMic?.();
+      void session.start({ pushToTalk: true });
+      adapter.holdTalk?.();
+    }, SPACE_HOLD_MS);
+  };
+  const spaceUp = (event) => {
+    if (event.code !== 'Space') return;
+    if (spaceTimer) {
+      clearTimeout(spaceTimer);
+      spaceTimer = null;
+    }
+    if (!spaceTalking) return;
+    spaceTalking = false;
+    void adapter.releaseTalk?.();
+  };
+  if (adapter.protocol === 'self-hosted-qwen' && capabilities.pushToTalk) {
+    window.addEventListener('keydown', spaceDown, true);
+    window.addEventListener('keyup', spaceUp, true);
+    session.signal.addEventListener(
+      'abort',
+      () => {
+        if (spaceTimer) clearTimeout(spaceTimer);
+        window.removeEventListener('keydown', spaceDown, true);
+        window.removeEventListener('keyup', spaceUp, true);
+      },
+      { once: true },
+    );
+  }
   if (session.disposed) {
     ui.button.removeEventListener('click', buttonHandler);
     annotationUnsubscribe?.();
