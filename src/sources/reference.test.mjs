@@ -18,6 +18,7 @@ test('reference factories retain compatibility without starting acquisition or s
     'auFire',
     'cables',
     'gpsjam',
+    'gnssIntegrity',
     'volcanoes',
     'aurora',
     'radiation',
@@ -71,6 +72,7 @@ test('reference factories retain compatibility without starting acquisition or s
   assert.notEqual(first.worldSigmets, second.worldSigmets);
   assert.notEqual(first.coralBleaching, second.coralBleaching);
   assert.notEqual(first.canadaAlerts, second.canadaAlerts);
+  assert.notEqual(first.gnssIntegrity, second.gnssIntegrity);
   assert.equal(typeof first.earthquakes.getSnapshot, 'function');
   assert.equal(typeof first['fire-perimeters'].getSnapshot, 'function');
   assert.equal(typeof first.auFire.getSnapshot, 'function');
