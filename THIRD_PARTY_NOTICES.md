@@ -19,3 +19,10 @@ resolved dependency inventory remains in `package-lock.json`.
 - Source: <https://github.com/jtarrio/signals>
 - License: Apache License 2.0
 - License text: <https://www.apache.org/licenses/LICENSE-2.0>
+
+## Geo file import (GeoJSON / KML / KMZ / GPX)
+
+`src/data/geoFileImport.js`, `src/data/geoImportImages.js`, `src/data/geoImportPins.js`,
+`src/data/cameraFraming.js`, `src/ui/geoFileImport.js`, `src/ui/flyToDataSource.js` and their
+tests are ported from bilawalsidhu/gods-eye-view PR #1122 (merge 533d7c6), MIT License,
+Copyright (c) Bilawal Sidhu.

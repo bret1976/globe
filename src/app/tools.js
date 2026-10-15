@@ -1,6 +1,7 @@
 import { SceneDirector } from '../scenes/director.js';
 import { initAnnotations } from '../annotations/index.js';
 import { initDrawTool } from '../annotations/drawTool.js';
+import { initGeoFileImport } from '../ui/geoFileImport.js';
 import { initImageryBoxTool } from '../ui/imageryBoxTool.js';
 import { createRecentImageryPanel } from '../ui/recentImagery.js';
 import { initGevVoiceCommands } from '../voice/gevRealtime.js';
@@ -57,6 +58,19 @@ export function createApplicationTools({
   defer(() => drawTool?.destroy());
   for (const id of ['weather', 'weather-radar', 'weather-lightning', 'weather-satellite'])
     dataManager.layers.get(id)?.module.attachTileset?.(tileset);
+  // DISPLAY ▸ Import: the person's own GeoJSON/KML/KMZ/GPX files, each its
+  // own data source. They live for the page session, so the application
+  // lifetime removes them and the drop listeners on the viewer container.
+  const geoFileImport = initGeoFileImport({
+    viewer,
+    navigation: styleManager,
+    ground: operations.surface?.groundFloor,
+    subscribeMapSource: (listener) => mapStackController?.subscribe?.(listener),
+  });
+  defer(() => geoFileImport?.destroy());
+  // DATA ▸ Recent Imagery: the box tool claims the pointer like Draw and the
+  // panel lives on the right rail, so both belong to the application
+  // lifetime. The tileset lets the layer drape while the globe is hidden.
   const recentImagery = dataManager.layers.get('recent-imagery')?.module;
   if (recentImagery) {
     recentImagery.attachTileset(tileset);
