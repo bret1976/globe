@@ -2702,6 +2702,37 @@ function installViewTargetPrewarm(viewer) {
   });
 }
 
+/** Voice zoom-in never takes the camera below this clearance over terrain. */
+export const VOICE_ZOOM_MIN_CLEARANCE_M = 150;
+
+/**
+ * How far the camera may move along its view direction on one zoom-in step
+ * without dropping under VOICE_ZOOM_MIN_CLEARANCE_M above the ground. Each
+ * step spends at most `fraction` of the clearance left above that floor, so
+ * repeated "zoom in" converges on the floor instead of tunnelling through it.
+ * @returns {number} metres (Infinity when the camera looks level or up).
+ */
+export function zoomInHeightBudgetM(viewer, fraction) {
+  const camera = viewer.camera;
+  const carto = camera.positionCartographic;
+  let groundM = 0;
+  try {
+    const sampled = viewer.scene?.globe?.getHeight?.(carto);
+    if (Number.isFinite(sampled)) groundM = Math.max(0, sampled);
+  } catch {
+    /* no terrain sample: ellipsoid floor */
+  }
+  const clearanceM = carto.height - groundM - VOICE_ZOOM_MIN_CLEARANCE_M;
+  if (!(clearanceM > 0)) return 0;
+  const up = Cesium.Ellipsoid.WGS84.geodeticSurfaceNormal(
+    camera.positionWC,
+    new Cesium.Cartesian3(),
+  );
+  const descentPerM = -Cesium.Cartesian3.dot(camera.directionWC, up);
+  if (!(descentPerM > 1e-6)) return Infinity;
+  return (clearanceM * Math.min(1, fraction)) / descentPerM;
+}
+
 function adjustCameraZoom(viewer, args) {
   const direction = String(args.direction || '').toLowerCase();
   if (direction !== 'in' && direction !== 'out') {
@@ -2733,6 +2764,7 @@ function adjustCameraZoom(viewer, args) {
     const safeMovementM = Math.min(
       movementM,
       Math.max(0, targetDistanceM - 25),
+      zoomInHeightBudgetM(viewer, fraction),
     );
     if (safeMovementM <= 0) {
       return {
@@ -2740,7 +2772,7 @@ function adjustCameraZoom(viewer, args) {
         action: 'adjust_camera_zoom',
         direction,
         amount,
-        error: 'Camera is already at the minimum target distance',
+        error: 'Camera is already at the minimum zoom height',
       };
     }
     camera.zoomIn(safeMovementM);
