@@ -25,6 +25,7 @@ import { createHmsSmokeSource } from '../layers/hmsSmoke/source.js';
 import { createWorldSigmetsSource } from '../layers/worldSigmets/source.js';
 import { createCoralBleachingSource } from '../layers/coralBleaching/source.js';
 import { createCanadaAlertsSource } from '../layers/canadaAlerts/source.js';
+import { createAdsbGnssSource } from '../layers/gnss/source.js';
 import { createHurricaneConesSource } from '../layers/hurricaneCones/source.js';
 import { createIonosphereSource } from '../layers/ionosphere/source.js';
 import { createUkraineFiresSource } from '../layers/ukraineFires/source.js';
@@ -39,6 +40,7 @@ export function createReferenceSources() {
     auFire: createAuFireSource(),
     cables: createBundledCableSource(),
     gpsjam: createGpsjamSource(),
+    gnssIntegrity: createAdsbGnssSource(),
     volcanoes: createUsgsVolcanoSource(),
     aurora: createOvationAuroraSource(),
     radiation: createSafecastRadiationSource(),

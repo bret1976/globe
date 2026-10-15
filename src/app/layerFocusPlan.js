@@ -43,6 +43,7 @@ export const LAYER_FOCUS_HEIGHT_M = Object.freeze({
   'ukraine-fires': 1_800_000,
   'fz1073-2026': 120_000,
   'gps-interference': 2_500_000,
+  'gnss-integrity': 1_600_000,
   'rocket-launches': 800_000,
   'local-firms': 80_000,
   'fire-perimeters': 1_500_000,
@@ -306,6 +307,14 @@ export const LAYER_LIVE_DESTINATIONS = Object.freeze({
     kind: 'region',
     preferredHeightM: 2_500_000,
   }),
+  // The GNSS feed samples 250 nm around the view centre, so open over the
+  // Baltic, where low navigation accuracy is reported most days.
+  'gnss-integrity': Object.freeze({
+    lat: 55.3,
+    lon: 19.8,
+    heightM: 1_600_000,
+    label: 'Baltic Sea navigation integrity (live ADS-B)',
+  }),
   'local-firms': Object.freeze({
     lat: 39.5,
     lon: -121.0,
@@ -423,6 +432,7 @@ export const FEATURED_DESTINATION_LAYER_IDS = Object.freeze([
   'ionosphere',
   'ukraine-fires',
   'gps-interference',
+  'gnss-integrity',
   'local-firms',
   'fire-perimeters',
   'au-fire',

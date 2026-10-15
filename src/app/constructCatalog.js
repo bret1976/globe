@@ -26,6 +26,7 @@ import { createApplicationWeather } from './layers/weather.js';
 import { createApplicationWind } from './layers/wind.js';
 import { createApplicationCyclones } from './layers/cyclones.js';
 import { createApplicationGpsInterference } from './layers/gpsInterference.js';
+import { createApplicationGnssIntegrity } from './layers/gnss.js';
 import { createApplicationVolcanoes } from './layers/volcanoes.js';
 import { createApplicationAurora } from './layers/aurora.js';
 import { createApplicationRadiation } from './layers/radiation.js';
@@ -87,6 +88,7 @@ const SOURCE_METHODS = Object.freeze({
   'fire-perimeters': ['getSnapshot'],
   auFire: ['getSnapshot'],
   gpsjam: ['getSnapshot'],
+  gnssIntegrity: ['getSnapshot'],
   volcanoes: ['getSnapshot'],
   aurora: ['getSnapshot'],
   radiation: ['getSnapshot'],
@@ -210,6 +212,7 @@ export function createApplicationCatalog({
         }),
         createApplicationAuFire({ source: sources.auFire }),
         createApplicationGpsInterference({ source: sources.gpsjam }),
+        createApplicationGnssIntegrity({ source: sources.gnssIntegrity }),
         createApplicationVolcanoes({ source: sources.volcanoes }),
         createApplicationAurora({ source: sources.aurora }),
         createApplicationRadiation({ source: sources.radiation }),

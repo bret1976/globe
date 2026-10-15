@@ -457,6 +457,11 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
     disposition: 'enabled-only',
   }),
   Object.freeze({
+    id: 'gnss-integrity',
+    token: 'gn',
+    disposition: 'enabled-only',
+  }),
+  Object.freeze({
     id: 'gps-interference',
     token: 'l',
     disposition: 'enabled-only',

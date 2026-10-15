@@ -56,6 +56,7 @@ import { hmsSmokeProxy } from './hmsSmoke.js';
 import { worldSigmetsProxy } from './worldSigmets.js';
 import { coralBleachingProxy } from './coralBleaching.js';
 import { canadaAlertsProxy } from './canadaAlerts.js';
+import { gnssIntegrityProxy } from './gnssIntegrity.js';
 
 /** Construct the local provider plugins in their established order. */
 function localProviderPlugins() {
@@ -107,6 +108,7 @@ function localProviderPlugins() {
     worldSigmetsProxy(),
     coralBleachingProxy(),
     canadaAlertsProxy(),
+    gnssIntegrityProxy(),
     fireballsProxy(),
     spcOutlookProxy(),
     airportDelaysProxy(),
