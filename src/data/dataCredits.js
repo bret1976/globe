@@ -59,7 +59,8 @@ export const DATA_CREDITS = [
     key: 'celestrak',
     html:
       'Satellites (TLEs): CelesTrak ' +
-      '(<a href="https://celestrak.org" target="_blank" rel="noopener">celestrak.org</a>), ' +
+      '(<a href="https://celestrak.org" target="_blank" rel="noopener">celestrak.org</a>; fallback ' +
+      '<a href="https://tle.ivanstanojevic.me" target="_blank" rel="noopener">TLE API</a>), ' +
       'Dr. T.S. Kelso',
   },
   {
