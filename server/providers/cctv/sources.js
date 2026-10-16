@@ -470,9 +470,73 @@ function pickOntarioCctvView(views) {
   );
 }
 
+// Ontario 511 developer API: keyed (ON511_API_KEY), limited to 10 calls per
+// 60 s. Cache the catalog, dedupe in-flight calls and throttle to a sliding
+// window below the limit. The key is never logged.
+const ON511_CACHE_TTL_MS = 10 * 60 * 1000;
+const ON511_WINDOW_MS = 60 * 1000;
+const ON511_MAX_CALLS_PER_WINDOW = 6;
+const on511State = { rows: null, fetchedAt: 0, inFlight: null, calls: [] };
+
+/** @internal test hook */
+export function __resetOntario511CacheForTests() {
+  on511State.rows = null;
+  on511State.fetchedAt = 0;
+  on511State.inFlight = null;
+  on511State.calls = [];
+}
+
 /**
- * Fetch Ontario 511 CCTV cameras. Keyless: the catalog is exposed by the
- * public 511 API, while frame URLs are stable still-image endpoints under
+ * Fetch the Ontario 511 camera catalog rows, cached and throttled.
+ *
+ * @returns {Promise<Array<object>|null>}
+ */
+export async function fetchOntario511CameraRows() {
+  const now = Date.now();
+  if (on511State.rows && now - on511State.fetchedAt < ON511_CACHE_TTL_MS) {
+    return on511State.rows;
+  }
+  if (on511State.inFlight) return on511State.inFlight;
+  const key = String(process.env.ON511_API_KEY || '').trim();
+  if (!key) {
+    console.warn('[CCTV] Ontario 511 skipped: ON511_API_KEY not set');
+    return on511State.rows;
+  }
+  on511State.calls = on511State.calls.filter((t) => now - t < ON511_WINDOW_MS);
+  if (on511State.calls.length >= ON511_MAX_CALLS_PER_WINDOW) {
+    console.warn('[CCTV] Ontario 511 throttled locally; serving cache');
+    return on511State.rows;
+  }
+  on511State.calls.push(now);
+  on511State.inFlight = (async () => {
+    try {
+      const url = `${ONTARIO_511_CAMERAS_URL}&key=${encodeURIComponent(key)}`;
+      const resp = await fetch(url, {
+        headers: { Accept: 'application/json' },
+        signal: AbortSignal.timeout(CCTV_SOURCE_FETCH_TIMEOUT_MS),
+      });
+      if (!resp.ok) {
+        console.warn('[CCTV] Ontario 511 camera download failed:', resp.status);
+        return on511State.rows;
+      }
+      const rows = await resp.json();
+      if (!Array.isArray(rows)) return on511State.rows;
+      on511State.rows = rows;
+      on511State.fetchedAt = Date.now();
+      return rows;
+    } catch (err) {
+      console.warn('[CCTV] Ontario 511 camera download error:', err?.name || 'error');
+      return on511State.rows;
+    } finally {
+      on511State.inFlight = null;
+    }
+  })();
+  return on511State.inFlight;
+}
+
+/**
+ * Fetch Ontario 511 CCTV cameras. The catalog comes from the keyed 511
+ * developer API (cached + throttled above), while frame URLs are stable still-image endpoints under
  * 511on.ca/map/Cctv/. Only rows with finite Ontario coords and at least one
  * enabled official still view are kept.
  *
@@ -480,15 +544,7 @@ function pickOntarioCctvView(views) {
  */
 export async function loadOntarioSourcesFromOpenData() {
   try {
-    const resp = await fetch(ONTARIO_511_CAMERAS_URL, {
-      headers: { Accept: 'application/json' },
-      signal: AbortSignal.timeout(CCTV_SOURCE_FETCH_TIMEOUT_MS),
-    });
-    if (!resp.ok) {
-      console.warn('[CCTV] Ontario 511 camera download failed:', resp.status);
-      return [];
-    }
-    const rows = await resp.json();
+    const rows = await fetchOntario511CameraRows();
     if (!Array.isArray(rows)) return [];
 
     const cameras = [];
