@@ -18,6 +18,7 @@ import {
   loadNswSourcesFromOpenData,
   loadCalgarySourcesFromOpenData,
   loadVegvesenSourcesFromOpenData,
+  loadTorontoSourcesFromOpenData,
 } from './sources.js';
 import { loadMdchartSourcesFromOpenData } from './mdchart.js';
 import { loadDdotSourcesFromGis } from './ddot.js';
@@ -145,6 +146,11 @@ const LIVE_PACKS = [
     name: 'hongkong',
     enabled: () => envEnabled('CCTV_HONGKONG_ENABLED'),
     load: loadHongKongSourcesFromOpenData,
+  },
+  {
+    name: 'toronto',
+    enabled: () => envEnabled('CCTV_TORONTO_ENABLED'),
+    load: loadTorontoSourcesFromOpenData,
   },
 ];
 /**

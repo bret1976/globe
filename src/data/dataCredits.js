@@ -369,6 +369,12 @@ export const DATA_CREDITS = [
       '<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>',
   },
   {
+    key: 'toronto-cctv',
+    html:
+      'Traffic cameras (Toronto): contains information licensed under the ' +
+      '<a href="https://www.toronto.ca/city-government/data-research-maps/open-data/open-data-licence/" target="_blank" rel="noopener">Open Government Licence – Toronto</a>',
+  },
+  {
     key: 'gbfs',
     html:
       'Bikeshare availability: GBFS operator feeds ' +
