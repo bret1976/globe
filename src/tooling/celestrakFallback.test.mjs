@@ -115,3 +115,32 @@ test('fallback keeps prior elements for satellites it cannot refresh, but needs 
   assert.match(writes[0].body, /1 25544U NEW-L1/);
   assert.match(writes[0].body, /1 48274U OLD-L1/);
 });
+
+test('SatNOGS bulk catalog refreshes every satellite in one request', async (t) => {
+  const { writes } = setup(t, 2_000_000_000_000);
+  const seen = [];
+  t.mock.method(globalThis, 'fetch', async (url) => {
+    seen.push(new URL(url).hostname);
+    if (url.includes('celestrak')) return new Response('', { status: 403 });
+    if (url.includes('satnogs'))
+      return Response.json([
+        {
+          norad_cat_id: 25544,
+          tle1: '1 25544U BULK-L1',
+          tle2: '2 25544 BULK-L2',
+        },
+        {
+          norad_cat_id: 48274,
+          tle1: '1 48274U BULK-L1',
+          tle2: '2 48274 BULK-L2',
+        },
+      ]);
+    return new Response('rate limited', { status: 429 });
+  });
+  await install(celestrakProxy())('/stations');
+  await settle();
+  assert.equal(writes.length, 1);
+  assert.match(writes[0].body, /1 25544U BULK-L1/);
+  assert.match(writes[0].body, /1 48274U BULK-L1/);
+  assert.ok(!seen.includes('tle.ivanstanojevic.me'), 'no per-id calls needed');
+});

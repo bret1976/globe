@@ -84,6 +84,50 @@ export function celestrakProxy() {
   let primaryFailures = 0;
   let primaryBlockedUntil = 0;
   const groupFailures = new Map(); // group -> { n, until }
+  // The fallback host answers 508 "resource limit" when hammered: every
+  // group shares one small pool, and a partial refresh retries in 30 min.
+  const FALLBACK_CONCURRENCY = 2;
+  const FALLBACK_RETRY_MS = 1_500;
+  const PARTIAL_RETRY_MS = 30 * 60_000;
+  let fallbackActive = 0;
+  const fallbackQueue = [];
+  const fallbackSlot = () =>
+    new Promise((resolve) => {
+      const go = () => {
+        fallbackActive++;
+        resolve(() => {
+          fallbackActive--;
+          fallbackQueue.shift()?.();
+        });
+      };
+      if (fallbackActive < FALLBACK_CONCURRENCY) go();
+      else fallbackQueue.push(go);
+    });
+  const pause = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  async function fetchFallbackOne(id) {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const release = await fallbackSlot();
+      let status = 0;
+      try {
+        const res = await fetch(fallbackTleUrl(id).toString(), {
+          signal: AbortSignal.timeout(8_000),
+          headers: { 'User-Agent': UA, Accept: 'application/json' },
+        });
+        status = res.status;
+        if (res.ok) return await res.json();
+      } catch {
+        /* timeout or network: give up on this id */
+      } finally {
+        release();
+      }
+      // Only rate-limit answers are retried; a network error means the
+      // host is unreachable, and retrying it only stretches the refresh.
+      if (status !== 429 && status !== 503 && status !== 508) return null;
+      if (attempt === 0) await pause(FALLBACK_RETRY_MS);
+    }
+    return null;
+  }
 
   const backoff = (n) =>
     Math.min(BACKOFF_MAX_MS, BACKOFF_MIN_MS * 2 ** Math.max(0, n - 1));
@@ -135,47 +179,89 @@ export function celestrakProxy() {
     return out;
   }
 
+  // Bulk fallback: SatNOGS DB serves its whole TLE catalog (Space-Track
+  // derived, keyless) in one JSON call, so one request refreshes every
+  // group. Shared across groups and cached for 2 h.
+  const SATNOGS_TLE_URL = 'https://db.satnogs.org/api/tle/?format=json';
+  const BULK_TTL_MS = 2 * 3600_000;
+  const PER_ID_CAP = 60; // tle.ivanstanojevic.me allows ~500 req per window
+  let bulk = null; // { at, byId: Map<id, {l1, l2}> }
+  let bulkPending = null;
+  async function fetchBulk() {
+    if (bulk && Date.now() - bulk.at < BULK_TTL_MS) return bulk.byId;
+    if (bulkPending) return bulkPending;
+    bulkPending = (async () => {
+      try {
+        const res = await fetch(SATNOGS_TLE_URL, {
+          signal: AbortSignal.timeout(30_000),
+          headers: { 'User-Agent': UA, Accept: 'application/json' },
+        });
+        if (!res.ok) throw new Error(`satnogs ${res.status}`);
+        const rows = await res.json();
+        const byId = new Map();
+        for (const r of Array.isArray(rows) ? rows : []) {
+          if (typeof r?.tle1 === 'string' && typeof r?.tle2 === 'string')
+            byId.set(String(r.norad_cat_id), { l1: r.tle1, l2: r.tle2 });
+        }
+        if (!byId.size) throw new Error('satnogs empty');
+        bulk = { at: Date.now(), byId };
+        return byId;
+      } catch {
+        return bulk?.byId || new Map();
+      } finally {
+        bulkPending = null;
+      }
+    })();
+    return bulkPending;
+  }
+
+  const validFor = (sat, l1, l2) =>
+    typeof l1 === 'string' &&
+    l1.startsWith(`1 ${sat.id}`) &&
+    typeof l2 === 'string' &&
+    l2.startsWith(`2 ${sat.id}`);
+
   /**
    * Fallback: refresh every satellite already in the cached/seed catalog,
-   * one NORAD id at a time, from tle.ivanstanojevic.me. Satellites it cannot
+   * first from the SatNOGS bulk catalog, then (for a few leftovers) one NORAD
+   * id at a time from tle.ivanstanojevic.me. Satellites neither source can
    * refresh keep their previous elements; at least half must refresh.
    */
   async function fetchFallback(prior) {
     const sats = parseTle(prior?.body || '');
     if (!sats.length) throw new Error('no catalog to refresh from fallback');
     let ok = 0;
-    let cursor = 0;
-    const worker = async () => {
-      while (cursor < sats.length) {
-        const sat = sats[cursor++];
-        try {
-          const res = await fetch(fallbackTleUrl(sat.id).toString(), {
-            signal: AbortSignal.timeout(8_000),
-            headers: { 'User-Agent': UA, Accept: 'application/json' },
-          });
-          if (!res.ok) continue;
-          const j = await res.json();
-          if (
-            typeof j?.line1 === 'string' &&
-            j.line1.startsWith(`1 ${sat.id}`) &&
-            typeof j?.line2 === 'string' &&
-            j.line2.startsWith(`2 ${sat.id}`)
-          ) {
-            sat.l1 = j.line1;
-            sat.l2 = j.line2;
-            ok++;
-          }
-        } catch {
-          /* keep previous elements for this satellite */
+    const byId = await fetchBulk();
+    const missing = [];
+    for (const sat of sats) {
+      const t = byId.get(String(Number(sat.id)));
+      if (t && validFor(sat, t.l1, t.l2)) {
+        sat.l1 = t.l1;
+        sat.l2 = t.l2;
+        ok++;
+      } else missing.push(sat);
+    }
+    await Promise.all(
+      missing.slice(0, PER_ID_CAP).map(async (sat) => {
+        const j = await fetchFallbackOne(sat.id).catch(() => null);
+        if (validFor(sat, j?.line1, j?.line2)) {
+          sat.l1 = j.line1;
+          sat.l2 = j.line2;
+          ok++;
         }
-      }
-    };
-    await Promise.all(Array.from({ length: Math.min(6, sats.length) }, worker));
+      }),
+    );
     if (ok < Math.ceil(sats.length / 2))
       throw new Error(`fallback refreshed ${ok}/${sats.length}`);
     const body =
       sats.map((s) => `${s.name}\n${s.l1}\n${s.l2}`).join('\n') + '\n';
-    return { at: Date.now(), body, source: 'fallback' };
+    // A partial refresh counts as fresh for only 30 min, so the satellites
+    // it missed are asked for again soon (the merged body is the next base).
+    const at =
+      ok < sats.length * 0.9
+        ? Date.now() - TLE_TTL_MS + PARTIAL_RETRY_MS
+        : Date.now();
+    return { at, body, source: 'fallback', refreshed: ok, total: sats.length };
   }
 
   async function fetchUpstream(group, prior) {
