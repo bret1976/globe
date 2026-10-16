@@ -42,6 +42,7 @@ import { createApplicationRadiosondes } from './layers/radiosondes.js';
 import { createApplicationFlightRestrictions } from './layers/flightRestrictions.js';
 import { createApplicationAviationHazards } from './layers/aviationHazards.js';
 import { createApplicationFireballs } from './layers/fireballs.js';
+import { createApplicationStreetPhotos } from './layers/streetPhotos.js';
 import { createApplicationSpcOutlook } from './layers/spcOutlook.js';
 import { createApplicationAirportDelays } from './layers/airportDelays.js';
 import { createApplicationTsunamiAlerts } from './layers/tsunamiAlerts.js';
@@ -248,6 +249,7 @@ export function createApplicationCatalog({
         createApplicationTransit({ surface, source: sources.transit }),
         createApplicationBikeshare({ source: sources.bikeshare }),
         createApplicationDirections(),
+        createApplicationStreetPhotos(),
         vessels,
         installations,
         createApplicationAwareness({

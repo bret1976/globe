@@ -26,3 +26,13 @@ resolved dependency inventory remains in `package-lock.json`.
 `src/data/cameraFraming.js`, `src/ui/geoFileImport.js`, `src/ui/flyToDataSource.js` and their
 tests are ported from bilawalsidhu/gods-eye-view PR #1122 (merge 533d7c6), MIT License,
 Copyright (c) Bilawal Sidhu.
+
+## Street Photos (Panoramax)
+
+`src/layers/streetPhotos/panoramax/policy.js`, `src/layers/streetPhotos/panoramax/source.js`,
+`src/layers/streetPhotos/limiter.js`, `src/testSupport/panoramaxFixtures.mjs` and the
+`policy.test.mjs` / `source.test.mjs` tests are ported from bilawalsidhu/gods-eye-view
+PR #1134 ("Street Level: Panoramax as a fourth, keyless imagery provider", by asturksever),
+MIT License, Copyright (c) Bilawal Sidhu. The layer, viewer and coverage dots are a GodsEye
+adaptation. Imagery © Panoramax contributors; each picture carries its own licence, named in
+the photo caption.

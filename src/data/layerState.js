@@ -527,6 +527,7 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
   }),
   Object.freeze({ id: 'spc-outlook', token: 'sc', disposition: 'enabled-only' }),
   Object.freeze({ id: 'storm-reports', token: 'sr', disposition: 'enabled-only' }),
+  Object.freeze({ id: 'street-photos', token: 'sp', disposition: 'enabled-only' }),
   Object.freeze({
     id: 'telegeography-submarine-cables',
     token: 'u',
