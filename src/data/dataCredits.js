@@ -60,6 +60,7 @@ export const DATA_CREDITS = [
     html:
       'Satellites (TLEs): CelesTrak ' +
       '(<a href="https://celestrak.org" target="_blank" rel="noopener">celestrak.org</a>; fallback ' +
+      '<a href="https://db.satnogs.org" target="_blank" rel="noopener">SatNOGS DB</a> / ' +
       '<a href="https://tle.ivanstanojevic.me" target="_blank" rel="noopener">TLE API</a>), ' +
       'Dr. T.S. Kelso',
   },
