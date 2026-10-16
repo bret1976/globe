@@ -15,3 +15,9 @@ export function launchLibraryRecentUrl(end) {
   url.searchParams.set('mode', 'detailed');
   return url;
 }
+
+/** Fallback TLE source (tle.ivanstanojevic.me, CelesTrak-derived) for one NORAD id. */
+export function fallbackTleUrl(noradId) {
+  const id = String(noradId).replace(/\D/g, '');
+  return new URL(`https://tle.ivanstanojevic.me/api/tle/${id}`);
+}
