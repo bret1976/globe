@@ -1,0 +1,122 @@
+/* Street Photos (Panoramax) viewer: a glass card in the app's own panel
+   language — right side on desktop, bottom sheet on phones. */
+.street-photo-viewer {
+  position: fixed;
+  right: calc(var(--right-rail-x, 52px) + 12px);
+  bottom: 96px;
+  z-index: 250;
+  width: min(440px, calc(100vw - 32px));
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  box-sizing: border-box;
+  padding: 12px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--panel-radius);
+  background: var(--glass-bg);
+  backdrop-filter: blur(24px) saturate(1.4);
+  -webkit-backdrop-filter: blur(24px) saturate(1.4);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.5),
+    0 1px 0 rgba(255, 255, 255, 0.06) inset;
+  color: var(--text-primary);
+  font: 11px var(--font-sans);
+}
+.street-photo-viewer[hidden],
+.street-photo-viewer [hidden] {
+  display: none !important;
+}
+.street-photo-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.street-photo-title {
+  color: #ff6f00;
+  font: 600 10px var(--font-mono);
+  letter-spacing: 1.5px;
+}
+.street-photo-close {
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--btn-radius);
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 16px;
+  cursor: pointer;
+}
+.street-photo-frame {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.55);
+}
+.street-photo-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+.street-photo-badge {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: rgba(255, 111, 0, 0.85);
+  font: 600 9px var(--font-mono);
+}
+.street-photo-status {
+  position: absolute;
+  inset: auto 0 0 0;
+  padding: 6px 8px;
+  background: rgba(0, 0, 0, 0.6);
+  color: var(--text-secondary);
+  font: 10px var(--font-mono);
+}
+.street-photo-step {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 36px;
+  height: 48px;
+  border: 0;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.45);
+  color: #fff;
+  font-size: 24px;
+  cursor: pointer;
+}
+.street-photo-step.prev {
+  left: 6px;
+}
+.street-photo-step.next {
+  right: 6px;
+}
+.street-photo-step:disabled {
+  opacity: 0.25;
+  cursor: default;
+}
+.street-photo-caption {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  color: var(--text-secondary);
+  font: 10px var(--font-mono);
+}
+.street-photo-link {
+  margin-left: auto;
+  color: var(--accent);
+  text-decoration: none;
+}
+@media (max-width: 640px) {
+  .street-photo-viewer {
+    left: 8px;
+    right: 8px;
+    bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+    width: auto;
+    max-height: 70svh;
+  }
+}

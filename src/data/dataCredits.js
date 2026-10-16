@@ -173,6 +173,11 @@ export const DATA_CREDITS = [
       '(MSC GeoMet; <a href="https://eccc-msc.github.io/open-data/licence/readme_en/" target="_blank" rel="noopener">ECCC Data Servers End-use Licence</a>)',
   },
   {
+    key: 'panoramax',
+    html:
+      'Street Photos: imagery © <a href="https://panoramax.fr" target="_blank" rel="noopener">Panoramax</a> contributors, licence per picture (named in the photo caption)',
+  },
+  {
     key: 'fireballs',
     html:
       'Fireballs: ' +
