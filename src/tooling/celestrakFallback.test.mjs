@@ -144,3 +144,41 @@ test('SatNOGS bulk catalog refreshes every satellite in one request', async (t) 
   assert.match(writes[0].body, /1 48274U BULK-L1/);
   assert.ok(!seen.includes('tle.ivanstanojevic.me'), 'no per-id calls needed');
 });
+
+test('CelesTrak mirror on GitHub is tried before per-satellite fallbacks', async (t) => {
+  const { writes } = setup(t, Date.UTC(2026, 9, 16));
+  const seen = [];
+  t.mock.method(globalThis, 'fetch', async (url) => {
+    seen.push(new URL(url).hostname);
+    if (url.includes('celestrak.')) return new Response('', { status: 403 });
+    if (url.includes('githubusercontent'))
+      return new Response(
+        'ISS (ZARYA)\n1 25544U 98067A   26288.82192346  MIRROR\n2 25544 MIRROR-L2\n',
+      );
+    return new Response('no', { status: 500 });
+  });
+  await install(celestrakProxy())('/stations');
+  await settle();
+  assert.equal(writes.length, 1);
+  assert.equal(writes[0].source, 'mirror');
+  assert.match(writes[0].body, /MIRROR/);
+  assert.ok(!seen.includes('db.satnogs.org'));
+});
+
+test('a stale mirror is rejected and the per-satellite fallback runs', async (t) => {
+  const { writes } = setup(t, Date.UTC(2026, 9, 16));
+  t.mock.method(globalThis, 'fetch', async (url) => {
+    if (url.includes('celestrak.')) return new Response('', { status: 403 });
+    if (url.includes('githubusercontent'))
+      return new Response(
+        'ISS\n1 25544U 98067A   26200.00000000  OLDM\n2 25544 X\n',
+      );
+    if (url.includes('satnogs')) return Response.json([]);
+    const id = url.split('/').pop();
+    return Response.json({ line1: `1 ${id}U NEW-L1`, line2: `2 ${id} NEW-L2` });
+  });
+  await install(celestrakProxy())('/stations');
+  await settle();
+  assert.equal(writes.length, 1);
+  assert.equal(writes[0].source, 'fallback');
+});
