@@ -4,6 +4,7 @@ import { promises as fsp } from 'node:fs';
 import {
   celestrakTleUrl,
   fallbackTleUrl,
+  mirrorTleUrl,
 } from '../../../src/data/spaceProviderRequests.js';
 
 const SEED_DIR = path.join(
@@ -159,6 +160,37 @@ export function celestrakProxy() {
     throw lastError || new Error('celestrak unreachable');
   }
 
+  /** Newest TLE epoch in a body, as epoch ms (0 when none parse). */
+  function newestEpochMs(body) {
+    let best = 0;
+    for (const line of String(body).split(/\r?\n/)) {
+      if (!line.startsWith('1 ')) continue;
+      const yy = Number(line.slice(18, 20));
+      const day = Number(line.slice(20, 32));
+      if (!Number.isFinite(yy) || !Number.isFinite(day)) continue;
+      const year = yy < 57 ? 2000 + yy : 1900 + yy;
+      best = Math.max(best, Date.UTC(year, 0, 1) + (day - 1) * 86400_000);
+    }
+    return best;
+  }
+
+  // First fallback: a GitHub mirror of CelesTrak's own group files
+  // (satvisorcom/satvisor-data, cron-refreshed). Same group, same format,
+  // one request; rejected when its newest epoch is over 5 days old.
+  const MIRROR_MAX_AGE_MS = 5 * 86400_000;
+  async function fetchMirror(group) {
+    const res = await fetch(mirrorTleUrl(group).toString(), {
+      signal: AbortSignal.timeout(20_000),
+      headers: { 'User-Agent': UA },
+    });
+    if (!res.ok) throw new Error(`mirror HTTP ${res.status}`);
+    const body = await res.text();
+    if (!/^1 /m.test(body)) throw new Error('mirror: no TLE lines');
+    if (Date.now() - newestEpochMs(body) > MIRROR_MAX_AGE_MS)
+      throw new Error('mirror: stale');
+    return { at: Date.now(), body, source: 'mirror' };
+  }
+
   /** Parse a 3-line TLE body into [{ name, id, l1, l2 }]. */
   function parseTle(body) {
     const lines = String(body).split(/\r?\n/);
@@ -271,7 +303,11 @@ export function celestrakProxy() {
       console.warn(
         '[celestrak-proxy] CelesTrak unavailable — trying fallback TLE source',
       );
-      return fetchFallback(prior);
+      try {
+        return await fetchMirror(group);
+      } catch {
+        return fetchFallback(prior);
+      }
     }
   }
 

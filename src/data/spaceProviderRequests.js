@@ -21,3 +21,13 @@ export function fallbackTleUrl(noradId) {
   const id = String(noradId).replace(/\D/g, '');
   return new URL(`https://tle.ivanstanojevic.me/api/tle/${id}`);
 }
+
+/** CelesTrak group mirror (satvisorcom/satvisor-data on GitHub, refreshed by cron). */
+export function mirrorTleUrl(group) {
+  const slug = String(group)
+    .toLowerCase()
+    .replace(/[^a-z0-9-]/g, '');
+  return new URL(
+    `https://raw.githubusercontent.com/satvisorcom/satvisor-data/master/celestrak/tle/${slug}.tle`,
+  );
+}
