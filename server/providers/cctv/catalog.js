@@ -17,6 +17,7 @@ import {
   loadWarendorfSourcesFromCatalog,
   loadNswSourcesFromOpenData,
   loadCalgarySourcesFromOpenData,
+  loadKingCountySourcesFromOpenData,
   loadVegvesenSourcesFromOpenData,
   loadTorontoSourcesFromOpenData,
 } from './sources.js';
@@ -111,6 +112,11 @@ const LIVE_PACKS = [
     name: 'colorado',
     enabled: () => envEnabled('CCTV_COLORADO_ENABLED'),
     load: loadColoradoSourcesFromOpenData,
+  },
+  {
+    name: 'kingcounty',
+    enabled: () => envEnabled('CCTV_KINGCOUNTY_ENABLED'),
+    load: loadKingCountySourcesFromOpenData,
   },
   {
     name: 'vegvesen',

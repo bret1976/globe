@@ -80,6 +80,8 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
     feedType: normalizeFeedType(source.feedType),
     sourceKind: source.sourceKind || (source.url ? 'configured' : 'fallback'),
     poseSource: source.poseSource,
+    model: source.model || '',
+    manufacturer: source.manufacturer || '',
     license: source.license,
     credit: source.credit || '',
     code: source.code || '',
