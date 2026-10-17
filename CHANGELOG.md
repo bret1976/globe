@@ -1,3 +1,9 @@
+## 2026-10-17 — CCTV: King County (WA) + Catalonia camera packs · upstream hardening (ports of upstream gods-eye-view, MIT)
+
+- **CCTV** gains two keyless camera packs ported from upstream gods-eye-view (MIT): **King County, WA** road cameras (#645, ~58 live county cameras around Renton, Redmond, Federal Way and Novelty Hill; one public King County DOT ArcGIS layer fetched with an explicit field list, frames pinned to `info.kingcounty.gov` over HTTPS, WSDOT-owned rows skipped because our WSDOT pack already carries them, each camera's published hardware served as `model`/`manufacturer`; KCGIS Center terms) and **Catalonia** (#595, ~130 cameras: Servei Català de Trànsit highway cameras plus Barcelona and Terrassa municipal cameras from one WFS/GML feed; Llicència oberta d'ús d'informació – Catalunya, attribution). `CCTV_KINGCOUNTY_ENABLED=0` / `CCTV_CATALONIA_ENABLED=0` turn either pack off; `CCTV_KINGCOUNTY_MAX_SOURCES` / `CCTV_CATALONIA_MAX_SOURCES` cap them.
+- Hardening ports: CCTV catalog numbers the feed leaves blank stay unknown instead of reading as zero (#1172); military aircraft hold their last track and speed when a poll omits them (#1096); FIRMS CSV parsing rejects impossible acquisition days (#1043).
+- Credits + DATA_SOURCES rows added for both new camera operators.
+
 ## 2026-10-16 — Street Photos (Panoramax) · Satellites: fresh TLEs again
 
 - **Street Photos (Panoramax)**, a new Cameras toggle (share token `sp`): keyless street-level pictures from the open Panoramax commons. Below 6 km, orange dots mark pictures in view; click one to open it in a glass photo card (right side on desktop, bottom sheet on phones) with date, photographer (email-named accounts never shown) or holding instance, the picture's own licence, ‹ › / ←→ along its sequence, Esc to close and an "Open in Panoramax" link. 360° pictures show flat with a 360° badge. Policy/STAC source ported from upstream bilawalsidhu/gods-eye-view PR #1134 (MIT).
