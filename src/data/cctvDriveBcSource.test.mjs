@@ -28,6 +28,7 @@ import {
   DEFAULT_OREGON_MAX_SOURCES,
   DEFAULT_WSDOT_MAX_SOURCES,
   DEFAULT_HONGKONG_MAX_SOURCES,
+  DEFAULT_CATALONIA_MAX_SOURCES,
   DRIVEBC_WEBCAMS_URL,
 } from '../../server/providers/cctv/constants.js';
 import {
@@ -264,6 +265,7 @@ test('default per-pack camera caps fit inside the default catalog cap', () => {
     DEFAULT_OREGON_MAX_SOURCES +
     DEFAULT_WSDOT_MAX_SOURCES +
     DEFAULT_HONGKONG_MAX_SOURCES +
+    DEFAULT_CATALONIA_MAX_SOURCES +
     1;
   assert.ok(
     packs <= DEFAULT_CCTV_MAX_SOURCES,

@@ -358,6 +358,23 @@ export const DATA_CREDITS = [
       '<a href="https://data.calgary.ca/stories/s/Open-Calgary-Terms-of-Use/u45n-7awa" target="_blank" rel="noopener">Open Government Licence – City of Calgary</a>',
   },
   {
+    key: 'catalonia-cctv',
+    html:
+      'CCTV cameras &amp; frames (Catalonia): ' +
+      '<a href="https://transit.gencat.cat/" target="_blank" rel="noopener">Servei Català de Trànsit</a> ' +
+      '(Llicència oberta d’ús d’informació - Catalunya); some cameras are supplied by partners ' +
+      '(Ajuntament de Barcelona, Ajuntament de Terrassa), each named in the CCTV panel',
+  },
+  {
+    key: 'kingcounty-cctv',
+    html:
+      'CCTV cameras &amp; frames (King County, WA): King County Road Services — ' +
+      '<a href="https://kingcounty.gov/en/dept/local-services/roads" target="_blank" rel="noopener">kingcounty.gov</a>, ' +
+      'per the ' +
+      '<a href="https://kingcounty.gov/en/dept/kcit/data-information-services/gis-center/about/terms-conditions-copyrights" target="_blank" rel="noopener">KCGIS Center terms</a>. ' +
+      'Partner-city cameras hosted on the county image handler (e.g. Newcastle) name their owner in the CCTV panel.',
+  },
+  {
     key: 'vegvesen-cctv',
     html:
       'Road cameras (Norway): contains data under the ' +

@@ -236,6 +236,56 @@ export const CALGARY_DOWNTOWN = { lat: 51.0461, lon: -114.0626 };
  * body cannot be buffered without limit. */
 export const CALGARY_MAX_CATALOG_BYTES = 4 * 1024 * 1024;
 
+/**
+ * Catalonia traffic cameras (Servei Català de Trànsit): one keyless WFS/GML
+ * XML list (verified 2026-09-15, hourly catalog refresh), fetched over https
+ * (verified 2026-09-27: same 200 body, no redirect). The feed carries a
+ * `font` field naming the actual publisher per camera — SCT's own highway
+ * cameras plus hotlinked Barcelona (IMI) and Terrassa municipal cameras are
+ * kept, each confirmed to return a real frame. Frame URLs are checked
+ * against a host allowlist rather than one pinned origin, since each
+ * publisher serves from its own host.
+ */
+export const CATALONIA_CAMERAS_URL =
+  'https://www.gencat.cat/transit/opendata/cameres.xml';
+/** Byte ceiling for the Catalonia catalog read (~90 KB observed 2026-09-27),
+ * so a runaway body cannot be buffered without limit. */
+export const CATALONIA_MAX_CATALOG_BYTES = 1024 * 1024;
+/** Allowed image hosts, one per kept `font` publisher in the feed, each
+ * mapped to the one directory its frame links live in (every link in the
+ * 2026-10 feed shares it); a link must name a single file directly inside. */
+export const CATALONIA_IMAGE_HOSTS = Object.freeze(
+  new Map([
+    ['mct.gencat.cat', '/mct2bo/'], // SCT
+    ['www.bcn.cat', '/transit/imatges/'], // IMI (Ajuntament de Barcelona)
+    ['emap.terrassa.cat', '/it_terrassa/'], // Ajuntament de Terrassa
+  ]),
+);
+/** SCT `sctidcam` values: a bare image filename, which also keys the camera
+ * id (the feed's `fid` embeds an upstream server-start stamp). */
+export const CATALONIA_SCT_CAMERA_FILE_RE = /^[a-z0-9]+\.(gif|jpe?g)$/i;
+/** Per-`font` partner credit, shown beside the provider in the CCTV panel
+ * (same pattern as DriveBC's partner-supplied cameras). SCT is the feed's
+ * own publisher and carries no separate credit. */
+export const CATALONIA_FONT_CREDIT = Object.freeze({
+  IMI: 'Ajuntament de Barcelona',
+  Terrassa: 'Ajuntament de Terrassa',
+});
+/** Ground-elevation priors in metres, by `font`: the feed carries no
+ * elevation, and this pack spans sea level (Barcelona) to Terrassa's plateau
+ * (~270 m). The client's ground snap corrects these on 3D-tile stacks. */
+export const CATALONIA_FONT_ELEVATION_M = Object.freeze({
+  SCT: 80,
+  IMI: 20,
+  Terrassa: 270,
+});
+export const DEFAULT_CATALONIA_MAX_SOURCES = 150;
+/** Prioritization anchors: Barcelona and Terrassa. */
+export const CATALONIA_ANCHORS = [
+  { lat: 41.3874, lon: 2.1686 }, // Barcelona
+  { lat: 41.5636, lon: 2.0111 }, // Terrassa
+];
+
 /** Statens vegvesen (Norway) road cameras: the keyless OGC API Features view
  * of the official DATEX 3.1 CCTV site table, one GeoJSON request for the whole
  * country (~900 cameras). The raw DATEX node needs an account; this view does
@@ -311,6 +361,27 @@ export const COLORADO_ANCHORS = Object.freeze([
  * unbounded body cannot be buffered without limit. */
 export const COLORADO_MAX_CATALOG_BYTES = 4 * 1024 * 1024;
 
+/** King County, WA road cameras: keyless public ArcGIS FeatureServer layer
+ * ("King County and WSDOT Traffic Cameras", King County DOT Road Services).
+ * GeoJSON with WGS84 point geometry. `outFields` is an explicit list on
+ * purpose: the layer also carries asset-administration columns (including
+ * staff names in `ModifiedBy`) that must never be fetched. Uniquely among the
+ * packs, the county publishes each camera's hardware `Manufacturer`/`Model`
+ * (Cohu 3950/3965, Bosch AUTODOME, Axis Q6135-LE, …), carried through as the
+ * source's `model`. */
+export const KING_COUNTY_CAMERAS_URL =
+  'https://services.arcgis.com/Ej0PsM5Aw677QF1W/arcgis/rest/services/TRAFFICCAMERA_POINT_2029/FeatureServer/0/query?where=1%3D1&outFields=AssetID,Location,ImageURL,Live,Model,Manufacturer,Owner,CurrentStatus&f=geojson';
+/** Frames come only from the county's own image handler host. */
+export const KING_COUNTY_IMAGE_ORIGIN = 'https://info.kingcounty.gov/';
+/** The whole catalog is ~125 rows (~59 live county cameras); no thinning by
+ * default. */
+export const DEFAULT_KING_COUNTY_MAX_SOURCES = 125;
+/** Prioritization anchor: Renton, roughly central to the county road network. */
+export const KING_COUNTY_ANCHORS = [{ lat: 47.4829, lon: -122.2171 }];
+/** Hard ceiling on the King County catalog body. The whole layer is ~125 rows
+ * and well under 100 KB; this only exists so an upstream that streams an
+ * unbounded body cannot be buffered without limit. */
+export const KING_COUNTY_MAX_CATALOG_BYTES = 1024 * 1024;
 /**
  * City of Toronto RESCU traffic cameras: the municipal network the province's
  * 511 pack does not cover — downtown arterials plus the Gardiner, DVP, Allen
