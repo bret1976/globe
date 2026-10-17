@@ -204,6 +204,13 @@ test('King County model and manufacturer survive the /api/cctv/sources boundary 
     CCTV_KINGCOUNTY_ENABLED: undefined,
     CCTV_KINGCOUNTY_MAX_SOURCES: undefined,
     CCTV_MAX_SOURCES: undefined,
+    // This fork's snapshot-backed packs serve a bundled catalog when their
+    // upstream fails, so they are switched off to isolate the pack under test.
+    CCTV_MDCHART_ENABLED: '0',
+    CCTV_HONGKONG_ENABLED: '0',
+    CCTV_NYCTMC_ENABLED: '0',
+    CCTV_OREGON_ENABLED: '0',
+    CCTV_WSDOT_ENABLED: '0',
   });
   t.mock.method(globalThis, 'fetch', async (url) => {
     if (String(url) !== KING_COUNTY_CAMERAS_URL)
