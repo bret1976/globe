@@ -94,6 +94,32 @@ export function createModel({ state: layerState, services, parts, source }) {
    * @returns {Map<string, Object>} Map of stationId to station info objects.
    */
 
+
+  /**
+   * Station name text as a reader expects it. JCDecaux's Spanish contracts
+   * (Valenbisi, Sevici) prefix every name with "_" and Valenbisi joins words
+   * with it ("_PLAZA_MUSICO_LOPEZ_CHAVARRI"), so an underscore reads as a word
+   * break. Other spacing is the operator's own and stays as published.
+   */
+  function tidyStationName(text) {
+    return String(text || '').replace(/\s*_+\s*/g, ' ').trim();
+  }
+
+  /**
+   * Docks a station physically has. PBSC adds the bikes a station accepts in its
+   * geofenced area around the docks to `capacity` and reports that part as
+   * `geofenced_capacity` (not a GBFS field): Bilbao Bizi publishes 39 docks as
+   * capacity 839 with geofenced_capacity 800. Without the extension, or when it
+   * would exceed the total, `capacity` is read as given.
+   */
+  function dockCapacity(raw) {
+    const capacity = toNonNegativeInteger(raw?.capacity);
+    const geofenced = toNonNegativeInteger(raw?.geofenced_capacity);
+    if (capacity == null || geofenced == null || geofenced > capacity)
+      return capacity;
+    return capacity - geofenced;
+  }
+
   function parseStationInformation(payload) {
     const stations = extractStationsArray(payload);
     const stationMap = new Map();
@@ -108,10 +134,10 @@ export function createModel({ state: layerState, services, parts, source }) {
 
       stationMap.set(stationId, {
         stationId,
-        name: String(raw?.name || raw?.short_name || '').trim(),
+        name: tidyStationName(raw?.name) || tidyStationName(raw?.short_name),
         lat,
         lon,
-        capacity: toNonNegativeInteger(raw?.capacity),
+        capacity: dockCapacity(raw),
         isInstalled: normalizeGbfsBool(raw?.is_installed, true),
         isRenting: normalizeGbfsBool(raw?.is_renting, true),
         isReturning: normalizeGbfsBool(raw?.is_returning, true),
