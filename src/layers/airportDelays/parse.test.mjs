@@ -195,3 +195,22 @@ test('airportDelaysProxy resolves AWC coords and caches TTL', async () => {
   assert.equal(faaHits, 2);
   assert.equal(awcHits, 1, '24h coord cache reused');
 });
+
+test('airportDelaysProxy treats an AWC 204 coordinate lookup as "no matches", not an outage', async () => {
+  const { call } = harness(async (url) => {
+    const u = String(url);
+    if (u.includes('nasstatus.faa.gov')) {
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: () => null },
+        text: async () => SAMPLE_XML,
+      };
+    }
+    if (u.includes('aviationweather.gov')) return new Response(null, { status: 204 });
+    throw new Error(`unexpected url ${u}`);
+  });
+  const res = await call();
+  assert.equal(res.status, 200);
+  assert.equal(res.body.count, 0);
+});

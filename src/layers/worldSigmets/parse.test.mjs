@@ -218,3 +218,16 @@ test('proxy caches, retries, and falls back stale', async () => {
   const dead = await call();
   assert.equal(dead.status, 502);
 });
+
+test('proxy reads a 204 No Content isigmet answer as zero active SIGMETs', async () => {
+  let calls = 0;
+  const { call } = harness(async () => {
+    calls += 1;
+    return new Response(null, { status: 204 });
+  });
+  const res = await call();
+  assert.equal(res.status, 200);
+  assert.equal(res.body.count, 0);
+  assert.equal(res.body.rawCount, 0);
+  assert.equal(calls, 1);
+});

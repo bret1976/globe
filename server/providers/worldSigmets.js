@@ -41,11 +41,21 @@ export function worldSigmetsProxy({
         'User-Agent': UA,
       },
     });
+    // AWC answers 204 No Content (empty body) when nothing is in force; that
+    // is an empty list, not "Unexpected end of JSON input".
+    if (response.status === 204) return [];
     if (!response.ok) throw new Error(`AWC HTTP ${response.status} for ${url}`);
     const declared = Number(response.headers?.get?.('content-length'));
     if (Number.isFinite(declared) && declared > MAX_BODY_BYTES)
       throw new Error('AWC body exceeds size cap');
-    return response.json();
+    const text = await response.text();
+    if (text.length > MAX_BODY_BYTES) throw new Error('AWC body exceeds size cap');
+    if (!text.trim()) return [];
+    try {
+      return JSON.parse(text);
+    } catch {
+      throw new Error(`AWC returned a non-JSON body for ${url}`);
+    }
   }
 
   async function refresh() {
