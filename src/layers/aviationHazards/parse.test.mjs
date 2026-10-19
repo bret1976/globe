@@ -223,3 +223,74 @@ test('proxy merges feeds, caches, retries, and falls back stale', async () => {
   const dead = await call();
   assert.equal(dead.status, 502);
 });
+
+test('proxy reads a 204 No Content product as "none active", not a failure', async () => {
+  // AWC answers cwa?format=json with 204 and no body when no CWA is in force.
+  // That used to throw "Unexpected end of JSON input" and 502 the whole layer.
+  let calls = 0;
+  const { call } = harness(async (url) => {
+    calls += 1;
+    if (String(url).includes('airsigmet')) return Response.json([SIGMET]);
+    if (String(url).includes('gairmet')) return Response.json([GAIRMET_AREA]);
+    if (String(url).includes('cwa')) return new Response(null, { status: 204 });
+    throw new Error(`unexpected ${url}`);
+  });
+  const res = await call();
+  assert.equal(res.status, 200);
+  assert.equal(res.body.count, 2);
+  assert.equal(res.body.rawCount, 2);
+  assert.equal(res.body.products.cwa || 0, 0);
+  assert.equal(res.body.partial, undefined);
+  assert.equal(calls, 3); // no retries: an empty product is a normal answer
+});
+
+test('proxy reads an empty 200 body as an empty product list', async () => {
+  const { call } = harness(async (url) => {
+    if (String(url).includes('airsigmet')) return Response.json([SIGMET]);
+    if (String(url).includes('gairmet')) return new Response('', { status: 200 });
+    if (String(url).includes('cwa')) return new Response('  \n', { status: 200 });
+    throw new Error(`unexpected ${url}`);
+  });
+  const res = await call();
+  assert.equal(res.status, 200);
+  assert.equal(res.body.count, 1);
+  assert.equal(res.body.partial, undefined);
+});
+
+test('one persistently failing product does not take down the other two', async () => {
+  let cwaDown = false;
+  const { call, clock } = harness(async (url) => {
+    if (String(url).includes('airsigmet')) return Response.json([SIGMET]);
+    if (String(url).includes('gairmet')) return Response.json([GAIRMET_AREA]);
+    if (String(url).includes('cwa')) {
+      if (cwaDown) return new Response('<html>oops</html>', { status: 200 });
+      return Response.json([CWA]);
+    }
+    throw new Error(`unexpected ${url}`);
+  });
+  const healthy = await call();
+  assert.equal(healthy.body.count, 3);
+
+  // CWA starts returning garbage: the last good CWA list is reused.
+  cwaDown = true;
+  clock.t += 6 * 60_000;
+  const partial = await call();
+  assert.equal(partial.status, 200);
+  assert.deepEqual(partial.body.partial, ['cwa']);
+  assert.equal(partial.body.count, 3);
+  assert.equal(partial.body.stale, undefined);
+
+  // Past the stale window the dead product is simply left empty.
+  clock.t += 3 * 60 * 60_000;
+  const later = await call();
+  assert.equal(later.status, 200);
+  assert.deepEqual(later.body.partial, ['cwa']);
+  assert.equal(later.body.count, 2);
+});
+
+test('proxy still 502s when every product fails and nothing is cached', async () => {
+  const { call } = harness(async () => new Response('bad gateway', { status: 502 }));
+  const res = await call();
+  assert.equal(res.status, 502);
+  assert.match(res.body.error, /AWC HTTP 502/);
+});
