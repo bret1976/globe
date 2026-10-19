@@ -36,3 +36,12 @@ PR #1134 ("Street Level: Panoramax as a fourth, keyless imagery provider", by as
 MIT License, Copyright (c) Bilawal Sidhu. The layer, viewer and coverage dots are a GodsEye
 adaptation. Imagery © Panoramax contributors; each picture carries its own licence, named in
 the photo caption.
+
+## Hardening ports (2026-10-19)
+
+`src/terrainHeightsBounds.test.mjs` and the terrain-heights cache bounds in
+`server/providers/terrain.js` / `src/data/terrainHeightsProxy.js` are ported from
+bilawalsidhu/gods-eye-view PR #686 (daikaginza); `src/layers/launches/ingestion.test.mjs`
+and the Space Missions stale-provenance changes from PR #1199 (rudycelekli); the Launch
+Library request window and User-Agent from PR #1197 (rudycelekli). MIT License,
+Copyright (c) Bilawal Sidhu.

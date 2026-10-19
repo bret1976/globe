@@ -13,6 +13,8 @@ export function launchLibraryRequestHeaders(token = process.env.LL2_API_TOKEN) {
   const normalized = String(token || '').trim();
   return {
     Accept: 'application/json',
+    'User-Agent':
+      'GodsEyeView/0.1 (launch library proxy; +https://github.com/bret1976/globe)',
     ...(normalized ? { Authorization: `Token ${normalized}` } : {}),
   };
 }

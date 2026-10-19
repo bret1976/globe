@@ -61,7 +61,11 @@ export function airportDelaysProxy({
         'User-Agent': UA,
       },
     });
+    // 204 / empty body = AWC knows none of these ids; resolve nothing rather
+    // than failing the whole refresh on a JSON parse of an empty body.
+    if (response.status === 204) return [];
     if (!response.ok) throw new Error(`AWC airport HTTP ${response.status}`);
+    if (response.headers?.get?.('content-length') === '0') return [];
     return response.json();
   }
 
