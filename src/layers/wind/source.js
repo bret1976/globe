@@ -70,7 +70,12 @@ export function createWindSource({
         const response = await fetchImpl(endpoint, { signal });
         if (response.ok) {
           const payload = await response.json();
-          if (Array.isArray(payload?.samples)) return payload;
+          // A warming or empty proxy payload has no wind to draw. The hosted
+          // proxy can stay warming for hours when Open-Meteo rate-limits the
+          // shared server egress address (429), so fetch the grid directly
+          // instead of showing an empty layer.
+          if (Array.isArray(payload?.samples) && payload.samples.length)
+            return payload;
         }
       } catch {
         /* fall through to browser-direct batches */

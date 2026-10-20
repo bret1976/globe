@@ -21,22 +21,33 @@ const CHUNK = 80;
 const TTL_MS = 20 * 60_000;
 const STALE_MS = 6 * 60 * 60_000;
 const CACHE_DIR = path.join(process.cwd(), '.gev-cache');
-const CACHE_PATH = path.join(CACHE_DIR, 'wind.json');
+
+/** After a refresh fails (e.g. Open-Meteo 429 on the shared egress address),
+ * no new refresh starts for this long; stale data (or the warming payload,
+ * which makes browsers fetch the grid directly) is served meanwhile. Retrying
+ * every request only spends more of the address's quota. */
+const FAILURE_BACKOFF_MS = 30 * 60_000;
+/** 429 retries inside one refresh (2 s, 4 s). */
+const MAX_429_RETRIES = 2;
 
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-export function windProxy() {
+/** @param {{ cacheDir?: string }} [options] cacheDir is for tests. */
+export function windProxy({ cacheDir = CACHE_DIR } = {}) {
+  const cachePath = path.join(cacheDir, 'wind.json');
   /** @type {?{at: number, payload: object}} */
   let mem = null;
   /** @type {?Promise<object>} */
   let inflight = null;
   let diskChecked = false;
+  /** No refresh starts before this time (epoch ms) after a failed one. */
+  let retryAfterAt = 0;
 
   async function readDiskOnce() {
     if (diskChecked) return;
     diskChecked = true;
     try {
-      const parsed = JSON.parse(await fsp.readFile(CACHE_PATH, 'utf8'));
+      const parsed = JSON.parse(await fsp.readFile(cachePath, 'utf8'));
       if (Number.isFinite(parsed?.at) && parsed?.payload?.samples) mem = parsed;
     } catch {
       /* first run */
@@ -45,8 +56,8 @@ export function windProxy() {
 
   async function writeDisk(entry) {
     try {
-      await fsp.mkdir(CACHE_DIR, { recursive: true });
-      await fsp.writeFile(CACHE_PATH, JSON.stringify(entry));
+      await fsp.mkdir(cacheDir, { recursive: true });
+      await fsp.writeFile(cachePath, JSON.stringify(entry));
     } catch (err) {
       console.warn('[wind-proxy] cache write failed:', err?.message || err);
     }
@@ -54,11 +65,23 @@ export function windProxy() {
 
   async function fetchChunk(params, attempt = 0) {
     const response = await fetch(`https://api.open-meteo.com/v1/gfs?${params}`);
-    if (response.status === 429 && attempt < 5) {
+    if (response.status === 429 && attempt < MAX_429_RETRIES) {
+      await response.body?.cancel().catch(() => {});
       await delay(2000 * 2 ** attempt);
       return fetchChunk(params, attempt + 1);
     }
-    if (!response.ok) throw new Error(`Open-Meteo ${response.status}`);
+    if (!response.ok) {
+      let reason = '';
+      try {
+        const body = await response.json();
+        reason = String(body?.reason || '').slice(0, 120);
+      } catch {
+        /* no JSON reason */
+      }
+      throw new Error(
+        `Open-Meteo ${response.status}${reason ? ` (${reason})` : ''}`,
+      );
+    }
     return response.json();
   }
 
@@ -105,12 +128,14 @@ export function windProxy() {
         send(mem.payload);
         return;
       }
-      if (!inflight) {
+      if (!inflight && now >= retryAfterAt) {
         inflight = refresh()
           .catch((error) => {
+            retryAfterAt = Date.now() + FAILURE_BACKOFF_MS;
             console.warn(
               '[wind-proxy] refresh failed:',
               error?.message || error,
+              '— next attempt in 30 min',
             );
             return null;
           })
@@ -138,12 +163,14 @@ export function windProxy() {
     void readDiskOnce().then(() => {
       const now = Date.now();
       if (mem && now - mem.at < TTL_MS) return;
-      if (inflight) return;
+      if (inflight || now < retryAfterAt) return;
       inflight = refresh()
         .catch((error) => {
+          retryAfterAt = Date.now() + FAILURE_BACKOFF_MS;
           console.warn(
             '[wind-proxy] prefetch failed:',
             error?.message || error,
+            '— next attempt in 30 min',
           );
           return null;
         })
