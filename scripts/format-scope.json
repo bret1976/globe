@@ -802,6 +802,7 @@
   "src/layers/cyclones/index.test.mjs",
   "src/layers/cyclones/source.test.mjs",
   "src/data/cyclonesProxy.test.mjs",
+  "src/data/coralBleachingProxy.test.mjs",
   "src/maps/imageryHost.test.mjs",
   "src/ui/imageryBoxTool.test.mjs",
   "src/ui/imagerySplit.test.mjs",

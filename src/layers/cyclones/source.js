@@ -103,31 +103,49 @@ export function createCycloneSource({
   fetchImpl = (...args) => globalThis.fetch(...args),
   endpoint = '/api/cyclones',
 } = {}) {
+  async function direct(signal) {
+    const [nhcRes, eonetRes] = await Promise.allSettled([
+      fetchImpl(NHC_URL, { signal }),
+      fetchImpl(EONET_URL, { signal }),
+    ]);
+    const read = async (settled, empty) => {
+      if (settled.status !== 'fulfilled' || !settled.value.ok) return empty;
+      try {
+        return await settled.value.json();
+      } catch {
+        return empty;
+      }
+    };
+    const nhc = await read(nhcRes, { activeStorms: [] });
+    const eonet = await read(eonetRes, { events: [] });
+    return { ...mergeCycloneSnapshots(nhc, eonet), browserDirect: true };
+  }
   return {
     async getSnapshot({ signal } = {}) {
       signal?.throwIfAborted();
+      let proxied = null;
       try {
         const response = await fetchImpl(endpoint, { signal });
         if (response.ok) {
           const payload = await response.json();
-          if (Array.isArray(payload?.storms)) return payload;
+          if (Array.isArray(payload?.storms)) proxied = payload;
         }
       } catch {
         /* fall through to browser-direct */
       }
-      const [nhcRes, eonetRes] = await Promise.allSettled([
-        fetchImpl(NHC_URL, { signal }),
-        fetchImpl(EONET_URL, { signal }),
-      ]);
-      const nhc =
-        nhcRes.status === 'fulfilled' && nhcRes.value.ok
-          ? await nhcRes.value.json()
-          : { activeStorms: [] };
-      const eonet =
-        eonetRes.status === 'fulfilled' && eonetRes.value.ok
-          ? await eonetRes.value.json()
-          : { events: [] };
-      return mergeCycloneSnapshots(nhc, eonet);
+      signal?.throwIfAborted();
+      const feeds = proxied?.feeds;
+      const degraded =
+        !proxied ||
+        (feeds && Object.values(feeds).some((state) => state === 'down'));
+      if (!degraded) return proxied;
+      // The server couldn't reach a feed (EONET answers CORS from browsers),
+      // so ask directly and keep whichever answer has more storms.
+      const browser = await direct(signal).catch(() => null);
+      if (!proxied) return browser || mergeCycloneSnapshots({}, {});
+      if (browser && browser.storms.length > proxied.storms.length)
+        return browser;
+      return proxied;
     },
   };
 }
