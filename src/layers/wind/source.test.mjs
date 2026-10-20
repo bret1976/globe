@@ -39,3 +39,36 @@ test('wind source prefers the hosted proxy payload', async () => {
   const snapshot = await source.getSnapshot();
   assert.equal(snapshot.samples[0].lon, 2);
 });
+
+test('wind source fetches Open-Meteo directly when the proxy is only warming', async () => {
+  const urls = [];
+  const source = createWindSource({
+    fetchImpl: async (url) => {
+      urls.push(String(url));
+      if (String(url).endsWith('/api/wind')) {
+        return {
+          ok: true,
+          json: async () => ({ samples: [], warming: true, model: 'gfs' }),
+        };
+      }
+      const lats = new URL(String(url)).searchParams.get('latitude').split(',');
+      return {
+        ok: true,
+        json: async () =>
+          lats.map((lat) => ({
+            latitude: Number(lat),
+            longitude: 10,
+            current: {
+              time: '2026-10-20T14:00',
+              wind_speed_10m: 20,
+              wind_direction_10m: 270,
+            },
+          })),
+      };
+    },
+  });
+  const snapshot = await source.getSnapshot();
+  assert.ok(urls.some((url) => url.startsWith('https://api.open-meteo.com/')));
+  assert.equal(snapshot.samples.length, buildPoints().length);
+  assert.ok(!snapshot.warming, 'direct grid must not keep the layer warming');
+});
