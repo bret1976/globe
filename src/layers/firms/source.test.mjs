@@ -43,3 +43,21 @@ test('response-body completion honors cancellation without replacing records', a
     name: 'AbortError',
   });
 });
+test('phone-lite clients ask for the capped fire list; others get the full list', async () => {
+  for (const [lite, expected] of [
+    [true, '/api/firms?limit=40000'],
+    [false, '/api/firms'],
+  ]) {
+    let requested = null;
+    const source = createFirmsSource({
+      phoneLite: () => lite,
+      phoneLiteLimit: 40_000,
+      fetchImpl: async (url) => {
+        requested = url;
+        return { ok: true, json: async () => ({ fires: [] }) };
+      },
+    });
+    await source.getSnapshot();
+    assert.equal(requested, expected);
+  }
+});

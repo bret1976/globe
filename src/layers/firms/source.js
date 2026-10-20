@@ -1,15 +1,18 @@
-import { isPhoneLite, PHONE_LITE_FIRMS_LIMIT } from '../../app/phoneLite.js';
-
-/** Construct the existing live-fire endpoint without making a request. */
+/**
+ * Construct the existing live-fire endpoint without making a request.
+ * `phoneLite` / `phoneLiteLimit` are injected by the application
+ * (src/data/firmsHeatmap.js) so this source never imports src/app.
+ */
 export function createFirmsSource({
   fetchImpl = (...args) => globalThis.fetch(...args),
-  phoneLite = isPhoneLite,
+  phoneLite = () => false,
+  phoneLiteLimit = 40_000,
 } = {}) {
   return {
     async getSnapshot({ signal } = {}) {
       signal?.throwIfAborted();
       const url = phoneLite()
-        ? `/api/firms?limit=${PHONE_LITE_FIRMS_LIMIT}`
+        ? `/api/firms?limit=${phoneLiteLimit}`
         : '/api/firms';
       const response = await fetchImpl(url, {
         signal,

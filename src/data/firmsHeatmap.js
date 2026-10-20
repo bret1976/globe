@@ -1,12 +1,16 @@
 import { defaultSurface } from './surfaceServices.js';
 import { createApplicationFirms, firmsServices } from '../app/layers/firms.js';
 import { createSourceSlot } from '../sources/sourceSlot.js';
+import { isPhoneLite, PHONE_LITE_FIRMS_LIMIT } from '../app/phoneLite.js';
 import {
   createFirmsHelpers,
   createFirmsSource,
 } from '../layers/firms/index.js';
 const sourceSlot = createSourceSlot(
-  createFirmsSource(),
+  createFirmsSource({
+    phoneLite: isPhoneLite,
+    phoneLiteLimit: PHONE_LITE_FIRMS_LIMIT,
+  }),
   ['getSnapshot'],
   'Fire source',
 );
