@@ -45,3 +45,17 @@ bilawalsidhu/gods-eye-view PR #686 (daikaginza); `src/layers/launches/ingestion.
 and the Space Missions stale-provenance changes from PR #1199 (rudycelekli); the Launch
 Library request window and User-Agent from PR #1197 (rudycelekli). MIT License,
 Copyright (c) Bilawal Sidhu.
+
+## CCTV + flights ports (2026-10-20)
+
+`src/layers/cctv/rendering.test.mjs` and the live-video icon color in `src/layers/cctv/policy.js` /
+`rendering.js` are ported from bilawalsidhu/gods-eye-view PR #1200 (Danielslay86);
+`src/layers/cctv/frames.test.mjs` and the still-aspect fit in `frames.js` from PR #1201
+(Danielslay86); the Kartverket ground heights for Statens vegvesen cameras in
+`server/providers/cctv/sources.js` / `constants.js` and `src/data/cctvVegvesen.test.mjs` from
+PR #945 (trygvehhh); `src/data/routeSegment.test.mjs` and the along-track leg bound in
+`src/data/routePlausible.js` from PR #1284 (rudycelekli); the position-less OpenSky row
+handling in `src/sources/live/contract.js` / `aircraft.js` and `src/layers/flights/records.js` /
+`snapshotRenderer.js` (with their tests) from PR #1110 (Rohilalala). MIT License, Copyright (c) Bilawal
+Sidhu. Ground heights © Kartverket, CC BY 4.0 (modified: heights over water set to 0 m, rounded
+to 0.1 m).
