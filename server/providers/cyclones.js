@@ -24,19 +24,32 @@ export function cyclonesProxy() {
   /** @type {?Promise<object>} */
   let inflight = null;
 
+  /** Last good answer per feed, reused for STALE_MS when that feed fails so
+   * one transient miss (e.g. right after a restart) doesn't blank storms. */
+  const lastGood = { nhc: null, eonet: null };
+
+  async function readFeed(key, settled, empty) {
+    if (settled.status === 'fulfilled' && settled.value.ok) {
+      try {
+        const body = await settled.value.json();
+        lastGood[key] = { at: Date.now(), body };
+        return body;
+      } catch {
+        /* malformed body: fall back below */
+      }
+    }
+    const last = lastGood[key];
+    if (last && Date.now() - last.at < STALE_MS) return last.body;
+    return empty;
+  }
+
   async function refresh() {
     const [nhcRes, eonetRes] = await Promise.allSettled([
       fetch(NHC_URL),
       fetch(EONET_URL),
     ]);
-    const nhc =
-      nhcRes.status === 'fulfilled' && nhcRes.value.ok
-        ? await nhcRes.value.json()
-        : { activeStorms: [] };
-    const eonet =
-      eonetRes.status === 'fulfilled' && eonetRes.value.ok
-        ? await eonetRes.value.json()
-        : { events: [] };
+    const nhc = await readFeed('nhc', nhcRes, { activeStorms: [] });
+    const eonet = await readFeed('eonet', eonetRes, { events: [] });
     const payload = mergeCycloneSnapshots(nhc, eonet);
     mem = { at: Date.now(), payload };
     return payload;
@@ -51,9 +64,11 @@ export function cyclonesProxy() {
         res.end(JSON.stringify(mem.payload));
         return;
       }
-      const run = inflight || (inflight = refresh().finally(() => {
-        inflight = null;
-      }));
+      const run =
+        inflight ||
+        (inflight = refresh().finally(() => {
+          inflight = null;
+        }));
       run
         .then((payload) => {
           res.setHeader('Content-Type', 'application/json');
