@@ -62,7 +62,11 @@ const square = (lon, lat, d = 1) => [
 const FIXTURE = {
   type: 'FeatureCollection',
   features: [
-    { type: 'Feature', properties: PROPS_ABC, geometry: { type: 'Point', coordinates: [-69.125, 12.3] } },
+    {
+      type: 'Feature',
+      properties: PROPS_ABC,
+      geometry: { type: 'Point', coordinates: [-69.125, 12.3] },
+    },
     {
       type: 'Feature',
       properties: PROPS_ABC,
@@ -71,19 +75,46 @@ const FIXTURE = {
         coordinates: [[square(-70.2, 12.4, 0.3)], [square(-69.2, 12.0, 0.6)]],
       },
     },
-    { type: 'Feature', properties: PROPS_NLI, geometry: { type: 'Point', coordinates: [-159.8, 3.025] } },
-    { type: 'Feature', properties: PROPS_NLI, geometry: { type: 'Polygon', coordinates: [square(-160.5, 2.5, 2)] } },
+    {
+      type: 'Feature',
+      properties: PROPS_NLI,
+      geometry: { type: 'Point', coordinates: [-159.8, 3.025] },
+    },
+    {
+      type: 'Feature',
+      properties: PROPS_NLI,
+      geometry: { type: 'Polygon', coordinates: [square(-160.5, 2.5, 2)] },
+    },
     // Polygon only (no Point) → centroid fallback.
-    { type: 'Feature', properties: PROPS_ABR, geometry: { type: 'Polygon', coordinates: [square(-39, -18.5, 1)] } },
+    {
+      type: 'Feature',
+      properties: PROPS_ABR,
+      geometry: { type: 'Polygon', coordinates: [square(-39, -18.5, 1)] },
+    },
     // Junk rows are dropped.
-    { type: 'Feature', properties: { name: '', alert: '1' }, geometry: { type: 'Point', coordinates: [0, 0] } },
-    { type: 'Feature', properties: { name: 'Bad', alert: 'x' }, geometry: { type: 'Point', coordinates: [0, 0] } },
-    { type: 'Feature', properties: { name: 'No geom', alert: '1' }, geometry: null },
+    {
+      type: 'Feature',
+      properties: { name: '', alert: '1' },
+      geometry: { type: 'Point', coordinates: [0, 0] },
+    },
+    {
+      type: 'Feature',
+      properties: { name: 'Bad', alert: 'x' },
+      geometry: { type: 'Point', coordinates: [0, 0] },
+    },
+    {
+      type: 'Feature',
+      properties: { name: 'No geom', alert: '1' },
+      geometry: null,
+    },
   ],
 };
 
 test('CRW URL is the keyless virtual-station GeoJSON', () => {
-  assert.equal(CRW_VS_URL, 'https://coralreefwatch.noaa.gov/product/vs/vs_polygons.json');
+  assert.equal(
+    CRW_VS_URL,
+    'https://coralreefwatch.noaa.gov/product/vs/vs_polygons.json',
+  );
 });
 
 test('alert levels map to the heritage CRW scale', () => {
@@ -101,9 +132,20 @@ test('alert levels map to the heritage CRW scale', () => {
 });
 
 test('gauge filename gives the 7-day trend', () => {
-  assert.deepEqual(parseCoralGauge('Coral_Bleaching_Alert_Level_1_to_2.bmp'), { from: 1, to: 2, trend: 'rising' });
-  assert.deepEqual(parseCoralGauge('Coral_Bleaching_Alert_Level_4_to_1.bmp'), { from: 4, to: 1, trend: 'falling' });
-  assert.equal(parseCoralGauge('Coral_Bleaching_Alert_Level_3_to_3.bmp').trend, 'steady');
+  assert.deepEqual(parseCoralGauge('Coral_Bleaching_Alert_Level_1_to_2.bmp'), {
+    from: 1,
+    to: 2,
+    trend: 'rising',
+  });
+  assert.deepEqual(parseCoralGauge('Coral_Bleaching_Alert_Level_4_to_1.bmp'), {
+    from: 4,
+    to: 1,
+    trend: 'falling',
+  });
+  assert.equal(
+    parseCoralGauge('Coral_Bleaching_Alert_Level_3_to_3.bmp').trend,
+    'steady',
+  );
   assert.equal(parseCoralGauge('nope'), null);
 });
 
@@ -115,7 +157,13 @@ test('rings are decimated, closed point dropped, parts capped', () => {
   }
   const ring = simplifyCoralRing(big);
   assert.equal(ring.length, MAX_CORAL_RING_POINTS);
-  assert.deepEqual(simplifyCoralRing([[0, 0], [1, 1]]), []);
+  assert.deepEqual(
+    simplifyCoralRing([
+      [0, 0],
+      [1, 1],
+    ]),
+    [],
+  );
   assert.equal(simplifyCoralRing(square(0, 0)).length, 4);
   const parts = [];
   for (let i = 0; i < 10; i += 1) parts.push([square(i * 2, 0, 0.1 + i * 0.1)]);
@@ -123,13 +171,19 @@ test('rings are decimated, closed point dropped, parts capped', () => {
   assert.equal(rings.length, MAX_CORAL_PARTS);
   // Largest part first.
   assert.equal(rings[0][0][0], 18);
-  assert.deepEqual(coralOutlineRings({ type: 'Point', coordinates: [0, 0] }), []);
+  assert.deepEqual(
+    coralOutlineRings({ type: 'Point', coordinates: [0, 0] }),
+    [],
+  );
 });
 
 test('stations merge Point + polygon by name and sort most severe first', () => {
   const rows = normalizeCoralStations(FIXTURE);
   assert.equal(rows.length, 3);
-  assert.deepEqual(rows.map((r) => r.level), [4, 2, 0]);
+  assert.deepEqual(
+    rows.map((r) => r.level),
+    [4, 2, 0],
+  );
   const [nli, abc, abr] = rows;
   assert.equal(nli.name, 'Northern Line Islands');
   assert.equal(nli.dhw, 27);
@@ -144,7 +198,10 @@ test('stations merge Point + polygon by name and sort most severe first', () => 
   assert.equal(abc.sst, 29.41);
   assert.equal(abc.ssta, 1.26);
   assert.equal(abc.rings.length, 2);
-  assert.equal(abc.page, 'https://coralreefwatch.noaa.gov/product/vs/gauges/abc_islands.php');
+  assert.equal(
+    abc.page,
+    'https://coralreefwatch.noaa.gov/product/vs/gauges/abc_islands.php',
+  );
   // Polygon-only station gets a centroid marker.
   assert.ok(Math.abs(abr.lon - -38.5) < 1e-6);
   assert.ok(Math.abs(abr.lat - -18) < 1e-6);
@@ -169,7 +226,11 @@ test('label and card carry heat-stress numbers', () => {
 });
 
 function harness(fetchImpl, clock = { t: 1_000_000 }) {
-  const plugin = coralBleachingProxy({ fetchImpl, now: () => clock.t, sleep: async () => {} });
+  const plugin = coralBleachingProxy({
+    fetchImpl,
+    now: () => clock.t,
+    sleep: async () => {},
+  });
   assert.equal(typeof plugin.configurePreviewServer, 'function');
   let handler;
   plugin.configureServer({
@@ -191,7 +252,11 @@ function harness(fetchImpl, clock = { t: 1_000_000 }) {
           this.headersSent = true;
         },
         end(body) {
-          resolve({ status: this.status, headers: this.headers, body: JSON.parse(body) });
+          resolve({
+            status: this.status,
+            headers: this.headers,
+            body: JSON.parse(body),
+          });
         },
       };
       handler({ method }, res, () => resolve({ status: 'next' }));
@@ -204,7 +269,8 @@ test('proxy caches for hours, retries, and falls back stale', async () => {
   let fail = 1;
   const { call, clock } = harness(async (url) => {
     calls += 1;
-    if (fail-- > 0) throw new TypeError('fetch failed', { cause: { code: 'ETIMEDOUT' } });
+    if (fail-- > 0)
+      throw new TypeError('fetch failed', { cause: { code: 'ETIMEDOUT' } });
     assert.match(String(url), /vs_polygons\.json$/);
     return Response.json(FIXTURE);
   });
@@ -231,7 +297,41 @@ test('proxy caches for hours, retries, and falls back stale', async () => {
 });
 
 test('proxy rejects an empty station list instead of caching it', async () => {
-  const { call } = harness(async () => Response.json({ type: 'FeatureCollection', features: [] }));
+  const { call } = harness(async () =>
+    Response.json({ type: 'FeatureCollection', features: [] }),
+  );
   const res = await call();
   assert.equal(res.status, 502);
+});
+
+test('ERDDAP gridded fallback keeps Watch+ cells, most severe first', async () => {
+  const { coralErddapPayload } = await import('./parse.js');
+  const csv = [
+    'time,latitude,longitude,CRW_BAA,CRW_DHW,CRW_SST,CRW_SSTANOMALY,CRW_HOTSPOT',
+    'UTC,degrees_north,degrees_east,1,Celsius weeks,Celsius,Celsius,Celsius',
+    '2026-10-18T12:00:00Z,-18.025,147.025,2,3.1,28.2,1.1,0.9',
+    '2026-10-18T12:00:00Z,10.025,120.025,0,0,28,0.2,0',
+    '2026-10-18T12:00:00Z,5.025,-80.025,4,9.5,30.1,2.5,2.1',
+    '2026-10-18T12:00:00Z,1.025,1.025,NaN,NaN,NaN,NaN,NaN',
+  ].join('\n');
+  const p = coralErddapPayload(csv, 1);
+  assert.equal(p.count, 2);
+  assert.equal(p.rows[0].level, 4);
+  assert.equal(p.rows[1].name, 'Reef-belt cell 18.0°S 147.0°E');
+  assert.equal(p.date, '2026-10-18');
+  assert.equal(p.fallback, 'erddap');
+});
+
+test('OceanWatch single-variable CSVs join into one row per cell (lon 0–360 wrapped)', async () => {
+  const { mergeCoralErddapCsvs, coralErddapPayload } =
+    await import('./parse.js');
+  const baa =
+    'time,latitude,longitude,bleaching_alert_area\nUTC,n,e,s\n2026-10-18T12:00:00Z,-18.025,212.025,3';
+  const dhw =
+    'time,latitude,longitude,degree_heating_week\nUTC,n,e,w\n2026-10-18T12:00:00Z,-18.025,212.025,6.5';
+  const p = coralErddapPayload(mergeCoralErddapCsvs([baa, dhw]), 1);
+  assert.equal(p.count, 1);
+  assert.equal(p.rows[0].lon, -147.975);
+  assert.equal(p.rows[0].dhw, 6.5);
+  assert.equal(p.rows[0].level, 3);
 });

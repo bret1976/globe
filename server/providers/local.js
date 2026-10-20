@@ -54,7 +54,7 @@ import { ukraineFiresProxy } from './ukraineFires.js';
 import { tsunamiAlertsProxy } from './tsunamiAlerts.js';
 import { hmsSmokeProxy } from './hmsSmoke.js';
 import { worldSigmetsProxy } from './worldSigmets.js';
-import { coralBleachingProxy } from './coralBleaching.js';
+import { coralBleachingProxy, CORAL_DISK_CACHE } from './coralBleaching.js';
 import { canadaAlertsProxy } from './canadaAlerts.js';
 import { gnssIntegrityProxy } from './gnssIntegrity.js';
 
@@ -106,7 +106,7 @@ function localProviderPlugins() {
     flightRestrictionsProxy(),
     aviationHazardsProxy(),
     worldSigmetsProxy(),
-    coralBleachingProxy(),
+    coralBleachingProxy({ diskCache: CORAL_DISK_CACHE }),
     canadaAlertsProxy(),
     gnssIntegrityProxy(),
     fireballsProxy(),

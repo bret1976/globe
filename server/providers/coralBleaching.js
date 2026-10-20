@@ -9,16 +9,29 @@
  * GET /api/coral-bleaching → { fetchedAt, source, attribution, license, note,
  *   date, rawCount, count, levels, rows }
  */
+import { readFile, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import {
   CRW_VS_URL,
+  CRW_ERDDAP_URL,
+  CRW_OCEANWATCH_URLS,
+  mergeCoralErddapCsvs,
+  coralErddapPayload,
   normalizeCoralStations,
   countCoralLevels,
 } from '../../src/layers/coralBleaching/parse.js';
 
+export const CORAL_DISK_CACHE = join(
+  process.env.GODSEYE_CACHE_DIR || tmpdir(),
+  'godseye-coral-last-good.json',
+);
+
 const TTL_MS = 3 * 60 * 60_000;
 const STALE_MS = 48 * 60 * 60_000;
 const MAX_BODY_BYTES = 32 * 1024 * 1024;
-const BACKOFF_MS = [0, 2000, 6000];
+const BACKOFF_MS = [0, 3000];
+const ERDDAP_BACKOFF_MS = [0, 5000];
 const UA =
   'GodsEyeView/0.1 (coral-bleaching proxy; +https://github.com/bret1976/globe)';
 
@@ -26,15 +39,32 @@ export function coralBleachingProxy({
   fetchImpl = (...args) => globalThis.fetch(...args),
   now = () => Date.now(),
   sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+  diskCache = null,
 } = {}) {
   /** @type {?{at: number, payload: object}} */
   let mem = null;
   /** @type {?Promise<object>} */
   let inflight = null;
+  /** Last good snapshot survives restarts (best effort, container disk). */
+  let diskLoaded = !diskCache;
+  async function loadDisk() {
+    if (diskLoaded) return;
+    diskLoaded = true;
+    try {
+      const saved = JSON.parse(await readFile(diskCache, 'utf8'));
+      if (!mem && saved?.payload && Number.isFinite(saved.at)) mem = saved;
+    } catch {
+      /* no saved snapshot yet */
+    }
+  }
+  function remember(payload) {
+    mem = { at: now(), payload };
+    if (diskCache) writeFile(diskCache, JSON.stringify(mem)).catch(() => {});
+  }
 
   async function fetchJson(url) {
     const response = await fetchImpl(url, {
-      signal: AbortSignal.timeout(90_000),
+      signal: AbortSignal.timeout(45_000),
       redirect: 'follow',
       headers: {
         Accept: 'application/json',
@@ -46,6 +76,57 @@ export function coralBleachingProxy({
     if (Number.isFinite(declared) && declared > MAX_BODY_BYTES)
       throw new Error('CRW body exceeds size cap');
     return response.json();
+  }
+
+  async function fetchText(url, timeoutMs) {
+    const response = await fetchImpl(url, {
+      signal: AbortSignal.timeout(timeoutMs),
+      headers: { Accept: 'text/csv', 'User-Agent': UA },
+    });
+    if (!response.ok) throw new Error(`ERDDAP HTTP ${response.status}`);
+    return response.text();
+  }
+
+  /** CRW mirrors in order: PacIOOS (one request), then PIFSC OceanWatch. */
+  const MIRRORS = [
+    {
+      name: 'PacIOOS ERDDAP',
+      load: () => fetchText(CRW_ERDDAP_URL, 45_000),
+    },
+    {
+      name: 'NOAA PIFSC OceanWatch ERDDAP',
+      load: async () =>
+        mergeCoralErddapCsvs(
+          await Promise.all(
+            CRW_OCEANWATCH_URLS.map((url) => fetchText(url, 45_000)),
+          ),
+        ),
+    },
+  ];
+
+  async function fetchErddap() {
+    let lastError = null;
+    for (const wait of ERDDAP_BACKOFF_MS) {
+      if (wait) await sleep(wait);
+      for (const mirror of MIRRORS) {
+        try {
+          const payload = coralErddapPayload(await mirror.load(), now());
+          if (!payload.rows.length) throw new Error('no cells');
+          return {
+            ...payload,
+            source: `NOAA Coral Reef Watch (${mirror.name})`,
+            attribution: `Coral bleaching heat stress: NOAA Coral Reef Watch Daily 5km via ${mirror.name} (gridded fallback while coralreefwatch.noaa.gov is unreachable)`,
+          };
+        } catch (error) {
+          lastError = error;
+          console.warn(
+            `[coral-bleaching] ${mirror.name} fallback failed:`,
+            error?.cause?.code || error?.message || error,
+          );
+        }
+      }
+    }
+    throw lastError || new Error('ERDDAP unavailable');
   }
 
   async function refresh() {
@@ -60,7 +141,10 @@ export function coralBleachingProxy({
         if (!features) throw new Error('CRW returned no features');
         const rows = normalizeCoralStations(geojson);
         if (!rows.length) throw new Error('CRW returned no usable stations');
-        const dates = rows.map((r) => r.date).filter(Boolean).sort();
+        const dates = rows
+          .map((r) => r.date)
+          .filter(Boolean)
+          .sort();
         const payload = {
           fetchedAt: now(),
           source: 'NOAA Coral Reef Watch',
@@ -74,7 +158,7 @@ export function coralBleachingProxy({
           levels: countCoralLevels(rows),
           rows,
         };
-        mem = { at: now(), payload };
+        remember(payload);
         return payload;
       } catch (error) {
         lastError = error;
@@ -84,7 +168,13 @@ export function coralBleachingProxy({
         );
       }
     }
-    throw lastError || new Error('NOAA Coral Reef Watch unavailable');
+    try {
+      const payload = await fetchErddap();
+      remember(payload);
+      return payload;
+    } catch (error) {
+      throw lastError || error;
+    }
   }
 
   function installMiddleware(server) {
@@ -99,6 +189,7 @@ export function coralBleachingProxy({
         });
         res.end(JSON.stringify(body));
       };
+      await loadDisk();
       const t = now();
       if (mem && t - mem.at < TTL_MS) {
         send(200, mem.payload);

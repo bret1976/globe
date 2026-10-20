@@ -1,6 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mergeCycloneSnapshots, normalizeEonet, normalizeNhc } from './source.js';
+import {
+  mergeCycloneSnapshots,
+  normalizeEonet,
+  normalizeNhc,
+} from './source.js';
 
 test('NHC storms keep basin, wind, and position', () => {
   const storms = normalizeNhc({
@@ -65,4 +69,44 @@ test('merge prefers NHC when both sources share a location', () => {
   );
   assert.equal(merged.storms.length, 1);
   assert.equal(merged.storms[0].source, 'NHC');
+});
+
+test('browser goes direct when the proxy reports a feed down', async () => {
+  const { createCycloneSource } = await import('./source.js');
+  const eonet = {
+    events: [
+      { id: 'E1', title: 'Typhoon A', geometry: [{ coordinates: [130, 18] }] },
+      { id: 'E2', title: 'Cyclone B', geometry: [{ coordinates: [80, -12] }] },
+    ],
+  };
+  const source = createCycloneSource({
+    fetchImpl: async (url) => {
+      if (url === '/api/cyclones')
+        return Response.json({
+          storms: [],
+          feeds: { nhc: 'ok', eonet: 'down' },
+        });
+      if (String(url).includes('eonet')) return Response.json(eonet);
+      throw new TypeError('CORS');
+    },
+  });
+  const snap = await source.getSnapshot();
+  assert.equal(snap.storms.length, 2);
+  assert.equal(snap.browserDirect, true);
+});
+
+test('healthy proxy answer is used as-is', async () => {
+  const { createCycloneSource } = await import('./source.js');
+  let direct = 0;
+  const source = createCycloneSource({
+    fetchImpl: async (url) => {
+      if (url === '/api/cyclones')
+        return Response.json({ storms: [], feeds: { nhc: 'ok', eonet: 'ok' } });
+      direct += 1;
+      return Response.json({});
+    },
+  });
+  const snap = await source.getSnapshot();
+  assert.equal(snap.storms.length, 0);
+  assert.equal(direct, 0);
 });
