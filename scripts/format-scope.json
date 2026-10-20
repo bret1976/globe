@@ -482,6 +482,8 @@
   "src/layers/cctv/projection.js",
   "src/layers/cctv/cards.js",
   "src/layers/cctv/rendering.js",
+  "src/layers/cctv/rendering.test.mjs",
+  "src/layers/cctv/frames.test.mjs",
   "src/layers/cctv/testing.js",
   "src/layers/cctv/ingestion.js",
   "src/layers/cctv/hover.js",

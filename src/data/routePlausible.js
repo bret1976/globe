@@ -42,6 +42,20 @@ export function crossTrackKm(lat, lon, lat1, lon1, lat2, lon2) {
   return Math.asin(Math.sin(d13) * Math.sin(b13 - b12)) * R_KM;
 }
 
+/**
+ * Signed distance (km) along the great circle from the origin toward the
+ * destination. Port of upstream gods-eye-view #1284 (rudycelekli, MIT).
+ */
+function alongTrackKm(lat, lon, lat1, lon1, lat2, lon2) {
+  const distance = greatCircleKm(lat1, lon1, lat, lon) / R_KM;
+  const direction =
+    bearingRad(lat1, lon1, lat, lon) - bearingRad(lat1, lon1, lat2, lon2);
+  return (
+    Math.atan2(Math.sin(distance) * Math.cos(direction), Math.cos(distance)) *
+    R_KM
+  );
+}
+
 const NEAR_ENDPOINT_KM = 130;
 const CROSS_TRACK_KM = 200;
 const LOW_ALT_M = 3700; // ~12 000 ft
@@ -75,6 +89,32 @@ export function routePlausible({
     greatCircleKm(latDeg, lonDeg, pt.lat, pt.lon) < NEAR_ENDPOINT_KM;
   let geomOk = (haveO && near(origin)) || (haveD && near(destination));
   if (!geomOk && haveO && haveD) {
+    // The cross-track test alone measures distance to an INFINITE great
+    // circle, so a plane thousands of km beyond the destination (or behind
+    // the origin) on the same circle still passed. Bound the along-track
+    // position to the finite airport leg, with the same coarse tolerance at
+    // either end (upstream #1284).
+    const routeKm = greatCircleKm(
+      origin.lat,
+      origin.lon,
+      destination.lat,
+      destination.lon,
+    );
+    const alongKm = alongTrackKm(
+      latDeg,
+      lonDeg,
+      origin.lat,
+      origin.lon,
+      destination.lat,
+      destination.lon,
+    );
+    // atan2 returns the principal arc in [-πR, πR]. Near an antipodal
+    // destination, its allowed forward extension can cross that branch cut.
+    const segmentAlongKm =
+      alongKm < -CROSS_TRACK_KM ? alongKm + 2 * Math.PI * R_KM : alongKm;
+    // Coincident or antipodal endpoints do not define one minor arc. Keep the
+    // existing loose check when the segment cannot be judged reliably.
+    const segmentKnown = routeKm > 0.001 && routeKm < Math.PI * R_KM - 0.001;
     geomOk =
       Math.abs(
         crossTrackKm(
@@ -85,7 +125,10 @@ export function routePlausible({
           destination.lat,
           destination.lon,
         ),
-      ) < CROSS_TRACK_KM;
+      ) < CROSS_TRACK_KM &&
+      (!segmentKnown ||
+        (segmentAlongKm >= -CROSS_TRACK_KM &&
+          segmentAlongKm <= routeKm + CROSS_TRACK_KM));
   } else if (!geomOk) {
     geomOk = true; // only one endpoint known and not near — cannot judge, allow
   }
