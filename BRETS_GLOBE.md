@@ -27,3 +27,5 @@ Vessel feed **PARTIAL vs STALE** comes from upstream #626 (layer panel).
 
 - 2026-09-28: Aurora (OVATION) layer (`aurora`) via NOAA SWPC public JSON grid (downsampled; original code).
 - 2026-09-27: Elevated Volcanoes layer (`volcanoes`) via USGS Volcano Hazards `/vsc/api/volcanoApi/elevated` (public open data).
+
+- 2026-10-21: Flights know each civil aircraft's type and registration without a click — server-side Mictronics aircraft database (ODC-By 1.0, weekly ~3.4 MB download, `POST /api/aircraft-types`), so 747/A380 draw as four-engine jets, 787s as wide-bodies, and labels/queries carry the type. Port of open upstream bilawalsidhu/gods-eye-view PR #1230 (MIT). Also ports upstream #1304 (antimeridian point distances for places/annotations).
