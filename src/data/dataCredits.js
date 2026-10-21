@@ -50,6 +50,13 @@ export const DATA_CREDITS = [
       '(ODbL 1.0)',
   },
   {
+    key: 'mictronics',
+    html:
+      'Aircraft type &amp; registration for live flights: ' +
+      '<a href="https://github.com/Mictronics/aircraft-database" target="_blank" rel="noopener">Mictronics aircraft database</a> ' +
+      '(<a href="https://opendatacommons.org/licenses/by/1-0/" target="_blank" rel="noopener">ODC-By 1.0</a>)',
+  },
+  {
     key: 'aisstream',
     html:
       'Live vessels (AIS): ' +
