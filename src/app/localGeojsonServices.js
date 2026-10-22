@@ -26,4 +26,5 @@ export const localGeoJsonServices = Object.freeze({
   // Phone-lite (draft): datacenter footprints → centre markers on phones only.
   simplifyFootprints: (features) =>
     isPhoneLite() ? features.map(footprintToPoint) : features,
+  releaseCacheOnDisable: () => isPhoneLite(),
 });

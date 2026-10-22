@@ -1,5 +1,10 @@
 import * as Cesium from 'cesium';
 import {
+  isPhoneLite,
+  PHONE_LITE_VESSEL_ROWS,
+  PHONE_LITE_VESSEL_LABELS,
+} from '../../app/phoneLite.js';
+import {
   vesselTypeCss,
   vesselOverlayCohortLimit,
   VESSEL_OVERLAY_SOURCE_ID,
@@ -81,7 +86,7 @@ export function createRendering({
     if (Number.isFinite(configured) && configured > 0) {
       return Math.max(500, Math.min(50000, Math.round(configured)));
     }
-    return DEFAULT_RENDER_ROWS;
+    return isPhoneLite() ? PHONE_LITE_VESSEL_ROWS : DEFAULT_RENDER_ROWS;
   }
 
   function labelRowLimit() {
@@ -89,7 +94,8 @@ export function createRendering({
     if (Number.isFinite(configured) && configured >= 0) {
       return Math.max(0, Math.min(renderRowLimit(), Math.round(configured)));
     }
-    return Math.min(DEFAULT_ACTIVE_LABELS, renderRowLimit());
+    const labels = isPhoneLite() ? PHONE_LITE_VESSEL_LABELS : DEFAULT_ACTIVE_LABELS;
+    return Math.min(labels, renderRowLimit());
   }
 
   function ensureCollections(viewer) {

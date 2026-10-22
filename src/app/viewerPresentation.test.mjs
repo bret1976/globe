@@ -13,9 +13,11 @@ test('viewer resolution scale stays at 1x (Cesium already renders at native DPR)
   assert.equal(viewerResolutionScale(Number.NaN), 1);
 });
 
-test('constrained clients never multiply past 1× CSS pixels', () => {
-  assert.equal(viewerResolutionScale(3, { constrained: true }), 1);
+test('constrained clients cap the effective DPR at 2', () => {
+  assert.equal(viewerResolutionScale(3, { constrained: true }), 2 / 3);
+  assert.equal(viewerResolutionScale(2.625, { constrained: true }), 2 / 2.625);
   assert.equal(viewerResolutionScale(2, { constrained: true }), 1);
+  assert.equal(viewerResolutionScale(1, { constrained: true }), 1);
 });
 
 test('applyViewerPresentation disables browser-recommended downsampling', () => {
@@ -46,7 +48,7 @@ test('applyViewerPresentation softens MSAA and scale on constrained clients', ()
     devicePixelRatio: 3,
     constrained: true,
   });
-  assert.equal(viewer.resolutionScale, 1);
+  assert.equal(viewer.resolutionScale, 2 / 3);
   assert.equal(viewer.scene.msaaSamples, 1);
   assert.equal(viewer.scene.postProcessStages.fxaa.enabled, true);
 });
