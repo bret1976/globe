@@ -1,4 +1,10 @@
 import { LayerLifecycle } from '../data/lifecycle.js';
+import {
+  isPhoneLite,
+  PHONE_LITE_MAX_ACTIVE_LAYERS,
+  PHONE_LITE_FEED_INTERVAL_SCALE,
+  PHONE_LITE_RELEASE_ON_DISABLE,
+} from './phoneLite.js';
 import { LayerPresentation } from './layerPresentation.js';
 import { createCyberSonarScene } from '../cyberSonarScene.js';
 /** Register the application layer catalog before allowing state restoration. */
@@ -11,8 +17,14 @@ export function createApplicationData({
   defer,
 }) {
   // Initialize data layer manager
+  const phone = isPhoneLite();
   const dataManager = new LayerLifecycle(viewer, {
     allowQaRegistration,
+    // iPhone memory safety net: free layers on toggle-off, cap concurrent
+    // layers, poll feeds half as often. Desktop is unchanged.
+    releaseOnDisable: phone ? PHONE_LITE_RELEASE_ON_DISABLE : false,
+    maxActiveLayers: phone ? PHONE_LITE_MAX_ACTIVE_LAYERS : Infinity,
+    feedIntervalScale: phone ? PHONE_LITE_FEED_INTERVAL_SCALE : 1,
   });
   defer(async () => {
     await dataManager.destroyAll();

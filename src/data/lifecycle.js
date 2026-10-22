@@ -95,8 +95,39 @@ function raceFirstUpdate(promise, deadlineMs) {
  * for real-time data overlays on the CesiumJS globe.
  */
 export class LayerLifecycle {
-  constructor(viewer, { allowQaRegistration = false } = {}) {
+  constructor(
+    viewer,
+    {
+      allowQaRegistration = false,
+      releaseOnDisable = false,
+      maxActiveLayers = Infinity,
+      feedIntervalScale = 1,
+    } = {},
+  ) {
     this.viewer = viewer;
+    // Phone memory policy (iOS Safari kills the tab around ~1 GB): a disabled
+    // layer is fully destroyed instead of kept hidden, and only the most
+    // recently enabled `maxActiveLayers` stay on. Desktop keeps the defaults.
+    // true = every layer; an array/Set = only those ids. Modules whose
+    // destroy() is terminal (it sets a permanent `_destroyed` flag) must not
+    // be listed — they could never re-init.
+    this._releaseOnDisable =
+      releaseOnDisable === true
+        ? () => true
+        : releaseOnDisable && typeof releaseOnDisable[Symbol.iterator] === 'function'
+          ? ((ids) => (id) => ids.has(id))(new Set(releaseOnDisable))
+          : () => false;
+    this._maxActiveLayers =
+      Number.isFinite(maxActiveLayers) && maxActiveLayers > 0
+        ? Math.floor(maxActiveLayers)
+        : Infinity;
+    this._enableOrder = [];
+    // Phones poll periodic feeds less often (each AIS/FIRMS refresh is MBs of
+    // JSON parsed on the main thread). 1 = unchanged.
+    this._feedIntervalScale =
+      Number.isFinite(feedIntervalScale) && feedIntervalScale >= 1
+        ? feedIntervalScale
+        : 1;
     this._activityListeners = new Set();
     this.layers = new Map(); // id → { module, enabled, initialized, intervalId, lifecycleState, lifecycleUncertain }
     this._listeners = new Set();
@@ -610,7 +641,7 @@ export class LayerLifecycle {
     if (refreshInterval > 0) {
       entry.intervalId = setInterval(() => {
         void this._runPeriodicUpdate(layerId, entry);
-      }, refreshInterval);
+      }, refreshInterval * this._feedIntervalScale);
     } else if (updateInterval === 0) {
       entry.intervalId = setInterval(() => {
         if (!entry.enabled) return;
@@ -908,6 +939,23 @@ export class LayerLifecycle {
       }
       entry.enabled = false;
       entry.lifecycleUncertain = false;
+      this._enableOrder = this._enableOrder.filter((id) => id !== layerId);
+      if (
+        this._releaseOnDisable(layerId) &&
+        entry.initialized &&
+        typeof entry.module.destroy === 'function' &&
+        typeof entry.module.init === 'function'
+      ) {
+        // Hidden-but-retained layers were the iPhone crash: after toggling a
+        // dozen features off, 330 MB JS heap, 21K primitives and 45K DOM
+        // nodes stayed resident. Destroy now; the next enable re-inits.
+        try {
+          await entry.module.destroy(this.viewer);
+        } catch (e) {
+          console.warn(`[Data] ${layerId} release-on-disable error:`, e);
+        }
+        entry.initialized = false;
+      }
       if (!settleLifecycle() || signal?.aborted)
         return finishCancelledDisable('settle');
     } else {
@@ -1122,6 +1170,7 @@ export class LayerLifecycle {
       // a slower data fetch with refreshInterval.
       this._armUpdateLoop(layerId, entry);
       signal?.removeEventListener('abort', cancelEnable);
+      this._enforceActiveLayerCap(layerId);
     }
 
     this._publishActivity({ type: 'status' });
@@ -1136,6 +1185,22 @@ export class LayerLifecycle {
       ...(notificationToken ? { notificationToken } : {}),
     });
     return true;
+  }
+
+  /** Phone cap: switch off the least recently enabled layers past the limit. */
+  _enforceActiveLayerCap(layerId) {
+    this._enableOrder = this._enableOrder.filter((id) => id !== layerId);
+    this._enableOrder.push(layerId);
+    if (!Number.isFinite(this._maxActiveLayers)) return;
+    this._enableOrder = this._enableOrder.filter(
+      (id) => this.layers.get(id)?.enabled,
+    );
+    while (this._enableOrder.length > this._maxActiveLayers) {
+      const oldest = this._enableOrder.shift();
+      void Promise.resolve()
+        .then(() => this.setEnabled(oldest, false, { origin: 'memory-cap' }))
+        .catch((e) => console.warn(`[Data] memory cap could not stop ${oldest}:`, e));
+    }
   }
 
   /**

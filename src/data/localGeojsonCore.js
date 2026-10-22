@@ -341,6 +341,9 @@ export function createLocalGeoJsonLayer(
     governorRequestRender,
     // Host-supplied (phone-lite): may return a lighter feature list.
     simplifyFootprints = null,
+    // Host-supplied (phone-lite): drop the parsed dataset on disable instead of
+    // keeping it for a fast re-enable (datacenters alone held ~80 MB on iPhone).
+    releaseCacheOnDisable = null,
   },
 ) {
   let _dataSource = null;
@@ -478,6 +481,10 @@ export function createLocalGeoJsonLayer(
     _lodComputed = false;
     _lastLodProbeMs = Number.NEGATIVE_INFINITY;
     releaseDataSource(viewer);
+    if (typeof releaseCacheOnDisable === 'function' && releaseCacheOnDisable()) {
+      _cachedFeatures = null;
+      _stemRecords = [];
+    }
     _overlayPublisher.hide();
     clearSelectedEntityContextForLayer(id);
     if (viewer?.selectedEntity?.__localLayerId === id) {

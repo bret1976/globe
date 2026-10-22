@@ -17,3 +17,10 @@ test('footprints collapse to their centre point; points pass through', () => {
   const point = { type: 'Feature', geometry: { type: 'Point', coordinates: [5, 6] } };
   assert.equal(footprintToPoint(point), point);
 });
+
+test('phone-lite vessel and fire caps stay well under desktop', async () => {
+  const m = await import('./phoneLite.js');
+  assert.equal(m.PHONE_LITE_FIRMS_LIMIT, 15_000);
+  assert.ok(m.PHONE_LITE_VESSEL_ROWS < 12000);
+  assert.ok(m.PHONE_LITE_VESSEL_LABELS < m.PHONE_LITE_VESSEL_ROWS);
+});

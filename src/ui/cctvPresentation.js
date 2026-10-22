@@ -54,21 +54,25 @@ export function _renderCctvState(state) {
   }
 
   if (this._cctvSelect) {
+    // The picker is disabled while CCTV is off, so keep it empty then: the
+    // full catalog is ~7.7K <option>s (~45K DOM nodes) that stayed resident
+    // on iPhone after the layer was switched off.
+    const listed = enabled ? cameras : [];
     const shouldRebuild =
-      this._cctvSelect.options.length !== cameras.length ||
-      cameras.some(
+      this._cctvSelect.options.length !== listed.length ||
+      listed.some(
         (cam, idx) => this._cctvSelect.options[idx]?.value !== cam.id,
       );
     if (shouldRebuild) {
       this._cctvSelect.innerHTML = '';
-      for (const camera of cameras) {
+      for (const camera of listed) {
         const option = document.createElement('option');
         option.value = camera.id;
         option.textContent = `${camera.city} · ${camera.name}`;
         this._cctvSelect.appendChild(option);
       }
     }
-    this._cctvSelect.disabled = !enabled || cameras.length === 0;
+    this._cctvSelect.disabled = !enabled || listed.length === 0;
     if (
       activeId &&
       Array.from(this._cctvSelect.options).some((opt) => opt.value === activeId)
