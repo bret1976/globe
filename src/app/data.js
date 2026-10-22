@@ -20,6 +20,8 @@ export function createApplicationData({
   const phone = isPhoneLite();
   const dataManager = new LayerLifecycle(viewer, {
     allowQaRegistration,
+    // Pause periodic feed polling while the tab is hidden (upstream #1282).
+    visibilityTarget: globalThis.document ?? null,
     // iPhone memory safety net: free layers on toggle-off, cap concurrent
     // layers, poll feeds half as often. Desktop is unchanged.
     releaseOnDisable: phone ? PHONE_LITE_RELEASE_ON_DISABLE : false,

@@ -5,7 +5,10 @@ export { layerFeedState } from '../ui/layers.js';
 /** Compatibility facade for callers that construct a manager with its panel. */
 export class DataLayerManager extends LayerLifecycle {
   constructor(viewer, options) {
-    super(viewer, options);
+    super(viewer, {
+      visibilityTarget: globalThis.document ?? null,
+      ...options,
+    });
     this._presentation = new LayerPresentation(this);
   }
   buildTogglePanel(container) {

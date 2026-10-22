@@ -8,6 +8,7 @@ import { configureGlobeFraming } from './globeFraming.js';
 import { applyViewerPresentation } from './viewerPresentation.js';
 import { isConstrainedGlobeClient } from './clientCapabilities.js';
 import { applyModelAtmosphereWorkaround } from './atmosphereCompat.js';
+import { StarrySky } from '../sky/starrySky.js';
 
 const PINCH_ZOOM_MULTIPLIER = 8;
 const MAX_PINCH_PIXEL_DELTA = 120;
@@ -110,12 +111,12 @@ export function installTrackpadPinchZoom(
   };
 }
 
-/** Create the standard globe viewer in caller-owned, visible containers. */
-export function createApplicationViewer({ container, creditContainer }) {
-  if (!container || !creditContainer)
-    throw new TypeError('Viewer and credit containers are required');
-  const constrained = isConstrainedGlobeClient();
-  const viewer = new Cesium.Viewer(container, {
+/** Cesium.Viewer options of the standard globe viewer. */
+export function applicationViewerOptions(
+  creditContainer,
+  { constrained = isConstrainedGlobeClient() } = {},
+) {
+  return {
     timeline: false,
     animation: false,
     baseLayerPicker: false,
@@ -128,6 +129,11 @@ export function createApplicationViewer({ container, creditContainer }) {
     selectionIndicator: false,
     infoBox: false,
     baseLayer: false,
+    // Replaces the blocky Tycho-2 default with catalogue stars and a soft
+    // Milky Way (upstream gods-eye-view #1243, MIT). An option, not
+    // `skyBox: false`, which would also stop CesiumWidget creating the Sun
+    // and Moon. Same 6×1024² cube budget as the Tycho-2 default it replaces.
+    skyBox: new StarrySky(),
     creditContainer,
     // Desktop MSAA 4 (upstream); phones drop to 1 so WebKit can keep the context.
     msaaSamples: constrained ? 1 : 4,
@@ -135,7 +141,17 @@ export function createApplicationViewer({ container, creditContainer }) {
     // preserveDrawingBuffer doubles peak framebuffer memory — recording still
     // works on desktop; phones need the headroom more than a still capture.
     contextOptions: { webgl: { preserveDrawingBuffer: !constrained } },
-  });
+  };
+}
+
+/** Create the standard globe viewer in caller-owned, visible containers. */
+export function createApplicationViewer({ container, creditContainer }) {
+  if (!container || !creditContainer)
+    throw new TypeError('Viewer and credit containers are required');
+  const viewer = new Cesium.Viewer(
+    container,
+    applicationViewerOptions(creditContainer),
+  );
   try {
     viewer.targetFrameRate = 60;
     // Before any tile builds a draw command: Cesium's per-vertex model

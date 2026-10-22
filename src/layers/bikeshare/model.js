@@ -94,7 +94,6 @@ export function createModel({ state: layerState, services, parts, source }) {
    * @returns {Map<string, Object>} Map of stationId to station info objects.
    */
 
-
   /**
    * Station name text as a reader expects it. JCDecaux's Spanish contracts
    * (Valenbisi, Sevici) prefix every name with "_" and Valenbisi joins words
@@ -102,7 +101,9 @@ export function createModel({ state: layerState, services, parts, source }) {
    * break. Other spacing is the operator's own and stays as published.
    */
   function tidyStationName(text) {
-    return String(text || '').replace(/\s*_+\s*/g, ' ').trim();
+    return String(text || '')
+      .replace(/\s*_+\s*/g, ' ')
+      .trim();
   }
 
   /**
@@ -120,6 +121,21 @@ export function createModel({ state: layerState, services, parts, source }) {
     return capacity - geofenced;
   }
 
+  /**
+   * Read a numeric coordinate without treating blank text, booleans, arrays or
+   * null as zero (`Number('')`, `Number(null)` and `Number([])` are all 0,
+   * which put malformed stations at 0°N 0°E). Ported from upstream
+   * gods-eye-view #1232 (MIT).
+   */
+  function coordinateNumber(value) {
+    if (
+      typeof value !== 'number' &&
+      (typeof value !== 'string' || !value.trim())
+    )
+      return NaN;
+    return Number(value);
+  }
+
   function parseStationInformation(payload) {
     const stations = extractStationsArray(payload);
     const stationMap = new Map();
@@ -127,9 +143,15 @@ export function createModel({ state: layerState, services, parts, source }) {
     for (const raw of stations) {
       // Accept both GBFS 2.x (station_id) and alternate (id) field names
       const stationId = String(raw?.station_id ?? raw?.id ?? '').trim();
-      const lat = Number(raw?.lat ?? raw?.latitude);
-      const lon = Number(raw?.lon ?? raw?.longitude);
-      if (!stationId || !Number.isFinite(lat) || !Number.isFinite(lon))
+      const lat = coordinateNumber(raw?.lat ?? raw?.latitude);
+      const lon = coordinateNumber(raw?.lon ?? raw?.longitude);
+      if (
+        !stationId ||
+        !Number.isFinite(lat) ||
+        !Number.isFinite(lon) ||
+        Math.abs(lat) > 90 ||
+        Math.abs(lon) > 180
+      )
         continue;
 
       stationMap.set(stationId, {

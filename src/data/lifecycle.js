@@ -90,6 +90,9 @@ function raceFirstUpdate(promise, deadlineMs) {
   ]).finally(() => clearTimeout(timer));
 }
 
+/** Early-fire tolerance for periodic refresh ticks (see _armUpdateLoop). */
+const PERIODIC_DUE_SLACK_MS = 100;
+
 /**
  * LayerLifecycle — Manages registration, toggling, and update loops
  * for real-time data overlays on the CesiumJS globe.
@@ -102,9 +105,16 @@ export class LayerLifecycle {
       releaseOnDisable = false,
       maxActiveLayers = Infinity,
       feedIntervalScale = 1,
+      visibilityTarget = null,
     } = {},
   ) {
     this.viewer = viewer;
+    // Hosts may inject a visibilityTarget (document) with hidden /
+    // visibilityState and event-listener methods; periodic network refreshes
+    // then pause while the tab is hidden and run once, if overdue, on return.
+    // Without one (tests, headless), periodic work keeps its old behaviour.
+    // Upstream gods-eye-view #1282 (MIT).
+    this._visibilityTarget = visibilityTarget;
     // Phone memory policy (iOS Safari kills the tab around ~1 GB): a disabled
     // layer is fully destroyed instead of kept hidden, and only the most
     // recently enabled `maxActiveLayers` stay on. Desktop keeps the defaults.
@@ -114,8 +124,12 @@ export class LayerLifecycle {
     this._releaseOnDisable =
       releaseOnDisable === true
         ? () => true
-        : releaseOnDisable && typeof releaseOnDisable[Symbol.iterator] === 'function'
-          ? ((ids) => (id) => ids.has(id))(new Set(releaseOnDisable))
+        : releaseOnDisable &&
+            typeof releaseOnDisable[Symbol.iterator] === 'function'
+          ? (
+              (ids) => (id) =>
+                ids.has(id)
+            )(new Set(releaseOnDisable))
           : () => false;
     this._maxActiveLayers =
       Number.isFinite(maxActiveLayers) && maxActiveLayers > 0
@@ -629,6 +643,13 @@ export class LayerLifecycle {
     }
   }
 
+  _stopUpdateLoop(entry) {
+    clearInterval(entry.intervalId);
+    entry.intervalId = null;
+    entry.removeVisibilityListener?.();
+    entry.removeVisibilityListener = null;
+  }
+
   _armUpdateLoop(layerId, entry) {
     const configuredRefreshInterval = Number(entry.module.refreshInterval);
     const updateInterval = Number(entry.module.updateInterval);
@@ -639,9 +660,28 @@ export class LayerLifecycle {
           ? updateInterval
           : 0;
     if (refreshInterval > 0) {
-      entry.intervalId = setInterval(() => {
+      const period = refreshInterval * this._feedIntervalScale;
+      const visibilityDocument = this._visibilityTarget;
+      let dueAt = Date.now() + period;
+      const tick = () => {
+        if (
+          visibilityDocument?.hidden ||
+          visibilityDocument?.visibilityState === 'hidden' ||
+          !entry.enabled ||
+          entry.destroying ||
+          entry.refreshing ||
+          // Slack: a timer may fire a few ms before Date.now() reaches dueAt;
+          // without it a whole period would be skipped.
+          Date.now() < dueAt - PERIODIC_DUE_SLACK_MS
+        )
+          return;
+        dueAt = Date.now() + period;
         void this._runPeriodicUpdate(layerId, entry);
-      }, refreshInterval * this._feedIntervalScale);
+      };
+      entry.intervalId = setInterval(tick, period);
+      visibilityDocument?.addEventListener?.('visibilitychange', tick);
+      entry.removeVisibilityListener = () =>
+        visibilityDocument?.removeEventListener?.('visibilitychange', tick);
     } else if (updateInterval === 0) {
       entry.intervalId = setInterval(() => {
         if (!entry.enabled) return;
@@ -873,8 +913,7 @@ export class LayerLifecycle {
         entry.lifecycleUncertain = !compensated && !cleanupConfirmed;
         settleLifecycle();
         if (!entry.enabled && entry.intervalId) {
-          clearInterval(entry.intervalId);
-          entry.intervalId = null;
+          this._stopUpdateLoop(entry);
         }
         this._publishActivity({ type: 'status' });
         if (!compensated) {
@@ -934,8 +973,7 @@ export class LayerLifecycle {
       }
       if (signal?.aborted) return finishCancelledDisable('disable');
       if (entry.intervalId) {
-        clearInterval(entry.intervalId);
-        entry.intervalId = null;
+        this._stopUpdateLoop(entry);
       }
       entry.enabled = false;
       entry.lifecycleUncertain = false;
@@ -963,8 +1001,7 @@ export class LayerLifecycle {
       let abortCleanup = null;
       const cancelEnable = () => {
         if (entry.intervalId) {
-          clearInterval(entry.intervalId);
-          entry.intervalId = null;
+          this._stopUpdateLoop(entry);
         }
         // Disable immediately so modules with their own AbortController (Radio)
         // cancel pending update work at the same turn boundary. A second
@@ -994,8 +1031,7 @@ export class LayerLifecycle {
         // a later abort cannot revoke a successful retry.
         signal?.removeEventListener('abort', cancelEnable);
         if (entry.intervalId) {
-          clearInterval(entry.intervalId);
-          entry.intervalId = null;
+          this._stopUpdateLoop(entry);
         }
         await abortCleanup;
         let cleanupConfirmed = false;
@@ -1036,8 +1072,7 @@ export class LayerLifecycle {
       };
       const finishFailedEnable = async (phase, error) => {
         if (entry.intervalId) {
-          clearInterval(entry.intervalId);
-          entry.intervalId = null;
+          this._stopUpdateLoop(entry);
         }
         let cleanupConfirmed = false;
         try {
@@ -1161,8 +1196,7 @@ export class LayerLifecycle {
       // Always clear any stale interval before assigning a new one, so we never
       // orphan a running timer and end up double-polling.
       if (entry.intervalId) {
-        clearInterval(entry.intervalId);
-        entry.intervalId = null;
+        this._stopUpdateLoop(entry);
       }
 
       // Manager-owned periodic refresh work has one normalized loading/error
@@ -1199,7 +1233,9 @@ export class LayerLifecycle {
       const oldest = this._enableOrder.shift();
       void Promise.resolve()
         .then(() => this.setEnabled(oldest, false, { origin: 'memory-cap' }))
-        .catch((e) => console.warn(`[Data] memory cap could not stop ${oldest}:`, e));
+        .catch((e) =>
+          console.warn(`[Data] memory cap could not stop ${oldest}:`, e),
+        );
     }
   }
 
@@ -2305,8 +2341,7 @@ export class LayerLifecycle {
         return false;
       }
       if (entry.intervalId) {
-        clearInterval(entry.intervalId);
-        entry.intervalId = null;
+        this._stopUpdateLoop(entry);
       }
       entry.enabled = false;
     }

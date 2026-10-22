@@ -178,6 +178,8 @@ The [Bhote Koshi event pack](public/events/bhote-koshi-2026/README.md), under `p
 | **OpenStreetMap submarine cables** (optional free extract) | `osm_submarine_cables/` | **ODbL 1.0** | ✅ Free/open — attribute OSM | "© OpenStreetMap contributors" |
 | **Natural Earth physical regions** (1,046 land + 292 marine named polygons) | `natural_earth/`                  | **Public domain**                                                                                         | ✅ (no restrictions)                             | "Made with Natural Earth" (courtesy credit — not legally required)          |
 | **DataSF Analysis Neighborhoods** (41 SF neighborhood polygons)             | `neighborhoods/`                  | **PDDL 1.0** (public domain)                                                                              | ✅ (no restrictions)                             | "City & County of San Francisco — DataSF" (courtesy — not legally required) |
+| **Yale Bright Star Catalogue** (9,096 stars, sky background)                | `sky/`                            | **Public domain**                                                                                         | ✅ (no restrictions)                             | "Yale Bright Star Catalogue (Hoffleit & Warren, via CDS)" (courtesy credit) |
+| **ESO Milky Way panorama** (eso0932a, blurred cube map, sky background)     | `sky/`                            | **CC BY 4.0**                                                                                             | ✅ (attribution; changes stated)                 | "ESO/S. Brunier"                                                            |
 | **CCTV ground heights** (3,445 cameras)                                     | `cctv_ground_heights/`            | Precomputed camera placement heights, aligned to work with Google Photorealistic 3D Tiles (folder README) | —                                                | —                                                                           |
 
 ### ⚠️ TeleGeography cables are bundled (CC BY-NC-SA) like gods-eye-view
@@ -379,6 +381,11 @@ Natural Earth is **public domain** (no permission needed, no attribution legally
 https://www.naturalearthdata.com/about/terms-of-use/). We credit anyway: "Made with Natural
 Earth". Registration in the in-app `dataCredits.js` attribution list ships with the resolver
 wiring (see below).
+
+### Sky background (`sky/`)
+
+Sources, licences, the changes CC BY asks to state, hashes and build commands
+are in [`sky/README.md`](src/data/local_data/sky/README.md).
 
 ### DataSF Analysis Neighborhoods (`neighborhoods/`)
 

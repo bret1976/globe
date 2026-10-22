@@ -3367,3 +3367,79 @@ test('row action chips use live disabled state and descriptive counts without wr
     else globalThis.document = originalDocument;
   }
 });
+
+// Upstream gods-eye-view #1282 (MIT): hidden-tab polling pause.
+test('periodic polls pause hidden, catch up once when due, and dispose visibility listeners', async (t) => {
+  const listeners = new Set();
+  const doc = {
+    hidden: false,
+    addEventListener: (_name, fn) => listeners.add(fn),
+    removeEventListener: (_name, fn) => listeners.delete(fn),
+  };
+  t.mock.timers.enable({ apis: ['setInterval', 'Date'], now: 1000 });
+  const { LayerLifecycle } = await import('./lifecycle.js');
+  const manager = new LayerLifecycle({}, { visibilityTarget: doc });
+  const { module, calls } = makeSlowLayer('hidden-poll');
+  manager.register(module);
+  await manager.setEnabled('hidden-poll', true);
+  assert.equal(calls.update, 1);
+  doc.hidden = true;
+  t.mock.timers.tick(10000);
+  assert.equal(calls.update, 1);
+  assert.equal(await manager.refreshLayer('hidden-poll'), true);
+  assert.equal(calls.update, 2, 'explicit refresh remains allowed');
+  doc.hidden = false;
+  for (const fn of listeners) fn();
+  for (const fn of listeners) fn();
+  assert.equal(calls.update, 3);
+  await Promise.resolve();
+  await Promise.resolve();
+  await manager.destroyAll();
+  assert.equal(listeners.size, 0);
+  t.mock.timers.tick(10000);
+  assert.equal(calls.update, 3);
+});
+
+test('a visible tab keeps the normal polling cadence, and disable removes the listener', async (t) => {
+  const listeners = new Set();
+  const doc = {
+    hidden: false,
+    visibilityState: 'visible',
+    addEventListener: (_name, fn) => listeners.add(fn),
+    removeEventListener: (_name, fn) => listeners.delete(fn),
+  };
+  t.mock.timers.enable({ apis: ['setInterval', 'Date'], now: 5000 });
+  const { LayerLifecycle } = await import('./lifecycle.js');
+  const manager = new LayerLifecycle({}, { visibilityTarget: doc });
+  const { module, calls } = makeSlowLayer('visible-poll');
+  manager.register(module);
+  await manager.setEnabled('visible-poll', true);
+  assert.equal(calls.update, 1);
+  assert.equal(listeners.size, 1);
+  for (let i = 0; i < 3; i++) {
+    t.mock.timers.tick(1000);
+    await Promise.resolve();
+    await Promise.resolve();
+  }
+  assert.equal(calls.update, 4, 'one refresh per interval while visible');
+  await manager.setEnabled('visible-poll', false);
+  assert.equal(listeners.size, 0);
+  t.mock.timers.tick(5000);
+  assert.equal(calls.update, 4);
+});
+
+test('without a visibility target periodic polling is unchanged', async (t) => {
+  t.mock.timers.enable({ apis: ['setInterval', 'Date'], now: 1000 });
+  const { LayerLifecycle } = await import('./lifecycle.js');
+  const manager = new LayerLifecycle({});
+  const { module, calls } = makeSlowLayer('headless-poll');
+  manager.register(module);
+  await manager.setEnabled('headless-poll', true);
+  for (let i = 0; i < 2; i++) {
+    t.mock.timers.tick(1000);
+    await Promise.resolve();
+    await Promise.resolve();
+  }
+  assert.equal(calls.update, 3);
+  await manager.destroyAll();
+});
