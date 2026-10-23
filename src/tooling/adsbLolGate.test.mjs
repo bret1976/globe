@@ -93,7 +93,10 @@ test('a regional 429 pauses adsb.lol for flights and military, serving last-good
   });
   const opensky = await freshOpenSky('pause');
   const mil = install(providers.adsbLolProxy());
-  assert.equal((await opensky('/api/opensky', '?lat=30&lon=-97')).statusCode, 200);
+  assert.equal(
+    (await opensky('/api/opensky', '?lat=30&lon=-97')).statusCode,
+    200,
+  );
   assert.equal((await mil('/api/adsblol/mil')).statusCode, 200);
 
   now += 13_000;
@@ -110,7 +113,9 @@ test('a regional 429 pauses adsb.lol for flights and military, serving last-good
   calls.length = 0;
   now += 1_000;
   assert.equal(
-    (await opensky('/api/opensky', '?lat=30&lon=-97')).headers['x-opensky-cache'],
+    (await opensky('/api/opensky', '?lat=30&lon=-97')).headers[
+      'x-opensky-cache'
+    ],
     'STALE',
   );
   const milStale = await mil('/api/adsblol/mil');

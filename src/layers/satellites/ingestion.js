@@ -1,5 +1,5 @@
-import { twoline2satrec } from 'satellite.js';
 import * as Cesium from 'cesium';
+import { satrecFromElements } from '../../sources/orbitalElements.js';
 import { CATALOG_GROUPS, ISS_NORAD, POINT_STYLES } from './policy.js';
 
 export function createIngestion({
@@ -105,7 +105,7 @@ export function createIngestion({
         const seen = new Set();
 
         for (const entry of allEntries) {
-          const satrec = twoline2satrec(entry.line1, entry.line2);
+          const satrec = satrecFromElements(entry);
           if (!satrec || satrec.error !== 0) continue;
 
           const noradId = Number(satrec.satnum);

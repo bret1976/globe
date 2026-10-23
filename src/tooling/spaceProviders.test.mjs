@@ -8,6 +8,7 @@ import {
   LL2_CACHE_TTL_MS,
 } from 'gods-eye-view/server/providers/space';
 import {
+  celestrakOmmUrl,
   celestrakTleUrl,
   launchLibraryRecentUrl,
 } from 'gods-eye-view/sources/space';
@@ -53,6 +54,11 @@ test('portable requests keep fixed origins, encode group data and preserve the 3
   assert.equal(tle.pathname, '/NORAD/elements/gp.php');
   assert.equal(tle.searchParams.get('GROUP'), 'stations&FORMAT=json');
   assert.equal(tle.searchParams.get('FORMAT'), 'tle');
+  const omm = celestrakOmmUrl('stations&FORMAT=tle');
+  assert.equal(omm.origin, 'https://celestrak.org');
+  assert.equal(omm.pathname, '/NORAD/elements/gp.php');
+  assert.equal(omm.searchParams.get('GROUP'), 'stations&FORMAT=tle');
+  assert.equal(omm.searchParams.get('FORMAT'), 'json');
   const end = new Date('2026-03-01T12:34:56.000Z');
   const url = launchLibraryRecentUrl(end);
   assert.equal(url.origin, 'https://ll.thespacedevs.com');
@@ -74,12 +80,12 @@ test('compatibility exports retain the same LL2 header helper and TTL', () => {
   assert.equal(compatibility.LL2_CACHE_TTL_MS, LL2_CACHE_TTL_MS);
 });
 
-test('exported CelesTrak plugin coalesces refreshes, retains stale TLEs, and reads disk in a new instance', async (t) => {
+test('exported CelesTrak plugin coalesces refreshes, retains stale elements, and reads disk in a new instance', async (t) => {
   isolateDisk(t);
   let now = Date.now();
   t.mock.method(Date, 'now', () => now);
   t.mock.method(console, 'warn', () => {});
-  const tle = 'ISS\n1 25544U fixture\n2 25544 fixture';
+  const tle = '[{"OBJECT_NAME":"ISS (ZARYA)","NORAD_CAT_ID":25544}]';
   let calls = 0,
     release;
   const gate = new Promise((resolve) => {
@@ -88,6 +94,7 @@ test('exported CelesTrak plugin coalesces refreshes, retains stale TLEs, and rea
   t.mock.method(globalThis, 'fetch', async (url) => {
     calls++;
     assert.equal(new URL(url).searchParams.get('GROUP'), 'stations');
+    assert.equal(new URL(url).searchParams.get('FORMAT'), 'json');
     await gate;
     return new Response(tle);
   });
@@ -97,8 +104,10 @@ test('exported CelesTrak plugin coalesces refreshes, retains stale TLEs, and rea
   const first = request('/api/celestrak', '/stations');
   const second = request('/api/celestrak', '/stations');
   release();
-  for (const res of await Promise.all([first, second]))
+  for (const res of await Promise.all([first, second])) {
     assert.equal(res.body, tle);
+    assert.match(res.headers['Content-Type'], /^application\/json/);
+  }
   assert.equal(calls, 1);
   assert.equal(
     (await request('/api/celestrak', '/stations')).headers['x-tle-cache'],

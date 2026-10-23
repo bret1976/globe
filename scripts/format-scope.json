@@ -824,5 +824,10 @@
   "src/layers/volcanoes/parse.js",
   "src/layers/volcanoes/parse.test.mjs",
   "src/layers/volcanoes/source.js",
-  "src/app/layers/volcanoes.js"
+  "src/app/layers/volcanoes.js",
+  "src/sources/orbitalElements.js",
+  "src/sources/orbitalElements.test.mjs",
+  "server/providers/aircraft/adsbLolGate.js",
+  "src/tooling/adsbLolGate.test.mjs",
+  "src/tooling/celestrakFallback.test.mjs"
 ]

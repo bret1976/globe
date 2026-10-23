@@ -2,10 +2,7 @@ import {
   DEFAULT_FLIGHT_VIEW_ANCHOR,
   normalizeAdsbLolPointResponse,
 } from '../../../src/data/adsbLolFallback.js';
-import {
-  adsbLolMayRequest,
-  noteAdsbLolResponse,
-} from './adsbLolGate.js';
+import { adsbLolMayRequest, noteAdsbLolResponse } from './adsbLolGate.js';
 import {
   coalesceProxyRequest,
   readResponseJsonCapped,

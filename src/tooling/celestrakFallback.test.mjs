@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { promises as fsp } from 'node:fs';
 import { celestrakProxy } from '../../server/providers/space/celestrak.js';
-import { fallbackTleUrl } from '../data/spaceProviderRequests.js';
+import { fallbackTleUrl, mirrorOmmUrl } from '../data/spaceProviderRequests.js';
+import { parseOrbitalElements } from '../sources/orbitalElements.js';
 
 function install(plugin) {
   let handler;
@@ -31,12 +32,12 @@ function install(plugin) {
 const OLD =
   'ISS (ZARYA)\n1 25544U OLD-L1\n2 25544 OLD-L2\nCSS (TIANHE)\n1 48274U OLD-L1\n2 48274 OLD-L2\n';
 
-function setup(t, t0) {
+function setup(t, t0, prior = OLD) {
   let now = t0;
   t.mock.method(Date, 'now', () => now);
   t.mock.method(console, 'warn', () => {});
   t.mock.method(fsp, 'readFile', async () =>
-    JSON.stringify({ at: t0 - 7 * 3600_000, body: OLD }),
+    JSON.stringify({ at: t0 - 7 * 3600_000, body: prior }),
   );
   t.mock.method(fsp, 'mkdir', async () => {});
   const writes = [];
@@ -181,4 +182,136 @@ test('a stale mirror is rejected and the per-satellite fallback runs', async (t)
   await settle();
   assert.equal(writes.length, 1);
   assert.equal(writes[0].source, 'fallback');
+});
+
+// OMM fixtures: CelesTrak serves catalog numbers above 99999 only as OMM JSON.
+const omm = (id, name, epoch, extra = {}) => ({
+  OBJECT_NAME: name,
+  OBJECT_ID: '2026-233A',
+  EPOCH: epoch,
+  MEAN_MOTION: 15.48899044,
+  ECCENTRICITY: 0.00067481,
+  INCLINATION: 51.6326,
+  RA_OF_ASC_NODE: 58.3278,
+  ARG_OF_PERICENTER: 271.9059,
+  MEAN_ANOMALY: 88.1156,
+  EPHEMERIS_TYPE: 0,
+  CLASSIFICATION_TYPE: 'U',
+  NORAD_CAT_ID: id,
+  ELEMENT_SET_NO: 999,
+  REV_AT_EPOCH: 32,
+  BSTAR: 0.0001501181,
+  MEAN_MOTION_DOT: 0.00007803,
+  MEAN_MOTION_DDOT: 0,
+  ...extra,
+});
+
+test('mirror OMM URL is a fixed GitHub origin with a sanitized slug', () => {
+  const u = mirrorOmmUrl('Stations/../x');
+  assert.equal(u.origin, 'https://raw.githubusercontent.com');
+  assert.equal(
+    u.pathname,
+    '/satvisorcom/satvisor-data/master/celestrak/json/stationsx.json',
+  );
+});
+
+test('CelesTrak OMM JSON is forwarded as JSON with six-digit catalog numbers', async (t) => {
+  const { writes } = setup(t, Date.UTC(2026, 9, 23));
+  const body = JSON.stringify([
+    omm(25544, 'ISS (ZARYA)', '2026-10-22T18:57:11.728512'),
+    omm(101031, 'DRAGON CRS-35', '2026-10-22T18:57:11.728512'),
+  ]);
+  const seen = [];
+  t.mock.method(globalThis, 'fetch', async (url) => {
+    seen.push(url);
+    return new Response(body);
+  });
+  const request = install(celestrakProxy());
+  await request('/stations');
+  await settle();
+  assert.equal(new URL(seen[0]).searchParams.get('FORMAT'), 'json');
+  assert.equal(writes.length, 1);
+  assert.equal(writes[0].source, 'celestrak');
+  const hit = await request('/stations');
+  assert.equal(hit.headers['x-tle-cache'], 'HIT');
+  assert.match(hit.headers['Content-Type'], /^application\/json/);
+  assert.deepEqual(
+    parseOrbitalElements(hit.body).map((e) => e.omm.NORAD_CAT_ID),
+    [25544, 101031],
+  );
+});
+
+test('the JSON mirror is preferred, and a stale one falls back to the TLE mirror', async (t) => {
+  const { writes } = setup(t, Date.UTC(2026, 9, 23));
+  let jsonEpoch = '2026-10-22T12:00:00.000000';
+  const seen = [];
+  t.mock.method(globalThis, 'fetch', async (url) => {
+    seen.push(url);
+    if (url.includes('celestrak.')) return new Response('', { status: 403 });
+    if (url.endsWith('/json/stations.json'))
+      return Response.json([
+        omm(25544, 'ISS (ZARYA)', jsonEpoch),
+        omm(101031, 'DRAGON CRS-35', jsonEpoch),
+      ]);
+    if (url.endsWith('/tle/stations.tle'))
+      return new Response(
+        'ISS (ZARYA)\n1 25544U 98067A   26295.50000000  TLEMIRROR\n2 25544 X\n',
+      );
+    return new Response('no', { status: 500 });
+  });
+  await install(celestrakProxy())('/stations');
+  await settle();
+  assert.equal(writes.length, 1);
+  assert.equal(writes[0].source, 'mirror');
+  assert.match(writes[0].body, /"NORAD_CAT_ID":101031/);
+  assert.ok(!seen.some((url) => url.endsWith('.tle')));
+
+  jsonEpoch = '2026-10-01T00:00:00.000000'; // > 5 days old
+  seen.length = 0;
+  writes.length = 0;
+  await install(celestrakProxy())('/stations');
+  await settle();
+  assert.equal(writes.length, 1);
+  assert.equal(writes[0].source, 'mirror');
+  assert.match(writes[0].body, /TLEMIRROR/);
+});
+
+test('SatNOGS refreshes five-digit objects of an OMM catalog and keeps six-digit ones', async (t) => {
+  const prior = JSON.stringify([
+    omm(25544, 'ISS (ZARYA)', '2026-10-01T00:00:00.000000', {
+      OBJECT_ID: '1998-067A',
+    }),
+    omm(101031, 'DRAGON CRS-35', '2026-10-01T00:00:00.000000'),
+  ]);
+  const { writes } = setup(t, Date.UTC(2026, 9, 23), prior);
+  const iss = [
+    '1 25544U 98067A   26295.78971908  .00007803  00000+0  15012-3 0  9993',
+    '2 25544  51.6326  58.3278 0006748 271.9059  88.1156 15.48899044590607',
+  ];
+  t.mock.method(globalThis, 'fetch', async (url) => {
+    if (url.includes('celestrak.')) return new Response('', { status: 403 });
+    if (url.includes('githubusercontent'))
+      return new Response('', { status: 404 });
+    if (url.includes('satnogs'))
+      return Response.json([
+        { norad_cat_id: 25544, tle1: iss[0], tle2: iss[1] },
+      ]);
+    return new Response('rate limited', { status: 429 });
+  });
+  await install(celestrakProxy())('/stations');
+  await settle();
+  assert.equal(writes.length, 1);
+  assert.equal(writes[0].source, 'fallback');
+  const rows = JSON.parse(writes[0].body);
+  assert.equal(rows[0].TLE_LINE1, iss[0]);
+  assert.equal(rows[0].OBJECT_ID, '1998-067A');
+  assert.equal(rows[1].NORAD_CAT_ID, 101031);
+  assert.equal(rows[1].EPOCH, '2026-10-01T00:00:00.000000');
+  const entries = parseOrbitalElements(writes[0].body);
+  assert.deepEqual(entries[0], {
+    name: 'ISS (ZARYA)',
+    line1: iss[0],
+    line2: iss[1],
+  });
+  assert.equal(entries[1].omm.NORAD_CAT_ID, 101031);
 });

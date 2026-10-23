@@ -5,9 +5,13 @@ import {
   eciToGeodetic,
   degreesLong,
   degreesLat,
-  twoline2satrec,
 } from 'satellite.js';
 import { findNextIssPass } from '../../data/issPass.js';
+import {
+  elementsLaunchYear,
+  parseOrbitalElements,
+  satrecFromElements,
+} from '../../sources/orbitalElements.js';
 import { ORBIT_PATH_STEPS, ISS_NORAD } from './policy.js';
 
 export function createOrbits({ state: layerState, services, parts, source }) {
@@ -38,26 +42,10 @@ export function createOrbits({ state: layerState, services, parts, source }) {
   }
 
   /**
-   * Parse TLE text into array of { name, line1, line2 } objects.
+   * Parse CelesTrak OMM JSON or TLE text into catalog entries.
    */
 
-  function parseTLE(text) {
-    const lines = text
-      .trim()
-      .split('\n')
-      .map((l) => l.trim())
-      .filter((l) => l.length > 0);
-    const result = [];
-    for (let i = 0; i < lines.length - 2; i += 3) {
-      const name = lines[i];
-      const line1 = lines[i + 1];
-      const line2 = lines[i + 2];
-      if (line1.startsWith('1 ') && line2.startsWith('2 ')) {
-        result.push({ name, line1, line2 });
-      }
-    }
-    return result;
-  }
+  const parseTLE = parseOrbitalElements;
 
   /**
    * Propagate satellite position at a given JS Date.
@@ -213,12 +201,6 @@ export function createOrbits({ state: layerState, services, parts, source }) {
     return layerState._lookupTleEntries;
   }
 
-  function tleLineLaunchYear(line1) {
-    const shortYear = Number(String(line1 || '').slice(9, 11));
-    if (!Number.isFinite(shortYear)) return null;
-    return shortYear >= 57 ? 1900 + shortYear : 2000 + shortYear;
-  }
-
   function orbitTrackFromRecord(name, satrec) {
     const referenceDate = new Date();
     const current = propagatePosition(satrec, referenceDate);
@@ -238,7 +220,7 @@ export function createOrbits({ state: layerState, services, parts, source }) {
    * Find and propagate a mission payload directly from a TLE catalog.
    * This supports newly launched payloads that are present in CelesTrak's active
    * feed but have not yet moved into a narrower operational group.
-   * @param {string} tleText Three-line-element catalog text.
+   * @param {string} tleText CelesTrak OMM JSON or three-line-element catalog text.
    * @param {string} query Mission or payload name.
    * @param {{launchTime?: string|null}} [options] Optional launch epoch for namesake rejection.
    * @returns {{noradId:number,name:string,current:object,periodSec:number,orbitPath:Cesium.Cartesian3[],positionAt:function(Date):object|null}|null}
@@ -252,7 +234,7 @@ export function createOrbits({ state: layerState, services, parts, source }) {
     let bestScore = 0;
     const catalogText = String(tleText || '');
     for (const entry of lookupTleEntries(catalogText)) {
-      const designatorYear = tleLineLaunchYear(entry.line1);
+      const designatorYear = elementsLaunchYear(entry);
       if (
         launchYear !== null &&
         designatorYear !== null &&
@@ -266,7 +248,7 @@ export function createOrbits({ state: layerState, services, parts, source }) {
       }
     }
     if (!bestEntry || bestScore < 12) return null;
-    const satrec = twoline2satrec(bestEntry.line1, bestEntry.line2);
+    const satrec = satrecFromElements(bestEntry);
     if (!satrec || satrec.error !== 0) return null;
     return orbitTrackFromRecord(bestEntry.name, satrec);
   }
@@ -319,7 +301,6 @@ export function createOrbits({ state: layerState, services, parts, source }) {
     scoreSatelliteNameMatch,
     internationalDesignatorYear,
     lookupTleEntries,
-    tleLineLaunchYear,
     orbitTrackFromRecord,
     findSatelliteOrbitTrackInTle,
     getSatelliteOrbitTrack,
