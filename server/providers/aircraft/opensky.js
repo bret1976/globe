@@ -3,6 +3,10 @@ import {
   normalizeAdsbLolPointResponse,
 } from '../../../src/data/adsbLolFallback.js';
 import {
+  adsbLolMayRequest,
+  noteAdsbLolResponse,
+} from './adsbLolGate.js';
+import {
   coalesceProxyRequest,
   readResponseJsonCapped,
 } from '../common/http.js';
@@ -82,6 +86,17 @@ const ADSBLOL_POINT_CACHE_MS = 12000;
 const ADSBLOL_POINT_CACHE_MAX = 80;
 const ADSBLOL_POINT_RADIUS_NM = 250;
 const ADSBLOL_POINT_MAX_RESPONSE_BYTES = 8 * 1024 * 1024;
+// A failed anchor is not re-asked for this long, so one request falling
+// through the OpenSky branches never repeats the same failing upstream call.
+const ADSBLOL_POINT_FAILURE_HOLD_MS = 10_000;
+// Last-good regional frames stay servable (marked STALE) for this long while
+// adsb.lol is rate limited or unreachable; older frames are frozen traffic.
+const ADSBLOL_POINT_STALE_MAX_MS = 20 * 60_000;
+// A last-good frame from a nearby anchor (within ~2°, well inside the 250 nm
+// radius) beats a 502 for a view that has never been fetched.
+const ADSBLOL_POINT_NEAR_MAX_DEG = 2;
+/** Per-anchor epoch-ms until which a failed anchor is not re-fetched. */
+const _adsbLolPointFailedUntil = new Map();
 // A 200 response can still contain an old OpenSky snapshot. Past this point
 // the viewport-scoped adsb.lol source is more honest and keeps local motion
 // current instead of coasting a stale worldwide frame indefinitely.
@@ -250,6 +265,30 @@ function resolveAdsbLolAnchor(req) {
   return adsbLolFallbackAnchor(req) || DEFAULT_FLIGHT_VIEW_ANCHOR;
 }
 
+/**
+ * Best last-good regional frame for an anchor: its own cached frame, else the
+ * freshest frame cached for an anchor within ADSBLOL_POINT_NEAR_MAX_DEG. Both
+ * are bounded by ADSBLOL_POINT_STALE_MAX_MS.
+ */
+function staleAdsbLolPointFrame(cacheKey, latitude, longitude, now) {
+  const own = _adsbLolPointCache.get(cacheKey);
+  if (own && now - own.cachedAt <= ADSBLOL_POINT_STALE_MAX_MS)
+    return { ...own, cacheStatus: 'STALE' };
+  let best = null;
+  for (const record of _adsbLolPointCache.values()) {
+    if (!Number.isFinite(record.latitude) || !Number.isFinite(record.longitude))
+      continue;
+    if (now - record.cachedAt > ADSBLOL_POINT_STALE_MAX_MS) continue;
+    const dLat = Math.abs(record.latitude - latitude);
+    const dLon =
+      Math.abs(((record.longitude - longitude + 540) % 360) - 180) *
+      Math.cos((latitude * Math.PI) / 180);
+    if (Math.hypot(dLat, dLon) > ADSBLOL_POINT_NEAR_MAX_DEG) continue;
+    if (!best || record.cachedAt > best.cachedAt) best = record;
+  }
+  return best ? { ...best, cacheStatus: 'STALE-NEAR' } : null;
+}
+
 async function fetchAdsbLolPointFallback(req) {
   const anchor = resolveAdsbLolAnchor(req);
   const roundedLat = Math.round(anchor.latitude * 4) / 4;
@@ -259,6 +298,14 @@ async function fetchAdsbLolPointFallback(req) {
   const now = Date.now();
   if (cached && now - cached.cachedAt < ADSBLOL_POINT_CACHE_MS) {
     return { ...cached, cacheStatus: 'HIT' };
+  }
+  // Shared 429 cooldown or a just-failed anchor: answer from last-good frames
+  // without another upstream call (repeating it keeps the rate limit tripped).
+  if (
+    !adsbLolMayRequest(now) ||
+    now < (_adsbLolPointFailedUntil.get(cacheKey) || 0)
+  ) {
+    return staleAdsbLolPointFrame(cacheKey, roundedLat, roundedLon, now);
   }
 
   const request = coalesceProxyRequest(
@@ -278,7 +325,11 @@ async function fetchAdsbLolPointFallback(req) {
             signal: controller.signal,
           },
         );
-        if (!upstream.ok) throw new Error(`upstream HTTP ${upstream.status}`);
+        noteAdsbLolResponse(upstream.status, upstream.headers);
+        if (!upstream.ok) {
+          upstream.body?.cancel?.().catch(() => {});
+          throw new Error(`upstream HTTP ${upstream.status}`);
+        }
         const payload = await readResponseJsonCapped(
           upstream,
           ADSBLOL_POINT_MAX_RESPONSE_BYTES,
@@ -288,13 +339,27 @@ async function fetchAdsbLolPointFallback(req) {
           body: JSON.stringify(normalized),
           cachedAt: Date.now(),
           count: normalized.states.length,
+          latitude: roundedLat,
+          longitude: roundedLon,
         };
+        _adsbLolPointFailedUntil.delete(cacheKey);
         _adsbLolPointCache.delete(cacheKey);
         _adsbLolPointCache.set(cacheKey, record);
         while (_adsbLolPointCache.size > ADSBLOL_POINT_CACHE_MAX) {
           _adsbLolPointCache.delete(_adsbLolPointCache.keys().next().value);
         }
         return record;
+      } catch (error) {
+        _adsbLolPointFailedUntil.set(
+          cacheKey,
+          Date.now() + ADSBLOL_POINT_FAILURE_HOLD_MS,
+        );
+        while (_adsbLolPointFailedUntil.size > ADSBLOL_POINT_CACHE_MAX) {
+          _adsbLolPointFailedUntil.delete(
+            _adsbLolPointFailedUntil.keys().next().value,
+          );
+        }
+        throw error;
       } finally {
         clearTimeout(timeoutId);
       }
@@ -307,7 +372,7 @@ async function fetchAdsbLolPointFallback(req) {
     if (!request.shared && error?.name !== 'AbortError') {
       console.warn('[adsb.lol Flights Fallback]', error?.message || error);
     }
-    return cached ? { ...cached, cacheStatus: 'STALE' } : null;
+    return staleAdsbLolPointFrame(cacheKey, roundedLat, roundedLon, Date.now());
   }
 }
 
@@ -324,6 +389,13 @@ async function serveAdsbLolPointFallback(req, res, requestedMode, reason) {
     'X-Flight-Source': 'adsb.lol',
     'X-Flight-Coverage': `${ADSBLOL_POINT_RADIUS_NM}nm regional live`,
     'X-Flight-Count': String(fallback.count),
+    ...(fallback.cacheStatus.startsWith('STALE')
+      ? {
+          'X-Flight-Stale-Seconds': String(
+            Math.max(0, Math.round((Date.now() - fallback.cachedAt) / 1000)),
+          ),
+        }
+      : {}),
   });
   res.end(fallback.body);
   return true;

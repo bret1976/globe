@@ -5,6 +5,10 @@ import { WebSocketServer } from 'ws';
 import { setTimeout as delay } from 'node:timers/promises';
 import * as providers from '../../server/providers/live.js';
 import * as portable from '../../src/data/adsbLolFallback.js';
+import { resetAdsbLolGate } from '../../server/providers/aircraft/adsbLolGate.js';
+
+// The adsb.lol rate-limit gate is host-wide; each test starts uncooled.
+test.beforeEach(() => resetAdsbLolGate());
 
 function install(plugin, preview = false) {
   const routes = new Map();
@@ -372,6 +376,7 @@ test('military cooldown bounds untrusted Retry-After and defaults server errors'
     [429, '99999', 120],
     [503, 'invalid', 15],
   ]) {
+    resetAdsbLolGate(); // each case measures a fresh route, not the shared gate
     t.mock.method(
       globalThis,
       'fetch',
