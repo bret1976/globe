@@ -315,3 +315,31 @@ test('SatNOGS refreshes five-digit objects of an OMM catalog and keeps six-digit
   });
   assert.equal(entries[1].omm.NORAD_CAT_ID, 101031);
 });
+
+test('a fresh TLE cache from before the OMM switch is served but refreshed at once', async (t) => {
+  const t0 = Date.UTC(2026, 9, 23);
+  const { writes } = setup(t, t0);
+  t.mock.method(fsp, 'readFile', async () =>
+    JSON.stringify({ at: t0 - 60_000, body: OLD, source: 'mirror' }),
+  );
+  const seen = [];
+  t.mock.method(globalThis, 'fetch', async (url) => {
+    seen.push(url);
+    return Response.json([
+      omm(25544, 'ISS (ZARYA)', '2026-10-22T18:57:11.728512'),
+      omm(101031, 'DRAGON CRS-35', '2026-10-22T18:57:11.728512'),
+    ]);
+  });
+  const request = install(celestrakProxy());
+  const first = await request('/stations');
+  assert.equal(first.headers['x-tle-cache'], 'STALE');
+  assert.equal(first.body, OLD);
+  await settle();
+  assert.equal(new URL(seen[0]).searchParams.get('FORMAT'), 'json');
+  assert.equal(writes.length, 1);
+  assert.equal(writes[0].v, 2);
+  const hit = await request('/stations');
+  assert.equal(hit.headers['x-tle-cache'], 'HIT');
+  assert.match(hit.body, /101031/);
+  assert.equal(seen.length, 1);
+});

@@ -464,7 +464,10 @@ export function celestrakProxy() {
           entry = await readSeed(group);
           if (entry) mem.set(group, entry);
         }
-        if (entry && now - entry.at < TLE_TTL_MS) {
+        // A TLE cache written before the OMM switch lacks six-digit objects:
+        // serve it, but refresh now instead of waiting out its 6 h TTL.
+        const current = entry && (entry.v === 2 || isOmmBody(entry.body));
+        if (entry && current && now - entry.at < TLE_TTL_MS) {
           send(200, entry.body, entry.at ? 'HIT' : 'SEED');
           return;
         }
@@ -475,6 +478,7 @@ export function celestrakProxy() {
             return Promise.resolve(null);
           const pending = fetchUpstream(group, entry)
             .then(async (fresh) => {
+              fresh.v = 2; // fetched by the OMM-aware chain (may still be TLE)
               groupFailures.delete(group);
               mem.set(group, fresh);
               await writeDisk(group, fresh);
