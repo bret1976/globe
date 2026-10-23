@@ -390,3 +390,21 @@ test('military cooldown bounds untrusted Retry-After and defaults server errors'
     assert.equal(Number(result.headers['retry-after']), seconds);
   }
 });
+
+test('retired military history refuses without upstream I/O while validating identifiers', async (t) => {
+  t.mock.method(globalThis, 'fetch', async () => {
+    assert.fail('retired history must not contact the upstream');
+  });
+  const route = install(providers.trackBackfillProxies());
+  for (const hex of ['abc123', 'abc456']) {
+    const response = await route('/api/adsblol/trace', '?hex=' + hex);
+    assert.equal(response.statusCode, 503);
+    assert.equal(JSON.parse(response.body).code, 'history_unavailable');
+    assert.equal(response.headers['retry-after'], '1800');
+    assert.equal(response.headers['cache-control'], 'no-store');
+  }
+  assert.equal(
+    (await route('/api/adsblol/trace', '?hex=invalid')).statusCode,
+    400,
+  );
+});
