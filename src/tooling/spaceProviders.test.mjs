@@ -119,6 +119,9 @@ test('exported CelesTrak plugin coalesces refreshes, retains stale elements, and
   assert.equal(stale.body, tle);
   // Cached TLEs are returned before the background refresh settles.
   assert.equal(stale.headers['x-tle-cache'], 'STALE');
+  // Let the background refresh and its fallback chain finish under this
+  // test's fetch mock; otherwise it leaks into the next test's fetch count.
+  await new Promise((resolve) => setTimeout(resolve, 50));
   t.mock.method(fsp, 'readFile', async () =>
     JSON.stringify({ at: now, body: tle }),
   );
