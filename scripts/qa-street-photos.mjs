@@ -6,7 +6,11 @@
 import path from 'node:path';
 import fs from 'node:fs/promises';
 import puppeteer from 'puppeteer';
-import { twoline2satrec, propagate } from 'satellite.js';
+import { propagate } from 'satellite.js';
+import {
+  parseOrbitalElements,
+  satrecFromElements,
+} from '../src/sources/orbitalElements.js';
 
 const args = process.argv.slice(2);
 const arg = (n, d) => {
@@ -29,18 +33,16 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 for (const group of ['stations', 'visual']) {
   const res = await fetch(`${BASE}/api/celestrak/${group}`);
   const body = await res.text();
-  const l1 = body.split('\n').find((l) => l.startsWith('1 '));
-  const l2 = body.split('\n').find((l) => l.startsWith('2 '));
-  const yy = Number(l1.slice(18, 20));
-  const doy = Number(l1.slice(20, 32));
-  const epoch = Date.UTC(2000 + yy, 0, 1) + (doy - 1) * 86400000;
+  const [entry] = parseOrbitalElements(body);
+  const rec = satrecFromElements(entry);
+  // Element-set epoch (Julian date) from OMM or TLE alike.
+  const epoch = (rec.jdsatepoch - 2440587.5) * 86400000;
   const ageDays = (Date.now() - epoch) / 86400000;
   check(
     `TLE ${group} epoch recent`,
     ageDays < 4,
     `age ${ageDays.toFixed(2)} d, cache ${res.headers.get('x-tle-cache')}, source ${res.headers.get('x-tle-source')}`,
   );
-  const rec = twoline2satrec(l1, l2);
   const a = propagate(rec, new Date()).position;
   const b = propagate(rec, new Date(Date.now() + 10_000)).position;
   const moved = Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);

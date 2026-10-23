@@ -2,8 +2,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promises as fsp } from 'node:fs';
 import {
-  celestrakTleUrl,
+  celestrakOmmUrl,
   fallbackTleUrl,
+  mirrorOmmUrl,
   mirrorTleUrl,
 } from '../../../src/data/spaceProviderRequests.js';
 
@@ -13,17 +14,17 @@ const SEED_DIR = path.join(
 );
 
 /**
- * Vite plugin: CelesTrak TLE proxy.
+ * Vite plugin: CelesTrak GP proxy (OMM JSON, TLE accepted from old caches).
  *
  * CelesTrak does not send CORS headers, so this middleware fetches
- * satellite TLE data server-side and forwards it to the browser.
+ * satellite element sets server-side and forwards them to the browser.
  * Upstream URL: https://celestrak.org/NORAD/elements/gp.php
  *
  * @returns {import('vite').Plugin}
  */
 /**
- * CelesTrak GP/TLE proxy with a memory + disk cache.
- * Upstream: https://celestrak.org/NORAD/elements/gp.php?GROUP=<group>&FORMAT=tle
+ * CelesTrak GP proxy with a memory + disk cache (GROUP=<group>&FORMAT=json).
+ * Upstream: https://celestrak.org/NORAD/elements/gp.php?GROUP=<group>&FORMAT=json
  * CelesTrak asks clients not to re-fetch GP data more than ~every 2 h and
  * throttles offenders; every dev reload used to refetch every group. Cache TTL
  * 6 h; on upstream failure the freshest stale copy is served (a stale TLE
@@ -58,6 +59,24 @@ export function celestrakProxy() {
     }
   }
 
+  // OMM JSON is the only GP format with catalog numbers above 99999 (CelesTrak
+  // began assigning them in 2026: new ISS visiting vehicles, fresh launches).
+  // TLE text stays accepted from older caches, seeds and the TLE-only mirror.
+  const isOmmBody = (body) =>
+    /^\s*\[\s*\{/.test(String(body)) && String(body).includes('"NORAD_CAT_ID"');
+  const isTleBody = (body) => /^1 /m.test(String(body));
+  const isElementsBody = (body) => isOmmBody(body) || isTleBody(body);
+  const parseOmm = (body) => {
+    try {
+      const rows = JSON.parse(String(body));
+      return Array.isArray(rows)
+        ? rows.filter((r) => r && typeof r === 'object')
+        : [];
+    } catch {
+      return [];
+    }
+  };
+
   async function readSeed(group) {
     try {
       const parsed = JSON.parse(
@@ -66,7 +85,7 @@ export function celestrakProxy() {
           'utf8',
         ),
       );
-      if (typeof parsed?.body === 'string' && /^1 /m.test(parsed.body)) {
+      if (typeof parsed?.body === 'string' && isElementsBody(parsed.body)) {
         return { at: Number(parsed.at) || 0, body: parsed.body };
       }
     } catch {
@@ -139,7 +158,7 @@ export function celestrakProxy() {
     let lastError = null;
     for (const host of hosts) {
       try {
-        const url = celestrakTleUrl(group);
+        const url = celestrakOmmUrl(group);
         url.hostname = host;
         const res = await fetch(url.toString(), {
           signal: AbortSignal.timeout(8_000),
@@ -147,7 +166,8 @@ export function celestrakProxy() {
         });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const body = await res.text();
-        if (!/^1 /m.test(body)) throw new Error('no TLE lines in response');
+        // An error page parses to zero records: a failure, keep the cache.
+        if (!isOmmBody(body)) throw new Error('no OMM records in response');
         primaryFailures = 0;
         primaryBlockedUntil = 0;
         return { at: Date.now(), body, source: 'celestrak' };
@@ -160,9 +180,18 @@ export function celestrakProxy() {
     throw lastError || new Error('celestrak unreachable');
   }
 
-  /** Newest TLE epoch in a body, as epoch ms (0 when none parse). */
+  /** Newest element-set epoch in an OMM or TLE body, as epoch ms (0 when none parse). */
   function newestEpochMs(body) {
     let best = 0;
+    if (isOmmBody(body)) {
+      for (const row of parseOmm(body)) {
+        if (typeof row.EPOCH !== 'string') continue;
+        // OMM EPOCH is UTC with microseconds and no zone designator.
+        const at = Date.parse(row.EPOCH.slice(0, 23) + 'Z');
+        if (Number.isFinite(at)) best = Math.max(best, at);
+      }
+      return best;
+    }
     for (const line of String(body).split(/\r?\n/)) {
       if (!line.startsWith('1 ')) continue;
       const yy = Number(line.slice(18, 20));
@@ -175,10 +204,28 @@ export function celestrakProxy() {
   }
 
   // First fallback: a GitHub mirror of CelesTrak's own group files
-  // (satvisorcom/satvisor-data, cron-refreshed). Same group, same format,
-  // one request; rejected when its newest epoch is over 5 days old.
+  // (satvisorcom/satvisor-data, cron-refreshed). Same group, one request,
+  // OMM JSON first (six-digit ids), its TLE copy second; rejected when the
+  // newest epoch is over 5 days old.
   const MIRROR_MAX_AGE_MS = 5 * 86400_000;
   async function fetchMirror(group) {
+    try {
+      const res = await fetch(mirrorOmmUrl(group).toString(), {
+        signal: AbortSignal.timeout(20_000),
+        headers: { 'User-Agent': UA },
+      });
+      if (!res.ok) throw new Error(`mirror HTTP ${res.status}`);
+      const body = await res.text();
+      if (!isOmmBody(body)) throw new Error('mirror: no OMM records');
+      if (Date.now() - newestEpochMs(body) > MIRROR_MAX_AGE_MS)
+        throw new Error('mirror: stale');
+      return { at: Date.now(), body, source: 'mirror' };
+    } catch {
+      return fetchMirrorTle(group);
+    }
+  }
+
+  async function fetchMirrorTle(group) {
     const res = await fetch(mirrorTleUrl(group).toString(), {
       signal: AbortSignal.timeout(20_000),
       headers: { 'User-Agent': UA },
@@ -260,6 +307,7 @@ export function celestrakProxy() {
    * refresh keep their previous elements; at least half must refresh.
    */
   async function fetchFallback(prior) {
+    if (isOmmBody(prior?.body)) return fetchFallbackOmm(prior);
     const sats = parseTle(prior?.body || '');
     if (!sats.length) throw new Error('no catalog to refresh from fallback');
     let ok = 0;
@@ -296,6 +344,73 @@ export function celestrakProxy() {
     return { at, body, source: 'fallback', refreshed: ok, total: sats.length };
   }
 
+  /**
+   * Fallback for an OMM catalog. The fallback sources only speak TLE, so a
+   * five-digit object they refresh is written back as an item carrying
+   * TLE_LINE1/TLE_LINE2 (the browser parses either form); six-digit objects
+   * cannot be refreshed there and keep their previous OMM elements.
+   */
+  async function fetchFallbackOmm(prior) {
+    const rows = parseOmm(prior.body);
+    const tleId = (line) => Number(String(line || '').slice(2, 7));
+    const valid = (id, l1, l2) =>
+      typeof l1 === 'string' &&
+      typeof l2 === 'string' &&
+      l1.startsWith('1 ') &&
+      l2.startsWith('2 ') &&
+      tleId(l1) === id &&
+      tleId(l2) === id;
+    const refreshable = rows.filter(
+      (r) => Number.isSafeInteger(r.NORAD_CAT_ID) && r.NORAD_CAT_ID <= 99999,
+    );
+    if (!refreshable.length)
+      throw new Error('no five-digit catalog to refresh from fallback');
+    const byId = await fetchBulk();
+    const updated = new Map();
+    const missing = [];
+    for (const row of refreshable) {
+      const t = byId.get(String(row.NORAD_CAT_ID));
+      if (t && valid(row.NORAD_CAT_ID, t.l1, t.l2))
+        updated.set(row, { l1: t.l1, l2: t.l2 });
+      else missing.push(row);
+    }
+    await Promise.all(
+      missing.slice(0, PER_ID_CAP).map(async (row) => {
+        const j = await fetchFallbackOne(row.NORAD_CAT_ID).catch(() => null);
+        if (valid(row.NORAD_CAT_ID, j?.line1, j?.line2))
+          updated.set(row, { l1: j.line1, l2: j.line2 });
+      }),
+    );
+    const ok = updated.size;
+    if (ok < Math.ceil(refreshable.length / 2))
+      throw new Error(`fallback refreshed ${ok}/${refreshable.length}`);
+    const body = JSON.stringify(
+      rows.map((row) => {
+        const t = updated.get(row);
+        return t
+          ? {
+              OBJECT_NAME: row.OBJECT_NAME,
+              OBJECT_ID: row.OBJECT_ID,
+              NORAD_CAT_ID: row.NORAD_CAT_ID,
+              TLE_LINE1: t.l1,
+              TLE_LINE2: t.l2,
+            }
+          : row;
+      }),
+    );
+    const at =
+      ok < refreshable.length * 0.9
+        ? Date.now() - TLE_TTL_MS + PARTIAL_RETRY_MS
+        : Date.now();
+    return {
+      at,
+      body,
+      source: 'fallback',
+      refreshed: ok,
+      total: refreshable.length,
+    };
+  }
+
   async function fetchUpstream(group, prior) {
     try {
       return await fetchCelestrak(group);
@@ -328,7 +443,11 @@ export function celestrakProxy() {
         // throws "Cannot set headers after they are sent".
         if (res.headersSent) return;
         res.writeHead(status, {
-          'Content-Type': 'text/plain',
+          // OMM bodies are JSON (and get gzipped by the standalone server).
+          'Content-Type':
+            status === 200 && isOmmBody(body)
+              ? 'application/json; charset=utf-8'
+              : 'text/plain',
           'x-tle-cache': cacheStatus,
           'x-tle-source': entry?.source || (entry?.at ? 'celestrak' : 'seed'),
         });
@@ -345,7 +464,10 @@ export function celestrakProxy() {
           entry = await readSeed(group);
           if (entry) mem.set(group, entry);
         }
-        if (entry && now - entry.at < TLE_TTL_MS) {
+        // A TLE cache written before the OMM switch lacks six-digit objects:
+        // serve it, but refresh now instead of waiting out its 6 h TTL.
+        const current = entry && (entry.v === 2 || isOmmBody(entry.body));
+        if (entry && current && now - entry.at < TLE_TTL_MS) {
           send(200, entry.body, entry.at ? 'HIT' : 'SEED');
           return;
         }
@@ -356,6 +478,7 @@ export function celestrakProxy() {
             return Promise.resolve(null);
           const pending = fetchUpstream(group, entry)
             .then(async (fresh) => {
+              fresh.v = 2; // fetched by the OMM-aware chain (may still be TLE)
               groupFailures.delete(group);
               mem.set(group, fresh);
               await writeDisk(group, fresh);

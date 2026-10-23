@@ -5,6 +5,10 @@ import { WebSocketServer } from 'ws';
 import { setTimeout as delay } from 'node:timers/promises';
 import * as providers from '../../server/providers/live.js';
 import * as portable from '../../src/data/adsbLolFallback.js';
+import { resetAdsbLolGate } from '../../server/providers/aircraft/adsbLolGate.js';
+
+// The adsb.lol rate-limit gate is host-wide; each test starts uncooled.
+test.beforeEach(() => resetAdsbLolGate());
 
 function install(plugin, preview = false) {
   const routes = new Map();
@@ -372,6 +376,7 @@ test('military cooldown bounds untrusted Retry-After and defaults server errors'
     [429, '99999', 120],
     [503, 'invalid', 15],
   ]) {
+    resetAdsbLolGate(); // each case measures a fresh route, not the shared gate
     t.mock.method(
       globalThis,
       'fetch',
@@ -384,4 +389,22 @@ test('military cooldown bounds untrusted Retry-After and defaults server errors'
     const result = await install(providers.adsbLolProxy())('/api/adsblol/mil');
     assert.equal(Number(result.headers['retry-after']), seconds);
   }
+});
+
+test('retired military history refuses without upstream I/O while validating identifiers', async (t) => {
+  t.mock.method(globalThis, 'fetch', async () => {
+    assert.fail('retired history must not contact the upstream');
+  });
+  const route = install(providers.trackBackfillProxies());
+  for (const hex of ['abc123', 'abc456']) {
+    const response = await route('/api/adsblol/trace', '?hex=' + hex);
+    assert.equal(response.statusCode, 503);
+    assert.equal(JSON.parse(response.body).code, 'history_unavailable');
+    assert.equal(response.headers['retry-after'], '1800');
+    assert.equal(response.headers['cache-control'], 'no-store');
+  }
+  assert.equal(
+    (await route('/api/adsblol/trace', '?hex=invalid')).statusCode,
+    400,
+  );
 });

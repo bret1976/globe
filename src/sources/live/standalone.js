@@ -1,5 +1,4 @@
 import {
-  epoch,
   finite,
   httpError,
   LiveSourceError,
@@ -149,26 +148,8 @@ export function createAdsbLolSource({
         status: response.status,
       };
     },
-    async getTrack(reference, { signal } = {}) {
-      const { response, payload } = await readResponse(
-        fetchImpl,
-        '/api/adsblol/trace?hex=' + encodeURIComponent(reference),
-        { signal },
-        'adsb.lol',
-      );
-      if (!response.ok) throw httpError(response, 'adsb.lol');
-      const baseTimeMs = epoch(payload?.timestamp, 1000);
-      return {
-        records:
-          baseTimeMs == null
-            ? []
-            : normalizeAircraftTrack(payload?.trace, {
-                baseTimeMs,
-                readsb: true,
-              }),
-        complete: false,
-      };
-    },
+    // ADSB.lol does not expose a supported live-history endpoint. Omitting
+    // optional getTrack keeps the tracking layer on its accumulated trail.
   };
 }
 

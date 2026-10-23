@@ -1,3 +1,8 @@
+import {
+  adsbLolCooldownRemainingMs,
+  noteAdsbLolResponse,
+} from './adsbLolGate.js';
+
 /**
  * Vite plugin: adsb.lol military aircraft proxy with 12 s response cache.
  *
@@ -74,6 +79,13 @@ export function adsbLolProxy() {
           serve(res, 200, _cache, 'HIT');
           return;
         }
+        // A 429 seen by another adsb.lol route (regional flights, GNSS)
+        // pauses this one too: the limit is per egress IP, not per route.
+        const sharedCooldownMs = adsbLolCooldownRemainingMs(now);
+        if (sharedCooldownMs > 0 && now + sharedCooldownMs > _cooldownUntil) {
+          _cooldownUntil = now + sharedCooldownMs;
+          _cooldownStatus = 429;
+        }
         if (now < _cooldownUntil) {
           const retryAfter = String(
             Math.ceil((_cooldownUntil - Date.now()) / 1000),
@@ -97,6 +109,7 @@ export function adsbLolProxy() {
         const upstream = await fetch('https://api.adsb.lol/v2/mil', {
           headers: { 'User-Agent': 'gods-eye-view-adsblol-proxy/1.0' },
         });
+        noteAdsbLolResponse(upstream.status, upstream.headers);
         if (upstream.ok) {
           const body = await upstream.text();
           _cache = body;

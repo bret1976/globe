@@ -6,6 +6,13 @@ export function celestrakTleUrl(group) {
   return url;
 }
 
+/** CelesTrak OMM JSON, the only GP format that carries six-digit catalog numbers. */
+export function celestrakOmmUrl(group) {
+  const url = celestrakTleUrl(group);
+  url.searchParams.set('FORMAT', 'json');
+  return url;
+}
+
 export function launchLibraryRecentUrl(end) {
   // Stable minute boundaries let different installations share LL2's cache.
   const roundedEnd = new Date(Math.floor(end.getTime() / 60000) * 60000);
@@ -31,5 +38,15 @@ export function mirrorTleUrl(group) {
     .replace(/[^a-z0-9-]/g, '');
   return new URL(
     `https://raw.githubusercontent.com/satvisorcom/satvisor-data/master/celestrak/tle/${slug}.tle`,
+  );
+}
+
+/** OMM JSON copy of the same mirrored group (carries six-digit catalog numbers). */
+export function mirrorOmmUrl(group) {
+  const slug = String(group)
+    .toLowerCase()
+    .replace(/[^a-z0-9-]/g, '');
+  return new URL(
+    `https://raw.githubusercontent.com/satvisorcom/satvisor-data/master/celestrak/json/${slug}.json`,
   );
 }
