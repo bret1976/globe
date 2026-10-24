@@ -6,12 +6,14 @@
 import * as Cesium from 'cesium';
 
 export const CYCLONE_LAYER_ID = 'weather-cyclones';
+export { stormLabel, stormTitle };
 
 function classificationColor(classification, windKt) {
   const wind = Number(windKt);
   if (Number.isFinite(wind) && wind >= 64)
     return Cesium.Color.fromCssColorString('#ff4d6d');
-  if (String(classification || '').toUpperCase().startsWith('HU'))
+  const code = String(classification || '').toUpperCase();
+  if (code === 'HU' || code === 'MH' || code === 'TY')
     return Cesium.Color.fromCssColorString('#ff4d6d');
   if (Number.isFinite(wind) && wind >= 34)
     return Cesium.Color.fromCssColorString('#ffb703');
@@ -23,7 +25,29 @@ function stormLabel(storm) {
     Number.isFinite(storm.windKt) && storm.windKt > 0
       ? ` · ${Math.round(storm.windKt)} kt`
       : '';
-  return `${storm.name}${wind}`;
+  // NHC names are bare ("Vance"); EONET titles already say "Hurricane Vance".
+  const kind = storm.classificationLabel;
+  const name =
+    kind && !String(storm.name).toLowerCase().includes(kind.toLowerCase())
+      ? `${kind} ${storm.name}`
+      : storm.name;
+  return `${name}${wind}`;
+}
+
+function stormTitle(storm) {
+  return [
+    storm.classificationLabel,
+    Number.isFinite(storm.windKt) && storm.windKt > 0
+      ? `${Math.round(storm.windKt)} kt`
+      : null,
+    Number.isFinite(storm.pressureMb) ? `${storm.pressureMb} mb` : null,
+    storm.movement ? `moving ${storm.movement}` : null,
+    storm.advisory ? `advisory ${storm.advisory}` : null,
+    storm.basin,
+    storm.source,
+  ]
+    .filter(Boolean)
+    .join(' · ');
 }
 
 /** Create the cyclone layer. */
@@ -166,7 +190,7 @@ export function createCyclonesLayer({ source, cesium = Cesium } = {}) {
           id: storm.id,
           label: storm.name,
           active: storm.id === selectedId,
-          title: [storm.basin, storm.source].filter(Boolean).join(' · '),
+          title: stormTitle(storm),
           params: { selected: storm.id },
         })),
       };

@@ -15,8 +15,103 @@ function text(value, max = 80) {
 }
 
 function number(value, min, max) {
+  // Number(null) and Number('') are 0; a missing field is not a zero.
+  if (value == null || value === '' || typeof value === 'boolean') return null;
   const n = Number(value);
   return Number.isFinite(n) && n >= min && n <= max ? n : null;
+}
+
+// NHC CurrentStorms.json writes positions as hemisphere strings ("12.4N",
+// "102.8W") and puts the decimals in latitudeNumeric / longitudeNumeric, so a
+// plain Number() of `latitude` drops every NHC storm. Read the numeric fields
+// first, then a plain number, then the hemisphere string.
+function coordinate(numeric, raw, positive, negative, limit) {
+  const direct = number(numeric, -limit, limit);
+  if (direct != null) return direct;
+  if (typeof raw === 'number') return number(raw, -limit, limit);
+  if (typeof raw !== 'string') return null;
+  const match = raw.trim().match(/^(-?\d+(?:\.\d+)?)\s*([A-Za-z])?$/);
+  if (!match) return null;
+  const value = Number(match[1]);
+  const hemisphere = match[2]?.toUpperCase();
+  if (hemisphere && hemisphere !== positive && hemisphere !== negative)
+    return null;
+  return number(
+    hemisphere === negative ? -Math.abs(value) : value,
+    -limit,
+    limit,
+  );
+}
+
+// NHC Tropical Cyclone Status JSON classification codes (PTC is
+// post-tropical, PC a potential tropical cyclone; subtropical systems are STS
+// and STD). Meanings follow upstream gods-eye-view #1349 (rudycelekli, MIT).
+const NHC_CLASSIFICATIONS = {
+  TD: 'Tropical depression',
+  TS: 'Tropical storm',
+  HU: 'Hurricane',
+  MH: 'Major hurricane',
+  TY: 'Typhoon',
+  STD: 'Subtropical depression',
+  STS: 'Subtropical storm',
+  PTC: 'Post-tropical cyclone',
+  PC: 'Potential tropical cyclone',
+  TC: 'Tropical cyclone',
+};
+
+export function classificationLabel(code) {
+  return NHC_CLASSIFICATIONS[String(code || '').toUpperCase()] || null;
+}
+
+const COMPASS = [
+  'N',
+  'NNE',
+  'NE',
+  'ENE',
+  'E',
+  'ESE',
+  'SE',
+  'SSE',
+  'S',
+  'SSW',
+  'SW',
+  'WSW',
+  'W',
+  'WNW',
+  'NW',
+  'NNW',
+];
+
+// CurrentStorms.json gives movementSpeed in miles per hour while intensity is
+// in knots (upstream gods-eye-view #1350, rudycelekli, MIT); report knots.
+function nhcMovement(raw) {
+  const legacy = text(raw?.movement, 40);
+  const direction = number(raw?.movementDir, 0, 360);
+  const mph = number(raw?.movementSpeed, 0, 200);
+  const speedKt = mph == null ? null : Math.round(mph * 0.868976);
+  if (direction == null && speedKt == null)
+    return { movement: legacy, movementDir: null, movementSpeedKt: null };
+  const parts = [];
+  if (direction != null && speedKt !== 0)
+    parts.push(COMPASS[Math.round(direction / 22.5) % 16]);
+  if (speedKt != null)
+    parts.push(speedKt === 0 ? 'stationary' : `${speedKt} kt`);
+  return {
+    movement: parts.join(' at '),
+    movementDir: direction,
+    movementSpeedKt: speedKt,
+  };
+}
+
+function nhcLink(raw) {
+  for (const value of [raw?.publicAdvisory?.url, raw?.url]) {
+    if (
+      typeof value === 'string' &&
+      /^https:\/\/www\.nhc\.noaa\.gov\//.test(value)
+    )
+      return value;
+  }
+  return 'https://www.nhc.noaa.gov/';
 }
 
 function normalizeNhc(payload) {
@@ -24,20 +119,39 @@ function normalizeNhc(payload) {
   for (const raw of payload?.activeStorms || []) {
     const id = text(raw?.id, 16)?.toLowerCase();
     const name = text(raw?.name || raw?.id, 40);
-    const lon = number(raw?.longitude ?? raw?.lon, -180, 180);
-    const lat = number(raw?.latitude ?? raw?.lat, -90, 90);
+    const lon = coordinate(
+      raw?.longitudeNumeric,
+      raw?.longitude ?? raw?.lon,
+      'E',
+      'W',
+      180,
+    );
+    const lat = coordinate(
+      raw?.latitudeNumeric,
+      raw?.latitude ?? raw?.lat,
+      'N',
+      'S',
+      90,
+    );
     if (!id || !name || lon == null || lat == null) continue;
+    const classification = text(raw?.classification, 8)?.toUpperCase() || 'TC';
     storms.push({
       id: `nhc:${id}`,
       name,
       basin: text(raw?.basin, 8) || id.slice(0, 2).toUpperCase(),
-      classification: text(raw?.classification, 8) || 'TC',
+      classification,
+      classificationLabel: classificationLabel(classification),
       windKt: number(raw?.intensity ?? raw?.windSpeed, 0, 250),
+      pressureMb: number(raw?.pressure, 850, 1100),
       lon,
       lat,
-      movement: text(raw?.movement, 40),
-      advisory: text(raw?.advNum || raw?.advisory, 8),
-      link: typeof raw?.url === 'string' ? raw.url : null,
+      ...nhcMovement(raw),
+      advisory: text(
+        raw?.publicAdvisory?.advNum || raw?.advNum || raw?.advisory,
+        8,
+      ),
+      updatedAt: text(raw?.lastUpdate || raw?.publicAdvisory?.issuance, 40),
+      link: nhcLink(raw),
       source: 'NHC',
     });
   }
@@ -88,12 +202,28 @@ function normalizeEonet(payload) {
 export function mergeCycloneSnapshots(nhc, eonet) {
   const storms = [...normalizeNhc(nhc)];
   for (const storm of normalizeEonet(eonet)) {
-    const duplicate = storms.some(
+    const duplicate = storms.find(
       (existing) =>
         Math.abs(existing.lon - storm.lon) < 1.5 &&
         Math.abs(existing.lat - storm.lat) < 1.5,
     );
-    if (!duplicate) storms.push(storm);
+    if (!duplicate) {
+      storms.push(storm);
+      continue;
+    }
+    // NHC has no past positions; keep EONET's track behind the NHC storm,
+    // ending at NHC's (newer) advisory position.
+    if (
+      duplicate.source === 'NHC' &&
+      !duplicate.track &&
+      Array.isArray(storm.track) &&
+      storm.track.length >= 1
+    ) {
+      duplicate.track = [
+        ...storm.track,
+        { lon: duplicate.lon, lat: duplicate.lat },
+      ];
+    }
   }
   return { fetchedAt: Date.now(), storms };
 }
