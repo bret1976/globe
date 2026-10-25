@@ -1,6 +1,30 @@
 import { applicationHtmlPlugin } from './application-html.js';
 import { hostedAssetsPlugin } from './hostedAssets.js';
 import cesium from 'vite-plugin-cesium';
+import { fileURLToPath } from 'node:url';
+
+/** HTML entry points: the globe and the standalone /watch dashboard. */
+export const HTML_ENTRIES = Object.freeze({
+  index: fileURLToPath(new URL('../index.html', import.meta.url)),
+  watch: fileURLToPath(new URL('../watch.html', import.meta.url)),
+});
+
+const CESIUM_TAGS = /[ \t]*<link[^>]+href="\/cesium\/Widgets\/widgets\.css"[^>]*>\s*|[ \t]*<script[^>]+src="\/cesium\/Cesium\.js"[^>]*><\/script>\s*/g;
+
+/** The /watch dashboard has no globe: drop the Cesium tags vite-plugin-cesium injects. */
+export function stripCesiumFromWatch(html, path = '') {
+  return /(^|\/)watch\.html$/.test(String(path)) ? html.replace(CESIUM_TAGS, '') : html;
+}
+
+function watchPagePlugin() {
+  return {
+    name: 'gev-watch-page',
+    transformIndexHtml: {
+      order: 'post',
+      handler: (html, ctx) => stripCesiumFromWatch(html, ctx?.filename || ctx?.path),
+    },
+  };
+}
 
 /** Build browser assets with explicit inputs; never load environment or providers. */
 export function createBrowserViteConfig({
@@ -17,6 +41,7 @@ export function createBrowserViteConfig({
       cesium(),
       applicationHtmlPlugin(),
       hostedAssetsPlugin(),
+      watchPagePlugin(),
       ...plugins,
     ],
     ...(publicDir === undefined ? {} : { publicDir }),
@@ -56,7 +81,10 @@ export function createBrowserViteConfig({
       'import.meta.env.GOOGLE_MAPS_API_KEY': JSON.stringify(googleApiKey),
       'import.meta.env.CESIUM_ION_TOKEN': JSON.stringify(cesiumToken),
     },
-    build: { chunkSizeWarningLimit: 1500 },
+    build: {
+      chunkSizeWarningLimit: 1500,
+      rollupOptions: { input: { ...HTML_ENTRIES } },
+    },
     // Transformers.js / Kokoro stay excluded from optimizeDeps above. Do not
     // set COOP/COEP — that would block Cesium ion tiles on other origins.
   };
