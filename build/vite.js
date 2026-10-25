@@ -5,9 +5,26 @@ import { fileURLToPath } from 'node:url';
 
 /** HTML entry points: the globe and the standalone /watch dashboard. */
 export const HTML_ENTRIES = Object.freeze({
-  main: fileURLToPath(new URL('../index.html', import.meta.url)),
+  index: fileURLToPath(new URL('../index.html', import.meta.url)),
   watch: fileURLToPath(new URL('../watch.html', import.meta.url)),
 });
+
+const CESIUM_TAGS = /[ \t]*<link[^>]+href="\/cesium\/Widgets\/widgets\.css"[^>]*>\s*|[ \t]*<script[^>]+src="\/cesium\/Cesium\.js"[^>]*><\/script>\s*/g;
+
+/** The /watch dashboard has no globe: drop the Cesium tags vite-plugin-cesium injects. */
+export function stripCesiumFromWatch(html, path = '') {
+  return /(^|\/)watch\.html$/.test(String(path)) ? html.replace(CESIUM_TAGS, '') : html;
+}
+
+function watchPagePlugin() {
+  return {
+    name: 'gev-watch-page',
+    transformIndexHtml: {
+      order: 'post',
+      handler: (html, ctx) => stripCesiumFromWatch(html, ctx?.filename || ctx?.path),
+    },
+  };
+}
 
 /** Build browser assets with explicit inputs; never load environment or providers. */
 export function createBrowserViteConfig({
@@ -24,6 +41,7 @@ export function createBrowserViteConfig({
       cesium(),
       applicationHtmlPlugin(),
       hostedAssetsPlugin(),
+      watchPagePlugin(),
       ...plugins,
     ],
     ...(publicDir === undefined ? {} : { publicDir }),

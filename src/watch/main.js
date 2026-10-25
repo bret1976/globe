@@ -10,6 +10,8 @@ import {
 } from './model.js';
 import { observeAircraftSnapshot, aircraftWentDarkSnapshot } from '../data/wentDarkAircraft.js';
 import { openSkySnapshot } from '../sources/live/aircraft.js';
+
+const FOOTER_CREDIT_KEYS = ['opensky', 'adsblol', 'aisstream', 'gpsjam'];
 import { PROVENANCE_COLORS, PROVENANCE_LABELS } from '../provenance/provenance.js';
 
 const $ = (id) => document.getElementById(id);
@@ -233,7 +235,8 @@ function tick() { $('updated').textContent = updatedAgo(state.updatedAt); }
 
 async function boot() {
   $('map-credit').textContent = 'Coastlines: Natural Earth 1:110m land (public domain).';
-  $('footer-licences').textContent = ['opensky', 'adsblol', 'aisstream', 'gpsjam'].map(licenceFor).join(' · ');
+  const footerText = FOOTER_CREDIT_KEYS.map(licenceFor).join(' · ');
+  $('footer-licences').textContent = footerText;
   $('jam-slider').addEventListener('input', (e) => showStep(Number(e.target.value)));
   $('jam-play').addEventListener('click', togglePlay);
   $('refresh-now').addEventListener('click', () => refresh());

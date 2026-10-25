@@ -13,7 +13,8 @@ test('explicit build inputs preserve browser-only defines, plugin order and loop
     cesiumToken: 'ion-fixture',
   });
   assert.equal(config.plugins[2].name, 'gev-hosted-assets');
-  assert.equal(config.plugins[3], plugin);
+  assert.equal(config.plugins[3].name, 'gev-watch-page');
+  assert.equal(config.plugins[4], plugin);
   assert.equal(config.server.host, 'localhost');
   assert.equal(config.server.port, 4173);
   assert.deepEqual(config.server.allowedHosts, [
@@ -57,8 +58,9 @@ test('build helper does not discover environment values or construct local provi
       config.define['import.meta.env.GOOGLE_MAPS_API_KEY'],
       undefined,
     );
-    assert.equal(config.plugins.length, 3);
+    assert.equal(config.plugins.length, 4);
     assert.equal(config.plugins[2].name, 'gev-hosted-assets');
+    assert.equal(config.plugins[3].name, 'gev-watch-page');
   } finally {
     if (before === undefined) delete process.env.GOOGLE_MAPS_API_KEY;
     else process.env.GOOGLE_MAPS_API_KEY = before;
@@ -70,11 +72,11 @@ test('root config retains existing named exports and standalone provider order',
     assert.equal(compatibility[name], value, name);
   const config = standaloneConfig({ mode: 'test' });
   // /api gzip runs before every provider so their responses can be compressed.
-  assert.equal(config.plugins.at(3).name, 'gev-api-compression');
+  assert.equal(config.plugins.at(4).name, 'gev-api-compression');
   // Stale-while-revalidate sits between gzip and the providers it fronts.
-  assert.equal(config.plugins.at(4).name, 'gev-api-swr');
+  assert.equal(config.plugins.at(5).name, 'gev-api-swr');
   assert.deepEqual(
-    config.plugins.slice(5, -2).map((plugin) => plugin.name),
+    config.plugins.slice(6, -2).map((plugin) => plugin.name),
     providers.localProviderPlugins().map((plugin) => plugin.name),
   );
   assert.equal(config.plugins.at(-3).name, 'gev-key-setup');

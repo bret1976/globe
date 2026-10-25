@@ -431,3 +431,13 @@ The required Google Maps / Cesium credit renders on the on-globe credit line (`#
 | Historical ADS-B | [ADSB.lol `globe_history_<year>`](https://github.com/adsblol) daily GitHub releases (readsb `trace_full` files) | ODbL 1.0 (ADSB.lol); releases also carry a CC0 LICENSE file. Credit "ADS-B: ADSB.lol (ODbL)" shown on the replay bar. | ~3 GB per UTC day, streamed and clipped server-side; never interpolated across gaps > 2 min. |
 | Historical AIS | [NOAA / BOEM MarineCadastre](https://coast.noaa.gov/htdata/CMSP/AISDataHandler/) daily US AIS | US Government public domain | US waters only; published through 2024 at time of writing — newer dates show "no ship history". |
 | Historical wind | [Open-Meteo historical forecast API](https://open-meteo.com/en/docs/historical-forecast-api) (`gfs_hrrr`, GFS fallback) | CC BY 4.0 (Open-Meteo); model data NOAA | Hourly 10 m wind on a 4×4 grid. |
+
+## /watch dashboard
+
+The `/watch` page (a 2D, Cesium-free dashboard) adds one bundled file and no new feeds:
+
+| Data | Source | License / terms | Notes |
+|---|---|---|---|
+| World land outline (`public/watch/land-110m.json`) | [Natural Earth](https://www.naturalearthdata.com/) 1:110m land, coordinates rounded to 0.1° | **Public domain** | Courtesy credit "Made with Natural Earth" shown in the page footer. |
+
+Everything else on `/watch` reads the globe's existing endpoints (`/api/opensky`, `/api/adsblol/mil`, `/api/ais-live/dark`, `/api/gpsjam*`, `/api/gnss-integrity/history`) and shows the same attributions listed above.

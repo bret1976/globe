@@ -4082,3 +4082,7 @@ releases imagery layers/listeners on replacement. Destroy invalidates pending
 work and releases owned resources, including late factory results. Supplied 3D
 tilesets remain owned by the caller; tilesets created through the controller's
 factory are added to its viewer and removed on destruction.
+
+## /watch dashboard
+
+`/watch` (`watch.html`, `src/watch/`) is a second Vite HTML entry: a 2D HUD with no Cesium (the build strips the Cesium tags vite-plugin-cesium injects). It polls existing endpoints every 30 s and shows per-feed health with a stale/partial/regional banner, went-dark ships (server tracker) and aircraft (tracked in-page, only when the flights feed is worldwide), a jamming timeline on a canvas map (30 gpsjam days + in-memory NIC/NACp frames, with region highlights and an honest history note), and the observed/inferred/simulated provenance table. Pure logic lives in `src/watch/model.js` (tested in `model.test.mjs`). Attribution strings that need no Cesium moved to `src/data/dataCreditList.js`; `dataCredits.js` re-exports them.
