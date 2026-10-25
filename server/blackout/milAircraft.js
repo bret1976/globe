@@ -55,6 +55,8 @@ export function createMilAircraftWatcher({ fetchImpl = globalThis.fetch, store =
   let lastSnapshotAt = null;
   let lastError = null;
   let lastCount = 0;
+  /** Latest positions from the last good snapshot (for the live map). */
+  let lastPositions = [];
   let polls = 0;
   let timer = null;
   let backoffUntil = 0;
@@ -76,10 +78,12 @@ export function createMilAircraftWatcher({ fetchImpl = globalThis.fetch, store =
       const snapAt = Number.isFinite(body?.now) ? body.now : t0;
       const list = Array.isArray(body?.ac) ? body.ac : [];
       tracker.noteFeedHealth(true, null, snapAt);
+      const positions = [];
       for (const ac of list) {
         const r = milReport(ac, snapAt);
-        if (r) tracker.observe(r, Math.min(r.at, snapAt));
+        if (r) { tracker.observe(r, Math.min(r.at, snapAt)); positions.push(r); }
       }
+      lastPositions = positions;
       lastCount = list.length;
       lastOkAt = now();
       lastSnapshotAt = snapAt;
@@ -119,5 +123,5 @@ export function createMilAircraftWatcher({ fetchImpl = globalThis.fetch, store =
   }
   function stop() { clearInterval(timer); timer = null; }
 
-  return { pollOnce, snapshot, recent: (n = now()) => log.list(n), start, stop, tracker };
+  return { pollOnce, snapshot, positions: () => ({ at: lastSnapshotAt, okAt: lastOkAt, list: lastPositions }), recent: (n = now()) => log.list(n), start, stop, tracker };
 }

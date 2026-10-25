@@ -315,3 +315,13 @@ function normalizeAisTimestamp(value) {
     ? new Date().toISOString()
     : date.toISOString();
 }
+
+/** One cached AISStream vessel by MMSI (fresh rows only), for click details. */
+export function aisStreamVessel(mmsi) {
+  const key = String(mmsi ?? '').trim();
+  if (!/^\d{1,9}$/.test(key)) return null;
+  const row = _aisStreamVessels.get(key) ?? _aisStreamVessels.get(Number(key));
+  if (!row || row._updatedAt < Date.now() - AISSTREAM_STALE_MS) return null;
+  const { _updatedAt, ...rest } = row;
+  return { ...rest, track: readAisTrack(row.mmsi ?? key).slice(-60) };
+}

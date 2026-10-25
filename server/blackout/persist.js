@@ -100,7 +100,10 @@ export function createPersistStore({ dir = resolvePersistDir(), warn = (...a) =>
       : { mode: 'memory', note: dir ? `Persistent directory not writable (${lastError}); state is in memory and is lost on restart.` : 'No persistent volume attached; went-dark state and GNSS history are in memory and are lost on restart or redeploy.' };
   }
 
-  return { register, load, saveAll, flushSync, status, get dir() { return usable ? dir : null; } };
+  /** Save one source right away (e.g. after a sign-up), not on the 2-minute timer. */
+  const saveNow = (name) => saveOne(name);
+
+  return { register, load, saveAll, saveNow, flushSync, status, get dir() { return usable ? dir : null; } };
 }
 
 let shared = null;

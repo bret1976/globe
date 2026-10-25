@@ -71,6 +71,27 @@
         <p id="changes" class="changes" role="status" aria-live="polite"></p>
       </section>
 
+      <section aria-labelledby="h-live" class="panel panel--live" id="live">
+        <header class="panel__head">
+          <h2 id="h-live">Live map</h2>
+          <span class="live-tags"><span class="tag tag--observed">Positions observed</span> <span class="tag tag--inferred">Dark inferred</span></span>
+        </header>
+        <div class="live-tools" role="group" aria-label="Live map layers">
+          <div class="seg">
+            <button type="button" class="chip" data-live="ships" aria-pressed="true">Ships <span id="live-n-ships" class="chip__n"></span></button>
+            <button type="button" class="chip" data-live="aircraft" aria-pressed="true">Military aircraft <span id="live-n-aircraft" class="chip__n"></span></button>
+            <button type="button" class="chip" data-live="dark" aria-pressed="true">Went dark <span id="live-n-dark" class="chip__n"></span></button>
+          </div>
+          <span class="live-zoom"><button id="live-zoom-in" type="button" class="btn btn--sm" aria-label="Zoom in">+</button><button id="live-zoom-out" type="button" class="btn btn--sm" aria-label="Zoom out">−</button><button id="live-world" type="button" class="btn btn--sm">World</button></span>
+        </div>
+        <div class="map-wrap live-wrap"><canvas id="live-map" role="img" aria-label="Live world map of tracked ships, military aircraft and targets that went dark. Drag to pan, pinch or scroll to zoom, tap a target for details."></canvas>
+          <p id="live-loading" class="live-loading"><span class="spinner" aria-hidden="true"></span> Loading live positions…</p>
+        </div>
+        <div id="live-detail" class="live-detail" aria-live="polite" hidden></div>
+        <p id="live-status" class="fine" aria-live="polite"></p>
+        <p class="fine">Ships: AISStream.io (positions newer than 30 min; dense areas are thinned to one dot per grid cell — zoom in for every vessel). Military aircraft: adsb.lol /v2/mil, ODbL 1.0. Positions between updates are dead-reckoned from course and speed. Red rings are last-known positions of targets that stopped reporting — inferred from silence, not proof of intent.</p>
+      </section>
+
       <div class="grid">
         <section aria-labelledby="h-dark" class="panel panel--dark">
           <header class="panel__head">
@@ -120,6 +141,53 @@
         </section>
       </div>
 
+
+      <div class="grid grid--activity">
+        <section aria-labelledby="h-events" class="panel panel--events" id="events">
+          <header class="panel__head"><h2 id="h-events">Live events</h2><span class="tag tag--inferred">Inferred</span></header>
+          <p id="events-state" class="fine" aria-live="polite">Connecting…</p>
+          <ol id="events-list" class="event-list" aria-label="Most recent events first"><li class="empty"><span class="spinner" aria-hidden="true"></span> Loading events…</li></ol>
+          <p class="fine">Built from the server-side detectors every 30 s: ships that lost AIS signal, military aircraft that went dark, targets that reappeared, and GPS-interference rises in the watched regions (adsb.lol integrity data). The detector needs about 20 minutes after a restart before it flags anything.</p>
+        </section>
+
+        <section aria-labelledby="h-alerts" class="panel panel--alerts" id="alerts">
+          <header class="panel__head"><h2 id="h-alerts">Email alerts</h2><span class="tag tag--observed">No login</span></header>
+          <p id="alerts-mode" class="note" hidden></p>
+          <form id="alerts-form" class="alerts-form" novalidate>
+            <label class="field field--block">Email<input id="alerts-email" name="email" type="email" inputmode="email" autocomplete="email" autocapitalize="off" spellcheck="false" required placeholder="you@example.com" maxlength="254" /></label>
+            <fieldset class="alerts-set"><legend>Alert me about</legend>
+              <label class="check"><input type="checkbox" name="types" value="ship" checked /> Ships going dark</label>
+              <label class="check"><input type="checkbox" name="types" value="aircraft" checked /> Military aircraft going dark</label>
+              <label class="check"><input type="checkbox" name="types" value="gnss" checked /> GPS interference rising</label>
+              <label class="check"><input type="checkbox" name="types" value="reappeared" /> Targets reappearing</label>
+            </fieldset>
+            <fieldset class="alerts-set"><legend>Only in these areas <span class="dim">(none ticked = anywhere)</span></legend><div id="alerts-areas" class="alerts-areas"></div></fieldset>
+            <label class="hp" aria-hidden="true">Website <input name="website" type="text" tabindex="-1" autocomplete="off" /></label>
+            <button id="alerts-submit" type="submit" class="btn btn--accent">Subscribe</button>
+            <p id="alerts-msg" class="alerts-msg" role="status" aria-live="polite"></p>
+          </form>
+          <p class="fine">Double opt-in: nothing is sent until you press the link in the confirmation mail. Digest at most once an hour (max 12 a day); every mail has a one-click unsubscribe that deletes your address. Your address is used only for these alerts.</p>
+        </section>
+      </div>
+
+      <section aria-labelledby="h-history" class="panel panel--history" id="history">
+        <header class="panel__head"><h2 id="h-history">Disappearance history</h2><span class="tag tag--inferred">Inferred · 90 days</span></header>
+        <form id="hist-filters" class="hist-filters" role="search" aria-label="Filter disappearance history">
+          <label class="field">Kind <select name="kind"><option value="all">All</option><option value="ships">Ships</option><option value="aircraft">Military aircraft</option></select></label>
+          <label class="field">State <select name="state"><option value="all">All</option><option value="dark">Still dark</option><option value="reappeared">Reappeared</option></select></label>
+          <label class="field">Area <select name="area" id="hist-area"><option value="">Anywhere</option></select></label>
+          <label class="field">Since <select name="days"><option value="">90 days</option><option value="1">24 h</option><option value="7">7 days</option><option value="30">30 days</option></select></label>
+          <label class="field"><span class="visually-hidden">Search</span><input name="q" type="search" placeholder="Name, MMSI, hex, sea…" autocomplete="off" maxlength="60" /></label>
+          <span class="exports">Export <a id="hist-csv" href="/api/blackout/v1/history?format=csv" download>CSV</a> · <a id="hist-geojson" href="/api/blackout/v1/history?format=geojson" download>GeoJSON</a></span>
+        </form>
+        <p id="hist-count" class="fine" aria-live="polite"></p>
+        <div class="table-wrap hist-wrap"><table class="hist-table">
+          <thead><tr><th scope="col">Target</th><th scope="col">Last seen</th><th scope="col">Where</th><th scope="col">Dark for</th><th scope="col">Status</th></tr></thead>
+          <tbody id="hist-body"><tr><td colspan="5" class="empty"><span class="spinner" aria-hidden="true"></span> Loading history…</td></tr></tbody>
+        </table></div>
+        <p class="fine">Every went-dark flag the detectors raised, kept on the server's volume for 90 days. "Last seen" is the final report before the silence; "dark for" runs until the target reported again (or until now). Ships: AISStream; aircraft: adsb.lol ODbL 1.0.</p>
+      </section>
+
       <section aria-labelledby="h-prov" class="panel panel--prov">
         <header class="panel__head">
           <h2 id="h-prov">Observed · inferred · simulated</h2>
@@ -167,5 +235,6 @@
       <p>Blackout · part of God's Eye View · <a href="/">← Back to the globe</a></p>
     </footer>
     <script type="module" src="/src/watch/main.js"></script>
+    <script type="module" src="/src/watch/live.js"></script>
   </body>
 </html>

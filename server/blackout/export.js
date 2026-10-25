@@ -25,7 +25,7 @@ export function darkRow(f, { kind, source, nowMs, state = 'dark' }) {
   };
 }
 
-function csvCell(v) {
+export function csvCell(v) {
   if (v == null) return '';
   let s = String(v);
   // Spreadsheet formula injection guard.
