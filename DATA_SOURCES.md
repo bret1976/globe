@@ -434,7 +434,7 @@ The required Google Maps / Cesium credit renders on the on-globe credit line (`#
 
 ## /watch dashboard
 
-The `/watch` page (a 2D, Cesium-free dashboard) adds one bundled file and no new feeds:
+The `/watch` page (Blackout, a 2D, Cesium-free dashboard) adds one bundled file and no new feeds:
 
 | Data | Source | License / terms | Notes |
 |---|---|---|---|
