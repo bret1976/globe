@@ -3,10 +3,13 @@ import {
   WENT_DARK_ENABLED_DEFAULT,
   createDarkTracker,
 } from '../../../src/data/wentDark.js';
+import { blackoutStore } from '../../blackout/persist.js';
+import { createFlagLog } from '../../blackout/flagLog.js';
 
 /**
- * Server-side "went dark" tracker for AISStream ships. In memory only — a
- * restart (or redeploy) starts from zero.
+ * Server-side "went dark" tracker for AISStream ships. In memory, saved to
+ * the Blackout persistent directory when one is attached (see
+ * server/blackout/persist.js); otherwise a restart starts from zero.
  *
  * Off switch: WENT_DARK_ENABLED=0 (or "false"/"off").
  */
@@ -17,9 +20,26 @@ export function wentDarkEnabled() {
 }
 
 let _tracker = null;
+let _log = null;
 function tracker() {
-  if (!_tracker) _tracker = createDarkTracker(SHIP_DARK_CONFIG);
+  if (!_tracker) {
+    const t = createDarkTracker(SHIP_DARK_CONFIG);
+    const saved = blackoutStore().register('ships-dark', () => t.exportState());
+    if (saved) t.importState(saved);
+    _tracker = t;
+  }
   return _tracker;
+}
+
+/** 24 h log of ship went-dark flags (persisted with the tracker). */
+export function shipFlagLog() {
+  if (!_log) {
+    const log = createFlagLog();
+    const saved = blackoutStore().register('ships-flags', () => log.exportState());
+    if (saved) log.importState(saved);
+    _log = log;
+  }
+  return _log;
 }
 
 /** Called by the AIS store for every accepted position report. Never throws. */
@@ -51,7 +71,7 @@ export function noteShipFeedStatus(status, nowMs = Date.now()) {
 /** JSON body for /api/ais-live/dark. */
 export function shipWentDarkSnapshot(nowMs = Date.now()) {
   const base = {
-    source: 'AISStream (in-memory since server start)',
+    source: blackoutStore().status().mode === 'disk' ? 'AISStream (persisted across restarts)' : 'AISStream (in-memory since server start)',
     provenance: 'inferred',
     thresholds: {
       minReports: SHIP_DARK_CONFIG.minReports,
@@ -66,10 +86,13 @@ export function shipWentDarkSnapshot(nowMs = Date.now()) {
   if (!wentDarkEnabled()) {
     return { ...base, enabled: false, status: 'off', reason: 'disabled by WENT_DARK_ENABLED', flagged: [], tracked: 0, steady: 0 };
   }
-  return { ...base, enabled: true, generatedAt: nowMs, ...tracker().evaluate(nowMs) };
+  const result = tracker().evaluate(nowMs);
+  shipFlagLog().update(result, nowMs, (id) => _tracker.lastHeardAt(id));
+  return { ...base, enabled: true, generatedAt: nowMs, restoredFrom: _tracker.restoredFrom, ...result };
 }
 
 /** Test hook. */
 export function resetShipWentDark() {
   _tracker = null;
+  _log = null;
 }

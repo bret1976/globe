@@ -418,3 +418,6 @@ function parseCsvOrJsonEnv(key, fallback) {
       .filter(Boolean);
   }
 }
+
+/** Blackout's always-on monitor: open the AIS stream at boot, not on first view. */
+export { ensureAisStreamConnection as ensureAisStreamForBlackout, aisStreamStatusSnapshot as aisStreamStatusForBlackout };

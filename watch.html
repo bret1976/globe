@@ -5,8 +5,22 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="color-scheme" content="dark" />
     <meta name="description" content="Blackout — feed health, went-dark targets and GNSS jamming history." />
+    <meta name="theme-color" content="#0a0a0f" />
     <title>Blackout</title>
     <link rel="icon" type="image/svg+xml" href="/logo.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/watch/favicon-32.png" />
+    <link rel="apple-touch-icon" href="/watch/apple-touch-icon.png" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="God's Eye View" />
+    <meta property="og:title" content="Blackout — live went-dark &amp; GNSS jamming monitor" />
+    <meta property="og:description" content="Ships and military aircraft that stopped transmitting, GNSS interference history and live feed health. Open data, no login." />
+    <meta property="og:image" content="/watch/og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Blackout — live went-dark &amp; GNSS jamming monitor" />
+    <meta name="twitter:image" content="/watch/og.png" />
+    <meta name="twitter:description" content="Ships and military aircraft that stopped transmitting, GNSS interference history and live feed health." />
   </head>
   <body>
     <a class="skip" href="#main">Skip to content</a>
@@ -19,9 +33,10 @@
         </div>
       </div>
       <div class="top__actions">
+        <a id="status-dot" class="status" href="/watch/health" title="Service status (JSON)" aria-label="Service status: checking"><span class="status__dot" aria-hidden="true"></span><span class="status__t">status</span></a>
         <span class="updated" aria-live="polite"><span class="pulse" aria-hidden="true"></span><span id="updated">not updated yet</span> <span id="refresh-state" class="dim"></span></span>
-        <button id="refresh-now" type="button" class="btn">Refresh</button>
-        <a class="btn btn--accent" href="/">Open globe</a>
+        <button id="refresh-now" type="button" class="btn btn--refresh" aria-label="Refresh now"><svg class="ico" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M17.65 6.35A7.95 7.95 0 0 0 12 4a8 8 0 1 0 7.75 10h-2.08A6 6 0 1 1 12 6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg><span class="btn__label">Refresh</span></button>
+        <a id="open-globe" class="btn btn--accent" href="/">Open globe</a>
       </div>
     </header>
 
@@ -29,7 +44,8 @@
       <section aria-labelledby="h-feeds" class="panel panel--feeds">
         <h2 id="h-feeds" class="visually-hidden">Feed health</h2>
         <div id="banner" class="banner" role="status" hidden><strong>Heads up</strong> <span id="banner-text"></span></div>
-        <div id="feeds" class="feeds" role="list" aria-label="Feed health by source"></div>
+        <div id="feeds" class="feeds" role="list" aria-label="Feed health by source"><div class="feed feed--loading" role="listitem"><span class="spinner" aria-hidden="true"></span> Loading live feeds…</div></div>
+        <p id="changes" class="changes" role="status" aria-live="polite"></p>
       </section>
 
       <div class="grid">
@@ -43,8 +59,15 @@
             <div class="kpi"><span class="kpi__n" id="dark-aircraft">—</span><span class="kpi__l">aircraft</span></div>
           </div>
           <ul id="dark-notes" class="notes"></ul>
-          <ol id="dark-list" class="dark-list" aria-label="Targets that went dark, most recent first"></ol>
-          <p class="fine">A last-known position of a target that stopped reporting. Where it is now is unknown. Aircraft are tracked in this page from the flights feed and only when that feed is worldwide.</p>
+          <div class="dark-tools" role="group" aria-label="Went-dark list">
+            <div class="seg" role="radiogroup" aria-label="Time window">
+              <button type="button" class="chip" role="radio" data-window="live" aria-checked="true">Now</button>
+              <button type="button" class="chip" role="radio" data-window="24h" aria-checked="false">Last 24 h</button>
+            </div>
+            <span class="exports">Export <a id="export-csv" href="/api/blackout/v1/dark?format=csv" download>CSV</a> · <a id="export-geojson" href="/api/blackout/v1/dark?format=geojson" download>GeoJSON</a></span>
+          </div>
+          <ol id="dark-list" class="dark-list" aria-label="Targets that went dark, most recent first"><li class="empty"><span class="spinner" aria-hidden="true"></span> Loading went-dark list…</li></ol>
+          <p class="fine">A last-known position of a target that stopped reporting. Where it is now is unknown. Ships: AISStream, worldwide where AIS receivers report. Aircraft: military transponders only (adsb.lol worldwide feed) — free civil feeds only cover a 250 nm radius, which cannot tell "went dark" from "left the area".</p>
         </section>
 
         <section aria-labelledby="h-jam" class="panel panel--jam">
@@ -52,14 +75,21 @@
             <h2 id="h-jam">Jamming timeline</h2>
             <span class="tag tag--inferred">Inferred</span>
           </header>
-          <div class="map-wrap"><canvas id="jam-map" role="img" aria-label="World map of GPS interference cells for the selected time"></canvas></div>
+          <div class="map-wrap"><canvas id="jam-map" role="img" aria-label="World map of GPS interference cells and went-dark targets for the selected time"></canvas>
+            <button id="map-reset" type="button" class="btn btn--sm map-reset" hidden>World view</button>
+            <p id="map-sel" class="map-sel" aria-live="polite" hidden></p>
+          </div>
           <div class="scrub">
+            <button id="jam-prev" type="button" class="btn btn--sm" aria-label="Previous step">‹</button>
             <button id="jam-play" type="button" class="btn" aria-pressed="false">Play</button>
+            <button id="jam-next" type="button" class="btn btn--sm" aria-label="Next step">›</button>
             <input id="jam-slider" type="range" min="0" max="0" value="0" step="1" aria-label="Jamming history time" />
+            <label class="speed">Speed <select id="jam-speed" aria-label="Playback speed"><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option></select></label>
           </div>
           <div class="scrub__meta"><strong id="jam-label">Loading…</strong> <span id="jam-count" class="dim"></span></div>
           <p id="jam-source" class="fine"></p>
-          <ul id="jam-regions" class="regions" aria-label="Cells per highlighted region"></ul>
+          <ul id="jam-regions" class="regions" aria-label="Cells per highlighted region — choose one to zoom the map"></ul>
+          <ul id="region-live" class="notes" aria-label="Latest GNSS integrity read per watch region"></ul>
           <ul class="legend" aria-label="Legend">
             <li><i style="--c:#ff4444"></i>high</li><li><i style="--c:#ffb547"></i>medium</li><li><i style="--c:#c58cff"></i>NIC/NACp low-sample</li><li><i class="box"></i>highlighted region</li>
           </ul>
@@ -72,13 +102,39 @@
           <h2 id="h-prov">Observed · inferred · simulated</h2>
         </header>
         <div id="prov-totals" class="totals"></div>
+        <p class="fine">Blackout uses observed and inferred data only. Layers the globe labels simulated are excluded here and shown only when you turn on the Simulated chip.</p>
+        <div class="prov-tools">
+          <div class="seg" role="group" aria-label="Filter by provenance">
+            <button type="button" class="chip" data-kind="observed" aria-pressed="true">Observed</button>
+            <button type="button" class="chip" data-kind="inferred" aria-pressed="true">Inferred</button>
+            <button type="button" class="chip" data-kind="simulated" aria-pressed="false">Simulated</button>
+          </div>
+          <label class="field"><span class="visually-hidden">Filter layers</span><input id="prov-filter" type="search" placeholder="Filter layers…" autocomplete="off" /></label>
+          <label class="field">Sort <select id="prov-sort" aria-label="Sort layers"><option value="">Default</option><option value="layerId">Layer A–Z</option><option value="provider">Provider A–Z</option><option value="count:desc">Count, high first</option><option value="kind">Badge</option></select></label>
+          <span id="prov-shown" class="dim"></span>
+        </div>
         <div class="table-wrap" tabindex="0" role="region" aria-label="Provenance by layer">
           <table>
-            <thead><tr><th scope="col">Layer</th><th scope="col">Badge</th><th scope="col">Provider</th><th scope="col" class="num">Count</th><th scope="col">Freshness</th><th scope="col">Licence / attribution</th></tr></thead>
+            <thead><tr><th scope="col" aria-sort="none"><button type="button" class="th-sort" data-sort="layerId">Layer</button></th><th scope="col" aria-sort="none"><button type="button" class="th-sort" data-sort="kind">Badge</button></th><th scope="col" aria-sort="none"><button type="button" class="th-sort" data-sort="provider">Provider</button></th><th scope="col" class="num" aria-sort="none"><button type="button" class="th-sort" data-sort="count">Count</button></th><th scope="col">Freshness</th><th scope="col">Licence / attribution</th></tr></thead>
             <tbody id="prov-body"></tbody>
           </table>
         </div>
         <p class="fine">Counts are shown only for layers this page polls; open the globe for the rest.</p>
+      </section>
+
+      <section aria-labelledby="h-api" class="panel panel--api" id="api">
+        <header class="panel__head"><h2 id="h-api">Public API</h2><span class="tag tag--inferred">Read-only · no key</span></header>
+        <p class="fine">Plain GET, JSON unless noted, CORS open. Data keeps its source licence (AISStream terms; adsb.lol ODbL 1.0; GPSJam). Please poll no faster than every 30 s.</p>
+        <dl class="api">
+          <dt><a href="/api/blackout/v1/health"><code>GET /api/blackout/v1/health</code></a> · <a href="/watch/health"><code>/watch/health</code></a></dt><dd>Feed, detector and storage status. 503 when nothing is live.</dd>
+          <dt><a href="/api/blackout/v1/dark"><code>GET /api/blackout/v1/dark</code></a></dt><dd><code>kind=all|ships|aircraft</code> · <code>window=live|24h</code> · <code>format=json|csv|geojson</code></dd>
+          <dt><a href="/api/blackout/v1/aircraft"><code>GET /api/blackout/v1/aircraft</code></a></dt><dd>Military-aircraft went-dark detector (worldwide, server-side).</dd>
+          <dt><a href="/api/blackout/v1/regions"><code>GET /api/blackout/v1/regions</code></a></dt><dd>Latest GNSS-integrity read for each watch region.</dd>
+          <dt><a href="/api/gnss-integrity/history"><code>GET /api/gnss-integrity/history</code></a></dt><dd>24 h of five-minute NIC/NACp frames; <code>?at=&lt;ms&gt;</code> for one frame.</dd>
+          <dt><a href="/api/gpsjam/dates"><code>GET /api/gpsjam/dates</code></a></dt><dd>Daily GPSJam files; <code>/api/gpsjam?date=YYYY-MM-DD</code> for one day.</dd>
+        </dl>
+        <p class="fine">Deep links: this page keeps its state in the address — <code>#t=2026-10-24</code> (day) or <code>#t=&lt;ms&gt;</code> (GNSS frame), <code>&amp;region=baltic</code>, <code>&amp;target=ship:&lt;mmsi&gt;</code>. Copy the address bar to share a view.</p>
+        <p id="storage-note" class="note"></p>
       </section>
     </main>
 

@@ -189,7 +189,10 @@ export function createDarkTracker(config = SHIP_DARK_CONFIG, options = {}) {
       targets.set(id, t);
     } else {
       if (nowMs < t.lastAt) return false; // out of order: ignore
-      if (nowMs === t.lastAt) {
+      if (t.resumeGap) {
+        // First report after a restore: the gap is our downtime, not the target's.
+        delete t.resumeGap;
+      } else if (nowMs === t.lastAt) {
         // Same-time duplicate: refresh fields, no interval sample.
       } else {
         const dt = nowMs - t.lastAt;
@@ -368,11 +371,65 @@ export function createDarkTracker(config = SHIP_DARK_CONFIG, options = {}) {
     };
   }
 
+  /**
+   * Plain-JSON copy of what the tracker knows, for a persistent store.
+   * Feed-health flags are kept so a restore never forgets a degraded feed.
+   */
+  function exportState() {
+    return {
+      v: 1,
+      kind: cfg.kind,
+      startedAt,
+      lastReportAt,
+      lastDegradedAt,
+      targets: [...targets.values()].map((t) => ({ ...t, trail: t.trail.slice(-4).map((p) => [...p]) })),
+    };
+  }
+
+  /**
+   * Load a saved state. The time the process was down is a whole-feed gap:
+   * targets last heard before it are never flagged on that silence (the
+   * observe() gap rule marks the feed degraded on the first new report).
+   * @returns {number} Targets restored.
+   */
+  function importState(saved, nowMs = Date.now()) {
+    if (!saved || saved.v !== 1 || saved.kind !== cfg.kind || !Array.isArray(saved.targets)) return 0;
+    let n = 0;
+    for (const raw of saved.targets) {
+      if (!raw?.id || !Number.isFinite(raw.lastAt) || nowMs - raw.lastAt > cfg.retentionMs) continue;
+      if (targets.has(String(raw.id))) continue;
+      if (targets.size >= cfg.maxTargets) break;
+      const t = { ...raw, resumeGap: true, id: String(raw.id), trail: Array.isArray(raw.trail) ? raw.trail.slice(-cfg.trailPoints) : [] };
+      const [r, c] = cellOf(t.lat, t.lon, cfg.cellDeg);
+      t.cellR = r;
+      t.cellC = c;
+      targets.set(t.id, t);
+      const key = cellKey(r, c);
+      let set = cells.get(key);
+      if (!set) cells.set(key, (set = new Set()));
+      set.add(t.id);
+      n += 1;
+    }
+    if (Number.isFinite(saved.lastReportAt) && (lastReportAt == null || saved.lastReportAt > lastReportAt)) lastReportAt = saved.lastReportAt;
+    // Everything restored was heard before the downtime: mark that.
+    lastDegradedAt = Math.max(lastDegradedAt ?? -Infinity, Number(saved.lastDegradedAt) || -Infinity, lastReportAt ?? -Infinity);
+    restoredFrom = Number.isFinite(saved.startedAt) ? saved.startedAt : null;
+    return n;
+  }
+
+  let restoredFrom = null;
+
   return {
     config: cfg,
     observe,
     noteFeedHealth,
     evaluate,
+    exportState,
+    importState,
+    lastHeardAt: (id) => targets.get(String(id))?.lastAt ?? null,
+    get restoredFrom() {
+      return restoredFrom;
+    },
     get size() {
       return targets.size;
     },
