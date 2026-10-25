@@ -20,6 +20,9 @@ export const FEED_STATES = Object.freeze(['live', 'warming', 'regional', 'partia
 const STATE_LABEL = { live: 'LIVE', warming: 'WARMING', regional: 'REGIONAL', partial: 'PARTIAL', stale: 'STALE', down: 'DOWN' };
 export const feedStateLabel = (s) => STATE_LABEL[s] || 'UNKNOWN';
 
+/** "5 s" / "3 min" (formatAge without its trailing "ago"). */
+const ageSpan = (atMs, nowMs) => formatAge(atMs, nowMs).replace(/ ago$/, '').replace('just now', 'under 5 s');
+
 const ageOf = (atMs, nowMs) => (Number.isFinite(atMs) ? Math.max(0, nowMs - atMs) : null);
 
 /** Civil flights from `/api/opensky` (payload `time` + x-flight-* headers). */
@@ -32,7 +35,7 @@ export function flightsFeed(probe, nowMs) {
   const count = Number(probe.headers?.count) || (probe.payload?.states?.length ?? 0);
   const provider = probe.headers?.source || base.provider;
   const out = { ...base, provider, atMs: at, ageMs, count, coverage };
-  if (ageMs == null || ageMs > 2 * MIN) return { ...out, state: 'stale', detail: ageMs == null ? 'snapshot undated' : `snapshot ${formatAge(at, nowMs)} old` };
+  if (ageMs == null || ageMs > 2 * MIN) return { ...out, state: 'stale', detail: ageMs == null ? 'snapshot undated' : `snapshot ${ageSpan(at, nowMs)} old` };
   if (!isWorldwideCoverage(coverage)) return { ...out, state: 'regional', detail: `${coverage} — not a worldwide picture` };
   return { ...out, state: 'live', detail: coverage };
 }
@@ -46,7 +49,7 @@ export function militaryFeed(probe, nowMs) {
   const ageMs = ageOf(at, nowMs);
   const count = Array.isArray(probe.payload?.ac) ? probe.payload.ac.length : 0;
   const out = { ...base, atMs: at, ageMs, count };
-  if (ageMs == null || ageMs > 5 * MIN) return { ...out, state: 'stale', detail: ageMs == null ? 'snapshot undated' : `snapshot ${formatAge(at, nowMs)} old` };
+  if (ageMs == null || ageMs > 5 * MIN) return { ...out, state: 'stale', detail: ageMs == null ? 'snapshot undated' : `snapshot ${ageSpan(at, nowMs)} old` };
   return { ...out, state: 'live', detail: 'worldwide military feed' };
 }
 
@@ -61,7 +64,7 @@ export function aisFeed(probe, nowMs) {
   const out = { ...base, atMs: at, ageMs, count: Number(p.tracked) || 0 };
   if (p.status === 'stale' || ageMs == null || ageMs > 5 * MIN) return { ...out, state: 'stale', detail: p.reason || 'no recent reports' };
   if (p.status === 'partial' || p.status === 'degraded') return { ...out, state: 'partial', detail: p.reason || 'feed delivering fewer reports than usual' };
-  if (Number.isFinite(p.startedAt) && nowMs - p.startedAt < 20 * MIN) return { ...out, state: 'warming', detail: `server memory since ${formatAge(p.startedAt, nowMs)} ago` };
+  if (Number.isFinite(p.startedAt) && nowMs - p.startedAt < 20 * MIN) return { ...out, state: 'warming', detail: `server restarted ${formatAge(p.startedAt, nowMs)}` };
   return { ...out, state: 'live', detail: `${out.count.toLocaleString('en-US')} vessels in memory` };
 }
 
@@ -89,7 +92,7 @@ export function gnssFeed(probe, nowMs) {
   const ageMs = ageOf(at, nowMs);
   const out = { ...base, atMs: at, ageMs, count: frames };
   if (!frames) return { ...out, state: 'warming', detail: 'no frames yet — recorded only where the globe has looked' };
-  if (ageMs > 60 * MIN) return { ...out, state: 'stale', detail: `newest frame ${formatAge(p.newestAt, nowMs)} old` };
+  if (ageMs > 60 * MIN) return { ...out, state: 'stale', detail: `newest frame ${ageSpan(p.newestAt, nowMs)} old` };
   return { ...out, state: 'regional', detail: `${frames} five-minute frames · only regions someone viewed` };
 }
 
@@ -200,7 +203,7 @@ export function historyNote(gpsjamDates = [], gnss = null, nowMs = Date.now()) {
   const gp = days ? `gpsjam: ${days} daily files (${gpsjamDates[0]} → ${gpsjamDates[days - 1]})` : 'gpsjam: no daily files listed';
   if (!gnss) return `${gp} · NIC/NACp: not loaded`;
   const frames = gnss.frames?.length || 0;
-  const since = Number.isFinite(gnss.startedAt) ? `kept in server memory since the restart ${formatAge(gnss.startedAt, nowMs)} ago` : 'kept in server memory';
+  const since = Number.isFinite(gnss.startedAt) ? `kept in server memory since the restart ${formatAge(gnss.startedAt, nowMs)}` : 'kept in server memory';
   if (!frames) return `${gp} · NIC/NACp: no frames yet (${since}; only regions someone viewed on the globe are recorded; lost on restart)`;
   const span = Math.max(0, (gnss.newestAt ?? 0) - (gnss.oldestAt ?? 0)) + (gnss.bucketMs || 0);
   return `${gp} · NIC/NACp: ${frames} five-minute frames covering about ${Math.round(span / MIN)} min of the possible 24 h (${since}; only viewed regions; lost on restart)`;
@@ -269,7 +272,7 @@ export function provenanceRows(live = {}, nowMs = Date.now()) {
       provider: p.provider,
       note: p.note || null,
       count: l ? l.count : null,
-      freshness: l?.atMs ? `${formatAge(l.atMs, nowMs)} ago` : l ? 'unknown' : 'not polled here',
+      freshness: l?.atMs ? formatAge(l.atMs, nowMs) : l ? 'unknown' : 'not polled here',
       licence: licenceFor(p.creditKey),
     };
   });

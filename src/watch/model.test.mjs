@@ -109,6 +109,16 @@ test('provenance rows cover every layer with a badge and licence', () => {
   assert.match(m.MAP_CREDIT_TEXT, /Natural Earth/);
 });
 
+test('age wording never doubles "ago"', () => {
+  const ais = m.aisFeed({ ok: true, payload: { status: 'ok', lastReportAt: NOW, startedAt: NOW - 3 * MIN } }, NOW);
+  assert.equal(ais.detail, 'server restarted 3 min ago');
+  assert.equal(m.militaryFeed({ ok: true, payload: { now: NOW - 10 * MIN } }, NOW).detail, 'snapshot 10 min old');
+  assert.match(m.historyNote([], { frames: [], startedAt: NOW - 3 * MIN }, NOW), /since the restart 3 min ago;/);
+  const { rows } = m.provenanceRows({ flights: { count: 1, atMs: NOW - 5000 } }, NOW);
+  assert.equal(rows.find((r) => r.layerId === 'flights').freshness, '5 s ago');
+  for (const r of rows) assert.doesNotMatch(r.freshness, /ago ago/);
+});
+
 test('updatedAgo wording', () => {
   assert.equal(m.updatedAgo(NaN, NOW), 'not updated yet');
   assert.equal(m.updatedAgo(NOW - 12_000, NOW), 'updated 12 s ago');
