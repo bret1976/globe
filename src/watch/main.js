@@ -398,6 +398,7 @@ async function refresh({ manual = false } = {}) {
       probe('/api/gpsjam/dates'), probe('/api/gnss-integrity/history'), probe('/api/blackout/v1/aircraft'),
       probe('/api/blackout/v1/health'), probe('/api/blackout/v1/dark?window=24h'), probe('/api/blackout/v1/regions'),
     ]);
+    if (![flights, military, ais, gpsjam, gnss, aircraft, health, recent, regions].some((x) => x.ok)) window.__watchError?.('live data: every /api request failed (offline, or a content blocker such as Brave Shields)');
     const local = Date.now();
     state.probes = { flights, military, ais, gpsjam, gnss, aircraft };
     state.ships = ais.ok ? { ...ais.payload, fetchedLocalMs: local } : null;
@@ -525,7 +526,8 @@ async function boot() {
   window.addEventListener('hashchange', applyHash);
   window.addEventListener('pageshow', (e) => { if (e.persisted) for (const a of document.querySelectorAll('.is-loading')) { a.classList.remove('is-loading'); a.removeAttribute('aria-busy'); a.textContent = 'Open in globe'; } $('open-globe').textContent = 'Open globe'; });
   window.addEventListener('resize', () => drawMap(state.points));
-  fetch('/watch/land-110m.json').then((r) => r.json()).then((j) => { state.land = j; drawMap(state.points); }).catch(() => {});
+  fetch('/watch/land-110m.json').then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); }).then((j) => { state.land = j; drawMap(state.points); }).catch((e) => window.__watchError?.(`land map (${e.message})`));
+window.__watchBooted = true;
   drawMap([]);
   await refresh();
   setInterval(() => refresh(), REFRESH_MS);

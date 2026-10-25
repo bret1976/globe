@@ -23,6 +23,29 @@
     <meta name="twitter:description" content="Ships and military aircraft that stopped transmitting, GNSS interference history and live feed health." />
   </head>
   <body>
+    <div id="load-error" role="alert" hidden style="position:fixed;left:0;right:0;bottom:0;z-index:100;padding:12px max(16px,env(safe-area-inset-left));background:#5c1a1a;color:#fff;font:14px/1.4 system-ui,sans-serif"></div>
+    <script>
+      (function () {
+        var seen = {};
+        function show(reason) {
+          var box = document.getElementById('load-error');
+          if (!box) return;
+          reason = String(reason || 'unknown error').slice(0, 200);
+          if (seen[reason]) return; seen[reason] = 1;
+          var line = document.createElement('div');
+          line.textContent = 'Something failed to load: ' + reason;
+          box.appendChild(line); box.hidden = false;
+        }
+        window.__watchError = show;
+        window.addEventListener('error', function (e) {
+          var t = e.target;
+          if (t && t !== window && (t.src || t.href)) show((t.src || t.href).replace(location.origin, ''));
+          else show(e.message);
+        }, true);
+        window.addEventListener('unhandledrejection', function (e) { show(e.reason && e.reason.message || e.reason); });
+        setTimeout(function () { if (!window.__watchBooted) show('page script did not start (blocked, offline or unsupported browser)'); }, 10000);
+      })();
+    </script>
     <a class="skip" href="#main">Skip to content</a>
     <header class="top">
       <div class="brand">
