@@ -21,7 +21,7 @@ function productCopy(product) {
       ? `${count} IR drape${count === 1 ? '' : 's'} · NASA GIBS`
       : 'NASA GIBS infrared';
   if (product.id === 'wind')
-    return count != null ? `${count} wind samples · Open-Meteo GFS` : 'Open-Meteo GFS';
+    return count != null ? `${count} wind samples · NOAA GFS` : 'NOAA GFS';
   if (product.id === 'weather-cyclones')
     return count != null
       ? `${count} storm${count === 1 ? '' : 's'} · NHC + EONET`

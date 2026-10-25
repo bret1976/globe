@@ -240,12 +240,19 @@ Asia–Pacific basin (typhoon cloud tops). No provider API key.
 `severeStorms` so Western Pacific typhoons appear for the typhoon Shorts pack.
 Browser-direct fallback hits both URLs when the proxy is absent.
 
-### Open-Meteo GFS wind overlay
+### GFS wind overlay (NOAA GFS via PacIOOS ERDDAP, Open-Meteo fallback)
 
-`/api/wind` (TTL 20 min) fetches a coarse Open-Meteo GFS 10 m wind grid
-(https://open-meteo.com/) and serves it to the Wind layer. Linked Open-Meteo
-credit already ships with cockpit weather; the globe overlay reuses that
-acknowledgement.
+`/api/wind` (TTL 20 min) fetches the coarse 8° 10 m wind lattice (765 points)
+in **one** keyless request from the NOAA NCEP GFS `ncep_global` dataset on the
+PacIOOS ERDDAP
+(https://pae-paha.pacioos.hawaii.edu/erddap/griddap/ncep_global.html, u/v in
+m/s, converted to km/h and degrees-from). GFS output is a US Government work
+(public domain). When ERDDAP is unavailable the proxy falls back to Open-Meteo
+GFS (https://open-meteo.com/, CC BY 4.0) in batches paced under Open-Meteo's
+600 calls/minute free limit — Open-Meteo counts every grid point as one call,
+so the old unpaced 765-point refresh exhausted the shared Railway egress
+quota and left the layer warming. The browser uses the same order (proxy →
+ERDDAP → Open-Meteo).
 
 
 

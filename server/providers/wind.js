@@ -1,7 +1,13 @@
 /**
- * Coarse Open-Meteo GFS 10 m wind grid for the globe overlay.
+ * Coarse GFS 10 m wind grid for the globe overlay.
  *
  * No API key. TTL 20 minutes. Serve stale on a transient failure.
+ *
+ * Primary: NOAA NCEP GFS u/v wind from the PacIOOS ERDDAP — one request for
+ * the whole lattice. Fallback: Open-Meteo GFS in paced batches. Open-Meteo
+ * counts every grid point as one API call, so the old 765-point burst every
+ * 20 minutes blew through its 600/minute and 10,000/day free limits on the
+ * shared Railway egress address and the proxy stayed "warming" for days.
  *
  *   GET /api/wind → { fetchedAt, model, valid, samples: [{lat,lon,speed,direction}] }
  *
@@ -10,6 +16,8 @@
 import path from 'node:path';
 import { promises as fsp } from 'node:fs';
 import {
+  buildErddapWindUrl,
+  parseErddapWind,
   WIND_GRID_STEP_DEG,
   WIND_LAT_MAX,
   WIND_LAT_MIN,
@@ -18,6 +26,10 @@ import {
 } from '../../src/layers/wind/source.js';
 
 const CHUNK = 80;
+/** Gap between Open-Meteo fallback batches: 80 points per 9 s ≈ 530/minute,
+ * under the free 600/minute limit. */
+const OPEN_METEO_CHUNK_GAP_MS = 9_000;
+const ERDDAP_TIMEOUT_MS = 30_000;
 const TTL_MS = 20 * 60_000;
 const STALE_MS = 6 * 60 * 60_000;
 const CACHE_DIR = path.join(process.cwd(), '.gev-cache');
@@ -32,8 +44,15 @@ const MAX_429_RETRIES = 2;
 
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-/** @param {{ cacheDir?: string }} [options] cacheDir is for tests. */
-export function windProxy({ cacheDir = CACHE_DIR } = {}) {
+/**
+ * @param {{ cacheDir?: string, fetchImpl?: typeof fetch, chunkGapMs?: number }} [options]
+ *   cacheDir, fetchImpl and chunkGapMs are for tests.
+ */
+export function windProxy({
+  cacheDir = CACHE_DIR,
+  fetchImpl = (...args) => globalThis.fetch(...args),
+  chunkGapMs = OPEN_METEO_CHUNK_GAP_MS,
+} = {}) {
   const cachePath = path.join(cacheDir, 'wind.json');
   /** @type {?{at: number, payload: object}} */
   let mem = null;
@@ -64,7 +83,9 @@ export function windProxy({ cacheDir = CACHE_DIR } = {}) {
   }
 
   async function fetchChunk(params, attempt = 0) {
-    const response = await fetch(`https://api.open-meteo.com/v1/gfs?${params}`);
+    const response = await fetchImpl(
+      `https://api.open-meteo.com/v1/gfs?${params}`,
+    );
     if (response.status === 429 && attempt < MAX_429_RETRIES) {
       await response.body?.cancel().catch(() => {});
       await delay(2000 * 2 ** attempt);
@@ -85,11 +106,39 @@ export function windProxy({ cacheDir = CACHE_DIR } = {}) {
     return response.json();
   }
 
+  async function fetchErddap() {
+    const response = await fetchImpl(buildErddapWindUrl(Date.now()), {
+      signal: AbortSignal.timeout(ERDDAP_TIMEOUT_MS),
+      headers: { Accept: 'application/json' },
+    });
+    if (!response.ok) {
+      await response.body?.cancel().catch(() => {});
+      throw new Error(`ERDDAP GFS ${response.status}`);
+    }
+    return parseErddapWind(await response.json());
+  }
+
   async function refresh() {
+    let payload;
+    try {
+      payload = await fetchErddap();
+    } catch (error) {
+      console.warn(
+        '[wind-proxy] NOAA GFS (ERDDAP) failed, using Open-Meteo:',
+        error?.message || error,
+      );
+      payload = await fetchOpenMeteo();
+    }
+    mem = { at: Date.now(), payload };
+    void writeDisk(mem);
+    return payload;
+  }
+
+  async function fetchOpenMeteo() {
     const points = buildPoints();
     const rows = [];
     for (let i = 0; i < points.length; i += CHUNK) {
-      if (i) await delay(400);
+      if (i) await delay(chunkGapMs);
       const chunk = points.slice(i, i + CHUNK);
       const params = new URLSearchParams({
         latitude: chunk.map((p) => p.lat.toFixed(2)).join(','),
@@ -101,18 +150,20 @@ export function windProxy({ cacheDir = CACHE_DIR } = {}) {
       if (Array.isArray(body)) rows.push(...body);
       else rows.push(body);
     }
-    const payload = parseGrid({
-      latitude: rows.map((row) => row.latitude),
-      longitude: rows.map((row) => row.longitude),
-      current: {
-        time: rows[0]?.current?.time || null,
-        wind_speed_10m: rows.map((row) => row.current?.wind_speed_10m),
-        wind_direction_10m: rows.map((row) => row.current?.wind_direction_10m),
-      },
-    });
-    mem = { at: Date.now(), payload };
-    void writeDisk(mem);
-    return payload;
+    return {
+      ...parseGrid({
+        latitude: rows.map((row) => row.latitude),
+        longitude: rows.map((row) => row.longitude),
+        current: {
+          time: rows[0]?.current?.time || null,
+          wind_speed_10m: rows.map((row) => row.current?.wind_speed_10m),
+          wind_direction_10m: rows.map(
+            (row) => row.current?.wind_direction_10m,
+          ),
+        },
+      }),
+      provider: 'open-meteo',
+    };
   }
 
   function installMiddleware(server) {

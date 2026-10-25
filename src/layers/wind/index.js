@@ -1,5 +1,5 @@
 /**
- * Wind overlay — coarse Open-Meteo GFS 10 m wind as colored, oriented
+ * Wind overlay — coarse GFS 10 m wind (NOAA GFS via PacIOOS ERDDAP, Open-Meteo fallback) as colored, oriented
  * arrows on the globe. Visible at Earth-to-regional scale; parks when the
  * camera is street-level so it does not wash out city views.
  */
@@ -65,7 +65,7 @@ export function createWindLayer({ source } = {}) {
     id: WIND_LAYER_ID,
     name: 'Wind',
     icon: '🌬',
-    source: 'Open-Meteo GFS · 10 m',
+    source: 'NOAA GFS · 10 m',
     updateInterval: 30 * 60_000,
     init(nextViewer) {
       if (viewer) throw new Error('Wind layer is already initialized');
