@@ -1,5 +1,4 @@
 import { AIRCRAFT_DARK_CONFIG, createDarkTracker } from '../../src/data/wentDark.js';
-import { adsbLolMayRequest, noteAdsbLolResponse } from '../providers/aircraft/adsbLolGate.js';
 import { blackoutStore } from './persist.js';
 import { createFlagLog } from './flagLog.js';
 
@@ -58,14 +57,20 @@ export function createMilAircraftWatcher({ fetchImpl = globalThis.fetch, store =
   let lastCount = 0;
   let polls = 0;
   let timer = null;
+  let backoffUntil = 0;
+  let backoff429 = 0;
 
   async function pollOnce() {
     const t0 = now();
-    if (!adsbLolMayRequest(t0)) { lastError = 'adsb.lol rate-limit cooldown'; return false; }
+    // Own backoff: /v2/mil is one small request every 30 s. The shared globe
+    // gate is often held by the civil regional fallback's 429s, which would
+    // otherwise starve this detector indefinitely.
+    if (t0 < backoffUntil) { lastError = 'adsb.lol rate-limit backoff'; return false; }
     polls += 1;
     try {
       const res = await fetchImpl(MIL_UPSTREAM, { headers: { Accept: 'application/json', 'User-Agent': 'Blackout/1 (+globe)' }, signal: AbortSignal.timeout(15_000) });
-      noteAdsbLolResponse(res.status, res.headers, now());
+      if (res.status === 429) { backoff429 += 1; backoffUntil = now() + Math.min(600_000, 30_000 * 2 ** (backoff429 - 1)); }
+      else if (res.ok) backoff429 = 0;
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const body = await res.json();
       const snapAt = Number.isFinite(body?.now) ? body.now : t0;
