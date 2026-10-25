@@ -8,7 +8,12 @@ import {
   gnssProvenance,
   pruneGnssObservations,
 } from './records.js';
+import {
+  describeGnssHistoryCoverage,
+  gnssTimelineSlider,
+} from './history.js';
 export * from './records.js';
+export * from './history.js';
 export { createAdsbGnssSource } from './source.js';
 
 /**
@@ -93,6 +98,77 @@ export function createGnssIntegrityLayer({
   let _retryAt = 0;
   let _failureCount = 0;
   const _observations = new Map();
+  // History scrubbing (server-memory frames). null index = live.
+  let _timeline = null;
+  let _timelineAt = -Infinity;
+  let _scrubIndex = null;
+  let _historyCells = null;
+  let _historyError = null;
+  let _frameTimer = null;
+  let _frameRequest = null;
+  let _rowListener = null;
+  const notifyRow = () => {
+    try {
+      _rowListener?.();
+    } catch {
+      /* panel repaint is best-effort */
+    }
+  };
+  const displayedCells = () =>
+    _scrubIndex != null && _historyCells ? _historyCells : _cells;
+
+  async function refreshTimeline({ force = false } = {}) {
+    if (typeof source.getHistory !== 'function' || !_enabled) return;
+    if (!force && monotonicNow() - _timelineAt < 60_000) return;
+    _timelineAt = monotonicNow();
+    try {
+      _timeline = await source.getHistory();
+      _historyError = null;
+      if (_scrubIndex != null && _scrubIndex >= _timeline.frames.length)
+        _scrubIndex = null;
+    } catch (error) {
+      _historyError = error?.message || 'History unavailable';
+    }
+    notifyRow();
+  }
+
+  function scrubTo(value) {
+    const frames = _timeline?.frames || [];
+    const index = Math.round(Number(value));
+    clearTimeout(_frameTimer);
+    _frameRequest?.abort();
+    _frameRequest = null;
+    if (!Number.isFinite(index) || index >= frames.length || index < 0) {
+      _scrubIndex = null;
+      _historyCells = null;
+      _signature = null;
+      if (_primitives) render();
+      notifyRow();
+      return;
+    }
+    _scrubIndex = index;
+    notifyRow();
+    const at = frames[index].at;
+    _frameTimer = setTimeout(async () => {
+      const controller = new AbortController();
+      _frameRequest = controller;
+      try {
+        const frame = await source.getHistoryFrame(at, {
+          signal: controller.signal,
+        });
+        if (controller.signal.aborted || _scrubIndex !== index) return;
+        _historyCells = frame.cells;
+        _historyError = null;
+        if (_primitives) render();
+      } catch (error) {
+        if (controller.signal.aborted) return;
+        _historyError = error?.message || 'History unavailable';
+      } finally {
+        if (_frameRequest === controller) _frameRequest = null;
+        notifyRow();
+      }
+    }, 180);
+  }
   const provenance = gnssProvenance({ windowMs });
 
   const queryKey = (anchor) =>
@@ -162,16 +238,17 @@ export function createGnssIntegrityLayer({
 
   function render() {
     // Only the id and band change what is drawn; counts alone do not.
+    const cells = displayedCells();
     const signature = JSON.stringify(
-      _cells.map(({ id, level }) => [id, level]),
+      cells.map(({ id, level }) => [id, level]),
     );
     if (signature === _signature) return;
     _signature = signature;
     _primitives.removeAll();
-    if (_cells.length) {
+    if (cells.length) {
       _primitives.add(
         new GnssGroundFill({
-          geometryInstances: _cells.map(
+          geometryInstances: cells.map(
             (cell) =>
               new Cesium.GeometryInstance({
                 id: `${layer.id}:${cell.id}`,
@@ -220,6 +297,15 @@ export function createGnssIntegrityLayer({
       _manager = manager;
     },
 
+    setRowControlsListener(listener) {
+      _rowListener = typeof listener === 'function' ? listener : null;
+    },
+
+    /** Scrub to a history frame index; null or out of range returns to live. */
+    scrubHistory(index) {
+      scrubTo(index == null ? Infinity : index);
+    },
+
     init(viewer) {
       if (_viewer)
         throw new Error('GNSS integrity layer is already initialized');
@@ -238,6 +324,7 @@ export function createGnssIntegrityLayer({
 
     enable() {
       _enabled = true;
+      void refreshTimeline({ force: true });
       // Cells left from before a long disable must not reappear past the window.
       if (_primitives) {
         expire();
@@ -254,6 +341,10 @@ export function createGnssIntegrityLayer({
       _backgroundRefresh = null;
       _request?.abort();
       _request = null;
+      clearTimeout(_frameTimer);
+      _frameTimer = null;
+      _frameRequest?.abort();
+      _frameRequest = null;
       _enabled = false;
       if (_primitives) _primitives.show = false;
     },
@@ -307,6 +398,7 @@ export function createGnssIntegrityLayer({
         });
         _cells = binGnssCells(_observations);
         render();
+        void refreshTimeline();
         _stale = snapshot.stale === true;
         _lastUpdate = at - snapshot.ageMs;
         _lastError = null;
@@ -352,6 +444,10 @@ export function createGnssIntegrityLayer({
       _removeCameraChanged = null;
       _observations.clear();
       _cells = [];
+      _timeline = null;
+      _scrubIndex = null;
+      _historyCells = null;
+      _rowListener = null;
       _signature = null;
       if (_primitives) {
         viewer.scene.groundPrimitives.remove(_primitives);
@@ -369,10 +465,25 @@ export function createGnssIntegrityLayer({
     },
 
     getRowControls() {
+      const slider = gnssTimelineSlider(_timeline, _scrubIndex, now());
+      const cells = displayedCells();
       return {
         chips: [],
+        slider: {
+          ...slider,
+          title:
+            'Drag left to replay recorded integrity cells (5-minute frames). Right end = live.',
+          onInput: (value) => scrubTo(value),
+        },
         info:
-          'Regional sample · 250 nm radius · cells from visited views over 30 min' +
+          (slider.live
+            ? ''
+            : `Showing recorded frame ${slider.valueText}${
+                _historyCells ? '' : ' (loading…)'
+              } · `) +
+          describeGnssHistoryCoverage(_timeline, now()) +
+          (_historyError ? ` · ${_historyError}` : '') +
+          ' · Regional sample · 250 nm radius · cells from visited views over 30 min' +
           (_lastError && _retryAt
             ? ` · ${_lastError} · Retrying automatically${
                 _retryAt <= 8640000000000000
@@ -385,7 +496,7 @@ export function createGnssIntegrityLayer({
         legend: ['high', 'medium', 'low'].map((level, index) => ({
           label: LEVEL_LABELS[level],
           color: GNSS_LEVEL_COLORS[level],
-          count: _cells.filter((cell) => cell.level === level).length,
+          count: cells.filter((cell) => cell.level === level).length,
           ...(index === 0
             ? {
                 blurb: `Low-accuracy score = 100 × max(0, bad − 1) / total: one aircraft is discounted, so this is not the raw share. Cells need ${GNSS_MIN_AIRCRAFT} aircraft over ${provenance.window.minutes} minutes. Navigation-integrity anomalies are not a detection of jamming or spoofing.`,

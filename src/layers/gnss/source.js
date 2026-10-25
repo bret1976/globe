@@ -70,7 +70,35 @@ export function createAdsbGnssSource({
         stale: payload.stale === true,
         classifier:
           typeof payload.classifier === 'string' ? payload.classifier : null,
+        provider: 'adsb.lol',
       };
+    },
+
+    /** Server-memory history timeline (frames list only). */
+    async getHistory({ signal } = {}) {
+      const response = await fetchImpl('/api/gnss-integrity/history', {
+        signal,
+      });
+      if (!response.ok)
+        throw new Error(`GNSS history unavailable (HTTP ${response.status})`);
+      const payload = await response.json();
+      if (!Array.isArray(payload?.frames))
+        throw new Error('Malformed GNSS history');
+      return payload;
+    },
+
+    /** Cells as the live overlay would have drawn them at `at` (ms). */
+    async getHistoryFrame(at, { signal } = {}) {
+      const response = await fetchImpl(
+        `/api/gnss-integrity/history?at=${encodeURIComponent(Math.round(at))}`,
+        { signal },
+      );
+      if (!response.ok)
+        throw new Error(`GNSS history unavailable (HTTP ${response.status})`);
+      const payload = await response.json();
+      if (!Array.isArray(payload?.frame?.cells))
+        throw new Error('Malformed GNSS history frame');
+      return payload.frame;
     },
   };
 }

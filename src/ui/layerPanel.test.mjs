@@ -37,6 +37,7 @@ test('panel presentation places Transit between Street Traffic and Bike Share in
       'military',
       'local-adsb',
       'ais-live-vessels',
+      'went-dark',
       'traffic',
       'transit',
       'bikeshare',

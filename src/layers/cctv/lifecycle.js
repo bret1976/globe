@@ -1,4 +1,8 @@
 import * as Cesium from 'cesium';
+import {
+  clearInspection,
+  publishInspection,
+} from '../../provenance/inspection.js';
 import { isPhoneLite } from '../../app/phoneLite.js';
 import { createPhoneBillboardClusterer } from '../../app/phoneClusters.js';
 import { viewshedColors, cameraHue } from '../../data/cctvViewshed.js';
@@ -321,6 +325,28 @@ export function createLifecycle({
       layerState._clickHandler = new Cesium.ScreenSpaceEventHandler(
         layerState._viewer.scene.canvas,
       );
+      // Trace-to-source: tell the Source panel which camera the click chose.
+      const inspectCamera = (cameraId) => {
+        try {
+          const record = layerState._recordById.get(cameraId);
+          if (!record) return;
+          const state = parts.presentation.getPublicCameraState(
+            record,
+            cameraId,
+          );
+          publishInspection({
+            layerId: 'cctv',
+            id: cameraId,
+            label: state.name,
+            provider: state.sourceLabel || state.provider || undefined,
+            fetchedAt: null,
+            properties: { calBadge: state.calBadge },
+            raw: state,
+          });
+        } catch {
+          /* the Source panel is optional */
+        }
+      };
       parts.selection.bindCctvWorldClickGesture(
         layerState._clickHandler,
         (click) => {
@@ -332,6 +358,7 @@ export function createLifecycle({
               cameraId,
               parts.selection.setActiveCamera,
             );
+            inspectCamera(cameraId);
             return;
           }
           // Any identified scene object owns this click even if its layer does not
@@ -355,6 +382,7 @@ export function createLifecycle({
               cardId,
               parts.selection.setActiveCamera,
             );
+            inspectCamera(cardId);
             return;
           }
           if (
@@ -364,6 +392,7 @@ export function createLifecycle({
             })
           ) {
             parts.selection.deactivateActiveCamera();
+            clearInspection('cctv');
           }
         },
         {

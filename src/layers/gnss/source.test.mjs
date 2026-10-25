@@ -27,6 +27,7 @@ test('the source asks the same-origin proxy for the view anchor', async () => {
     fetchedAt: 5,
     stale: false,
     classifier: 'gev-nic-nacp-v2',
+    provider: 'adsb.lol',
   });
 });
 

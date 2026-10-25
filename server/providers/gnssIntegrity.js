@@ -3,6 +3,7 @@ import {
   GNSS_WINDOW_MS,
   normalizeGnssAircraft,
 } from '../../src/layers/gnss/records.js';
+import { createGnssHistory } from '../../src/layers/gnss/history.js';
 import { adsbLolFallbackAnchor } from './aircraft/opensky.js';
 import { coalesceProxyRequest, readResponseJsonCapped } from './common/http.js';
 import { makeRateLimiter, clientKey } from './common/rate-limit.js';
@@ -57,6 +58,7 @@ export function gnssIntegrityProxy({
   now = () => Date.now(),
   monotonicNow = () => performance.now(),
   warn = (...args) => console.warn(...args),
+  history = createGnssHistory({ startedAt: now() }),
 } = {}) {
   const cache = new Map();
   const inFlight = new Map();
@@ -120,6 +122,7 @@ export function gnssIntegrityProxy({
         radiusNm: RADIUS_NM,
         // `degraded` on each row is this classifier's verdict, not gpsjam's.
         classifier: GNSS_CLASSIFIER.id,
+        provider: 'adsb.lol',
         rows,
       };
     } catch (error) {
@@ -156,6 +159,12 @@ export function gnssIntegrityProxy({
             local: true,
           });
         const value = await load(anchor);
+        // History records real reads only; it never polls on its own.
+        try {
+          history.record(value.rows, value.fetchedAt, now());
+        } catch (error) {
+          warn('[gnss-integrity] history record failed:', error?.message);
+        }
         const entry = {
           value,
           savedAt: monotonicNow(),
@@ -191,7 +200,31 @@ export function gnssIntegrityProxy({
       res.end(JSON.stringify(value));
     };
     if (req.method !== 'GET') return json(405, { error: 'method_not_allowed' });
-    const path = (req.url || '/').split('?')[0];
+    const path = (req.url || '/').split('?')[0].replace(/\/+$/, '');
+    if (path === '/history') {
+      const params = new URL(req.url || '/', 'http://local').searchParams;
+      const t = now();
+      const timeline = history.timeline(t);
+      const base = {
+        fetchedAt: t,
+        provider: 'adsb.lol',
+        classifier: GNSS_CLASSIFIER.id,
+        startedAt: timeline.startedAt,
+        bucketMs: timeline.bucketMs,
+        windowMs: timeline.windowMs,
+        retentionMs: timeline.retentionMs,
+        persisted: timeline.persisted,
+        oldestAt: timeline.oldestAt,
+        newestAt: timeline.newestAt,
+      };
+      if (params.has('at')) {
+        const at = Number(params.get('at'));
+        if (!Number.isFinite(at) || at <= 0)
+          return json(400, { error: 'invalid_at' });
+        return json(200, { ...base, frame: history.frame(Math.min(at, t), t) });
+      }
+      return json(200, { ...base, frames: timeline.frames });
+    }
     if (path !== '/' && path !== '')
       return json(404, { error: 'unknown_route' });
     const anchor = gnssIntegrityAnchor(req.url);

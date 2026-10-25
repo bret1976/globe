@@ -15,7 +15,7 @@ import './replay.css';
 import { recordRun, recordingSupported } from '../scenes/storyRecorder.js';
 import { holdContinuousRender, releaseContinuousRender } from '../renderGovernor.js';
 import { classifyAircraft, CLASS_MODEL_REAL, CLASS_MODEL_URL } from '../data/aircraftClass.js';
-import { REPLAY_SPEEDS, splitSegments, parseReplayHash, clampBbox, formatClock, formatDate, speedLabel } from './model.js';
+import { REPLAY_SPEEDS, splitSegments, parseReplayHash, clampBbox, formatClock, formatDate, speedLabel, replayJammingDate, replayJammingRows } from './model.js';
 
 export const REPLAY_EVENTS = [
   { id: 'sf-fleet-week-2025', label: 'SF Fleet Week 2025 · Air show Sat Oct 11', url: '/replay/sf-fleet-week-2025.json' },
@@ -33,7 +33,7 @@ const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<
 export function initReplay({ viewer }) {
   if (!viewer || document.getElementById('replay-btn')) return null;
   const isPhone = () => window.matchMedia('(max-width: 760px)').matches;
-  const state = { open: false, replay: null, entities: [], selected: null, mode: 'chase', speed: 3, saved: null, ds: null, trail: null, wind: [], timeZone: undefined, loadToken: 0, customToken: 0 };
+  const state = { jam: [], jamOn: true, jamNote: '', open: false, replay: null, entities: [], selected: null, mode: 'chase', speed: 3, saved: null, ds: null, trail: null, wind: [], timeZone: undefined, loadToken: 0, customToken: 0 };
 
   // ---------- button ----------
   const nav = document.getElementById('top-center-actions');
@@ -64,6 +64,7 @@ export function initReplay({ viewer }) {
         <select class="replay-event" aria-label="Replay event"></select>
         <button class="replay-custom-toggle" type="button" aria-expanded="false">CUSTOM AREA / TIME</button>
         <button class="replay-notes-toggle" type="button" aria-expanded="false">DATA NOTES</button>
+        <button class="replay-jam-toggle" type="button" aria-pressed="true" title="GPS jamming overlay: gpsjam.org daily hexes for the replay's UTC day (inferred from ADS-B accuracy)">GPS JAMMING</button>
       </div>
       <form class="replay-custom" hidden>
         <div class="replay-custom-grid">
@@ -175,6 +176,8 @@ export function initReplay({ viewer }) {
     unselect();
     for (const w of state.wind) state.ds?.entities.remove(w);
     state.wind = [];
+    state.jam = [];
+    state.jamNote = '';
     state.ds?.entities.removeAll();
     state.entities = [];
     state.replay = null;
@@ -242,6 +245,7 @@ export function initReplay({ viewer }) {
     for (const a of r.aircraft || []) add(a, 'air');
     for (const s of r.ships || []) add(s, 'ship');
     buildWind(r, at);
+    void buildJamming(r);
 
     // clock → event time (sun lighting follows the clock)
     const c = viewer.clock;
@@ -286,6 +290,54 @@ export function initReplay({ viewer }) {
       viewer.camera.flyTo({ destination: Cesium.Rectangle.fromDegrees(w, s, e, n), duration: 1.5 });
     }
   }
+
+  // gpsjam.org daily hexes for the replay's UTC day — the same overlay the
+  // live GPS Interference layer draws, clipped to the replay area. Daily
+  // granularity: it shows where aircraft reported poor accuracy that day,
+  // not at the replay minute.
+  async function buildJamming(r) {
+    const date = replayJammingDate(r.t0);
+    if (!date || !Array.isArray(r.bbox)) return;
+    let note;
+    try {
+      const res = await fetch(`/api/gpsjam?date=${date}`);
+      const body = await res.json().catch(() => ({}));
+      if (state.replay !== r || !state.ds) return;
+      if (!res.ok) {
+        note = res.status === 404 ? `GPS jamming: gpsjam.org has no file for ${date}.` : `GPS jamming overlay unavailable (${body.error || res.status}).`;
+      } else {
+        const rows = replayJammingRows(body.rows, r.bbox);
+        for (const row of rows) {
+          if (!Array.isArray(row.ring) || row.ring.length < 3) continue;
+          const color = Cesium.Color.fromCssColorString(row.level === 'high' ? '#FF2244' : '#FFCC33');
+          state.jam.push(state.ds.entities.add({
+            show: state.jamOn,
+            polygon: {
+              hierarchy: Cesium.Cartesian3.fromDegreesArray(row.ring.flat()),
+              material: color.withAlpha(row.level === 'high' ? 0.4 : 0.28),
+              outline: false,
+              heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+            },
+          }));
+        }
+        note = `GPS jamming (inferred): gpsjam.org daily file ${body.date || date} (UTC day, not the replay minute) · ${rows.length} medium/high hexes near this area.`;
+      }
+    } catch (err) {
+      if (state.replay !== r) return;
+      note = `GPS jamming overlay unavailable (${err.message}).`;
+    }
+    state.jamNote = note;
+    const list = $('.replay-notes ul');
+    if (list) list.insertAdjacentHTML('beforeend', `<li>${esc(note)}</li>`);
+    viewer.scene.requestRender();
+  }
+
+  $('.replay-jam-toggle').addEventListener('click', () => {
+    state.jamOn = !state.jamOn;
+    $('.replay-jam-toggle').setAttribute('aria-pressed', String(state.jamOn));
+    for (const e of state.jam) e.show = state.jamOn;
+    viewer.scene.requestRender();
+  });
 
   function windArrow() {
     const cv = document.createElement('canvas');

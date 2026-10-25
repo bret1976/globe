@@ -11,6 +11,10 @@ import {
   aisStreamRows,
   newestAisPositionAt,
 } from './ais-store.js';
+import {
+  noteShipFeedStatus,
+  shipWentDarkSnapshot,
+} from './went-dark.js';
 // ---------------------------------------------------------------------------
 // AISStream live vessel cache state
 // ---------------------------------------------------------------------------
@@ -75,6 +79,15 @@ export function aisLiveProxy() {
       try {
         ensureAisStreamConnection();
         const incoming = new URL(req.url || '', 'http://localhost');
+
+        if (incoming.pathname === '/dark' || incoming.pathname === '/dark/') {
+          noteShipFeedStatus(aisStreamStatusSnapshot().status);
+          res.statusCode = 200;
+          res.setHeader('Content-Type', 'application/json; charset=utf-8');
+          res.setHeader('Cache-Control', 'no-store');
+          res.end(JSON.stringify(shipWentDarkSnapshot()));
+          return;
+        }
 
         // Track sub-route MUST be handled before the rows snapshot — this
         // mount prefix-matches every subpath, so without this branch
@@ -334,6 +347,7 @@ function startAisStreamWatchdogTick() {
   _aisStreamTickTimer = setInterval(() => {
     try {
       ensureAisStreamConnection();
+      noteShipFeedStatus(aisStreamStatusSnapshot().status);
     } catch (error) {
       console.warn('[AISStream] watchdog tick failed', error?.message || '');
     }

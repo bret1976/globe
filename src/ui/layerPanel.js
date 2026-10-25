@@ -23,6 +23,7 @@ const PANEL_GROUPS = [
       'military',
       'local-adsb',
       'ais-live-vessels',
+      'went-dark',
       'traffic',
       'transit',
       'bikeshare',
@@ -97,6 +98,7 @@ const PANEL_LABELS = {
   'au-fire': 'AU Fire Incidents',
   'gps-interference': 'GPS Interference',
   'gnss-integrity': 'GNSS Integrity (live ADS-B)',
+  'went-dark': 'Went Dark (inferred)',
   volcanoes: 'Volcanoes (elevated)',
   aurora: 'Aurora (OVATION)',
   radiation: 'Radiation (Safecast)',
@@ -397,6 +399,15 @@ export class LayerPanel {
           else if (chip.params)
             this.setLayerParams(layer.id, chip.params, { origin: 'user' });
         });
+        // A time slider (history scrubbing): its own delegated input lane.
+        this._bind(controls, 'input', (event) => {
+          const input = event.target?.closest?.('.data-toggle-slider-input');
+          if (!input || input.disabled || !this.isEnabled(layer.id)) return;
+          const slider = this._rowControlsFor(layer.id)?.slider;
+          if (!slider || slider.id !== input.dataset.sliderId) return;
+          if (typeof slider.onInput === 'function')
+            slider.onInput(Number(input.value));
+        });
         row.appendChild(controls);
         // An ordered list below the chips, for a layer whose row carries a
         // sequence (turn-by-turn directions). Its own delegated listener, its
@@ -410,7 +421,8 @@ export class LayerPanel {
           const item = this._rowControlsFor(layer.id)?.list?.items?.find(
             (entry) => entry.id === button.dataset.listItemId,
           );
-          if (item?.params)
+          if (typeof item?.onClick === 'function') item.onClick();
+          else if (item?.params)
             this.setLayerParams(layer.id, item.params, { origin: 'user' });
         });
         row.appendChild(list);
@@ -447,8 +459,10 @@ export class LayerPanel {
     const controls = layer.enabled ? this._rowControlsFor(layer.id) : null;
     const chips = controls?.chips || [];
     const legend = controls?.legend || [];
+    const slider = controls?.slider || null;
     this._syncRowList(listContainer, controls?.list || null);
-    container.hidden = chips.length === 0 && legend.length === 0;
+    container.hidden = chips.length === 0 && legend.length === 0 && !slider;
+    this._syncRowSlider(container, slider);
 
     for (const node of [...container.children]) {
       if (
@@ -493,6 +507,56 @@ export class LayerPanel {
       entry.append(swatch, text);
       container.appendChild(entry);
     }
+  }
+
+  /**
+   * Render (or remove) a row's time slider, reconciled in place so a drag in
+   * progress keeps focus across the refresh its own input triggers.
+   * @param {HTMLElement} container The row's `.data-toggle-controls` node.
+   * @param {{id: string, min: number, max: number, step?: number, value: number,
+   *   label?: string, valueText?: string, ariaLabel?: string, title?: string,
+   *   disabled?: boolean}|null} slider
+   */
+  _syncRowSlider(container, slider) {
+    let node = container.querySelector?.('.data-toggle-slider') || null;
+    if (!slider) {
+      node?.remove();
+      return;
+    }
+    if (!node || node.dataset.sliderId !== slider.id) {
+      node?.remove();
+      node = document.createElement('label');
+      node.className = 'data-toggle-slider';
+      node.dataset.sliderId = slider.id;
+      const label = document.createElement('span');
+      label.className = 'data-toggle-slider-label';
+      const input = document.createElement('input');
+      input.type = 'range';
+      input.className = 'data-toggle-slider-input';
+      input.dataset.sliderId = slider.id;
+      const value = document.createElement('span');
+      value.className = 'data-toggle-slider-value';
+      node.append(label, input, value);
+      container.insertBefore(node, container.firstChild);
+    }
+    const label = node.querySelector('.data-toggle-slider-label');
+    const input = node.querySelector('.data-toggle-slider-input');
+    const value = node.querySelector('.data-toggle-slider-value');
+    const labelText = String(slider.label ?? '');
+    const valueText = String(slider.valueText ?? '');
+    if (label && label.textContent !== labelText) label.textContent = labelText;
+    if (value && value.textContent !== valueText) value.textContent = valueText;
+    if (input) {
+      input.min = String(slider.min ?? 0);
+      input.max = String(slider.max ?? 0);
+      input.step = String(slider.step ?? 1);
+      if (String(input.value) !== String(slider.value))
+        input.value = String(slider.value ?? 0);
+      input.disabled = Boolean(slider.disabled);
+      input.setAttribute('aria-label', slider.ariaLabel || labelText);
+      input.setAttribute('aria-valuetext', valueText);
+    }
+    node.title = slider.title || '';
   }
 
   /**

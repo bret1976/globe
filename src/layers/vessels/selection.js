@@ -195,6 +195,11 @@ export function createSelection({
         layerId: 'ais-live-vessels',
         layerName: 'Live AIS Vessels',
         source: aisLiveVesselsLayer.source,
+        provider: 'AISStream',
+        fetchedAt: Number.isFinite(record.receivedAtMs)
+          ? record.receivedAtMs
+          : null,
+        raw: record,
         label: components.cards.displayVesselName(record),
         latitude: record.lat,
         longitude: record.lon,

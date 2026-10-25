@@ -100,6 +100,8 @@ export function createTracking({
       layerId: 'flights',
       layerName: 'Live Flights',
       source: flightState.feed._lastSource,
+      provider: flightState.feed._lastSource,
+      fetchedAt: flightState.feed._lastUpdate ?? null,
       label: parts.queries._contactLabel(
         icao24,
         flightState.records.data.get(icao24),

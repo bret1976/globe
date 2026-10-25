@@ -96,6 +96,8 @@ export function createTracking({
       layerId: 'military',
       layerName: 'Military Flights',
       source: flightState.feed._lastSource,
+      provider: flightState.feed._lastSource,
+      fetchedAt: flightState.feed._lastUpdate ?? null,
       label,
       latitude: described.latitude,
       longitude: described.longitude,

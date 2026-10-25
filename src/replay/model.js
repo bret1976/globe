@@ -46,3 +46,29 @@ export function formatDate(epochS, timeZone) {
 }
 
 export function speedLabel(x) { return `${x} s/s`; }
+
+/** Degrees of margin around the replay box when picking gpsjam hexes. */
+export const REPLAY_JAMMING_MARGIN_DEG = 1.5;
+
+/** gpsjam publishes one file per UTC day: the day the replay starts in. */
+export function replayJammingDate(t0Seconds) {
+  if (!Number.isFinite(t0Seconds)) return null;
+  return new Date(t0Seconds * 1000).toISOString().slice(0, 10);
+}
+
+/**
+ * gpsjam rows (medium/high hexes) whose centre falls inside the replay box
+ * grown by `margin` degrees.
+ * @param {Array<{lat: number, lon: number}>} rows
+ * @param {[number, number, number, number]} bbox [west, south, east, north]
+ */
+export function replayJammingRows(rows, bbox, margin = REPLAY_JAMMING_MARGIN_DEG) {
+  if (!Array.isArray(rows) || !Array.isArray(bbox) || bbox.length !== 4) return [];
+  const [w, s, e, n] = bbox;
+  return rows.filter(
+    (r) =>
+      Number.isFinite(r?.lat) && Number.isFinite(r?.lon) &&
+      r.lat >= s - margin && r.lat <= n + margin &&
+      r.lon >= w - margin && r.lon <= e + margin,
+  );
+}

@@ -58,6 +58,7 @@ import {
 } from './layers/nowcoastWeather.js';
 import { createApplicationIonosphere } from './layers/ionosphere.js';
 import { createApplicationUkraineFires } from './layers/ukraineFires.js';
+import { createApplicationWentDark } from './layers/wentDark.js';
 import { createApplicationOceanCurrents } from './layers/oceanCurrents.js';
 import { createApplicationPowerPlants } from './layers/powerPlants.js';
 import { createInfrastructureLayers } from '../data/infrastructure.js';
@@ -117,6 +118,7 @@ const SOURCE_METHODS = Object.freeze({
   hurricaneCones: ['getSnapshot'],
   ionosphere: ['getSnapshot'],
   ukraineFires: ['getSnapshot'],
+  wentDark: ['getSnapshot'],
   cables: ['fetch'],
   cyclones: ['getSnapshot'],
   wind: ['getSnapshot'],
@@ -240,6 +242,7 @@ export function createApplicationCatalog({
         createApplicationHmsSmoke({ source: sources.hmsSmoke }),
         createApplicationIonosphere({ source: sources.ionosphere }),
         createApplicationUkraineFires({ source: sources.ukraineFires }),
+        createApplicationWentDark({ source: sources.wentDark }),
         createApplicationAlpr({ surface, source: sources.alpr }),
         satellites,
         createApplicationLaunches({ source: sources.launches, satellites }),
