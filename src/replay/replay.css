@@ -38,7 +38,7 @@ body.replay-active #top-center-actions > button:not(#replay-btn) { visibility: h
 .replay-gap { color: #ffcf66; }
 .replay-target-btns { display: flex; gap: 6px; margin-top: 8px; }
 .replay-target-btns button, .replay-bar button, .replay-event, .replay-custom input, .replay-custom select { min-height: 32px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--glass-border, rgba(255, 255, 255, 0.14)); background: rgba(8, 14, 20, 0.7); color: #d8f6ff; font-size: 11px; letter-spacing: 0.06em; cursor: pointer; }
-.replay-target-btns button[aria-pressed='true'], .replay-speed[aria-pressed='true'] { border-color: var(--accent, #00d4ff); color: var(--accent, #00d4ff); background: var(--accent-dim, rgba(0, 212, 255, 0.15)); }
+.replay-target-btns button[aria-pressed='true'], .replay-speed[aria-pressed='true'], .replay-jam-toggle[aria-pressed='true'] { border-color: var(--accent, #00d4ff); color: var(--accent, #00d4ff); background: var(--accent-dim, rgba(0, 212, 255, 0.15)); }
 .replay-bar { position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); width: min(920px, calc(100vw - 32px)); padding: 10px 12px 8px; border-radius: 16px; background: var(--glass-bg, rgba(10, 14, 20, 0.7)); border: 1px solid var(--glass-border, rgba(255, 255, 255, 0.12)); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); pointer-events: auto; display: flex; flex-direction: column; gap: 8px; box-sizing: border-box; }
 .replay-row { display: flex; align-items: center; gap: 8px; }
 .replay-event { flex: 1; min-width: 0; }
@@ -78,7 +78,7 @@ body.replay-active #top-center-actions > button:not(#replay-btn) { visibility: h
   .replay-play { min-height: 40px !important; }
   .replay-row-pick { flex-wrap: wrap; }
   .replay-event { flex-basis: 100%; min-height: 40px !important; }
-  .replay-custom-toggle, .replay-notes-toggle { flex: 1; min-height: 38px !important; }
+  .replay-custom-toggle, .replay-notes-toggle, .replay-jam-toggle { flex: 1; min-height: 38px !important; }
   .replay-custom-grid { grid-template-columns: 1fr 1fr; }
   .replay-custom-grid .replay-go { grid-column: 1 / -1; min-height: 42px; }
   .replay-custom input, .replay-custom select { min-height: 40px; font-size: 16px; }

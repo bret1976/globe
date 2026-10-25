@@ -1,4 +1,5 @@
 import { ERROR_BACKOFF_INTERVAL } from './recordPolicy.js';
+import { observeAircraftSnapshot } from '../../data/wentDarkAircraft.js';
 
 /** Own acquisition, cancellation, freshness and backoff independently of rendering. */
 export function createIngestion({
@@ -54,6 +55,7 @@ export function createIngestion({
         // Freshness belongs to the source snapshot, not the moment this browser
         // received a cached 200 response.
         feed._lastUpdate = sourceEpochMs;
+        observeAircraftSnapshot(snapshot);
         feed._lastTrackingRefreshOutcome = {
           epoch: trackingRefreshEpoch,
           status: 'accepted',

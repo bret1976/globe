@@ -8,6 +8,10 @@ import {
 } from './policy.js';
 import { getRegisteredTransitFeed } from '../../data/transitFeeds.js';
 import { isPointerFree } from '../../data/inputOwnership.js';
+import {
+  clearInspection,
+  publishInspection,
+} from '../../provenance/inspection.js';
 
 /**
  * Click-to-select one vehicle and a card that follows it.
@@ -88,6 +92,7 @@ export function createSelection({ state, services, parts }) {
       ? state._vehicles.get(state._selectedKey)
       : null;
     parts.trails.clear();
+    if (state._selectedKey) clearInspection('transit');
     state._selectedKey = null;
     state._selectedCardText = null;
     state._detectRevision += 1;
@@ -105,6 +110,18 @@ export function createSelection({ state, services, parts }) {
     parts.rendering.paintSelected(entry, true);
     parts.trails.select(entry);
     refreshSelectedCard(true);
+    const feed =
+      state._activeFeeds.get(entry.feedId) ||
+      getRegisteredTransitFeed(entry.feedId);
+    publishInspection({
+      layerId: 'transit',
+      id: key,
+      feedId: entry.feedId,
+      label: state._selectedCardText?.split('\u0000')[1] || key,
+      provider: feed?.name || feed?.agency || 'GTFS-Realtime',
+      fetchedAt: Number.isFinite(entry.fetchedAt) ? entry.fetchedAt : null,
+      raw: entry.record,
+    });
     governorRequestRender('transit-select');
   }
 

@@ -278,6 +278,12 @@ and snapshot source. The standalone adapter keeps the existing USGS daily feed,
 M2.5+ filtering, static discs, magnitude labels and analyst records. Disabling or
 destroying the layer cancels pending work and ignores late results.
 
+## Provenance, Went Dark and jamming history (2026-10-25)
+
+- `src/provenance/` — observed / inferred / simulated mapping (`LAYER_PROVENANCE`, `resolveProvenance`) and the picked-item channel; `src/ui/sourceInspector.js` renders the Source section (badge, provider, fetch age, licence, collapsible raw fields).
+- `src/data/wentDark.js` — detector with named thresholds (`SHIP_DARK_CONFIG`, `AIRCRAFT_DARK_CONFIG`, `WENT_DARK_ENABLED_DEFAULT`). Ships run server-side (`server/providers/vessels/went-dark.js`, `/api/ais-live/dark`); aircraft run in the browser off the Flights snapshot and only when coverage is worldwide. Layer `went-dark` (Movement group). Tested with simulated data only.
+- `src/layers/gnss/history.js` — in-memory 5-min / 24-h GNSS series behind `/api/gnss-integrity/history`; time slider on GNSS Integrity. gpsjam has a day slider (`/api/gpsjam/dates`, `?date=`), and replay draws the gpsjam day for its start date.
+
 ## Vessel components and sources
 
 `src/data/aisLiveVessels.js` assembles `createVesselLayer` from the

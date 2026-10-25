@@ -86,6 +86,7 @@ for (const hook of ['configureServer', 'configurePreviewServer']) {
     assert.deepEqual(calls, ['https://api.adsb.lol/v2/lat/50/lon/20/dist/250']);
     assert.deepEqual(res.body, {
       fetchedAt: 1234,
+      provider: 'adsb.lol',
       ageMs: 0,
       anchor: { lat: 50, lon: 20 },
       radiusNm: 250,
@@ -426,4 +427,25 @@ test('GERMAN: distinct concurrent upstream reads are bounded', async () => {
   pending.forEach((resolve) => resolve(Response.json(snapshot)));
   const results = await Promise.all(jobs);
   assert.ok(results.some((result) => result.status === 429));
+});
+
+test('history route: honest empty series after a restart, frames after a fetch, rejects a bad time', async () => {
+  let t = 4_000_000_000_000;
+  const request = install({
+    now: () => t,
+    fetchImpl: async () => Response.json({ ...snapshot, now: t }),
+  });
+  const empty = await request('/history');
+  assert.equal(empty.status, 200);
+  assert.equal(empty.body.persisted, false);
+  assert.deepEqual(empty.body.frames, []);
+  assert.equal(empty.body.startedAt, t);
+  assert.equal((await request('/?lat=50&lon=20')).status, 200);
+  t += 60_000;
+  const after = await request('/history');
+  assert.equal(after.body.frames.length, 1);
+  const frame = await request(`/history?at=${t}`);
+  assert.equal(frame.status, 200);
+  assert.ok(Array.isArray(frame.body.frame.cells));
+  assert.equal((await request('/history?at=nope')).status, 400);
 });

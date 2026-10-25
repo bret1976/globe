@@ -13,6 +13,10 @@ import { RecordingControls } from './recordingControls.js';
 import { readShellElements } from './shellElements.js';
 import { CockpitCoordinator } from './cockpitCoordinator.js';
 import { ContextControls } from './context.js';
+import {
+  destroySourceInspector,
+  initSourceInspector,
+} from './sourceInspector.js';
 import { CctvControls } from './cctv.js';
 import { RadioControls } from './radio.js';
 import { LocalSdrControls } from './localSdrControls.js';
@@ -487,6 +491,8 @@ export class StyleManager extends ShellFacade {
       },
     );
     initTrackedReadout(viewer);
+    // Trace-to-source panel: read-only view of whatever is clicked.
+    initSourceInspector({ viewer, getDataManager: () => this._dataManager });
     setDetectionStyle(this.activeStyle);
     this._applyDetectionDensityFromUi();
 
@@ -1617,6 +1623,7 @@ export class StyleManager extends ShellFacade {
       this._windowResizeHandler = null;
     }
     destroyTrackedReadout();
+    destroySourceInspector();
     destroyDetection();
     destroyWorldOverlay();
     this.celestialRing?.destroy();

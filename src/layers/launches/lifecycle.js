@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { publishInspection } from '../../provenance/inspection.js';
 import { isPointerFree } from '../../data/inputOwnership.js';
 
 export function createLifecycle({
@@ -38,9 +39,29 @@ export function createLifecycle({
         const launchId = parts.selection.entityLaunchId(entity);
         if (!launchId) return;
         parts.selection.setSelectedMission(launchId);
-        parts.selection.focusMission(
-          layerState._launches.find((launch) => launch.id === launchId),
+        const launch = layerState._launches.find(
+          (candidate) => candidate.id === launchId,
         );
+        parts.selection.focusMission(launch);
+        if (launch) {
+          try {
+            const path = parts.policyHelpers.missionPathPresentation(
+              launch,
+              layerState._replayTracks.has(launch.id),
+            );
+            publishInspection({
+              layerId: 'rocket-launches',
+              id: launchId,
+              label: launch.name,
+              provider: 'Launch Library 2',
+              fetchedAt: layerState._lastUpdate ?? null,
+              properties: { ascent: path.ascent },
+              raw: launch,
+            });
+          } catch {
+            /* the Source panel is optional */
+          }
+        }
       }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
       layerState._moveHandler = new Cesium.ScreenSpaceEventHandler(
         viewer.scene.canvas,

@@ -1,6 +1,10 @@
 import * as Cesium from 'cesium';
 import { isPointerFree } from '../../data/inputOwnership.js';
 import {
+  clearInspection,
+  publishInspection,
+} from '../../provenance/inspection.js';
+import {
   BIKESHARE_SELECTED_OVERLAY_SOURCE_ID,
   BIKESHARE_SELECTED_OVERLAY_SOURCE_OPTIONS,
 } from './policy.js';
@@ -99,6 +103,7 @@ export function createSelection({
       layerState._viewer.entities.remove(layerState._selectedEntity);
     }
 
+    if (layerState._selectedKey) clearInspection('bikeshare');
     layerState._selectedKey = null;
     layerState._selectedEntity = null;
     layerState._overlayHost.clearSource(BIKESHARE_SELECTED_OVERLAY_SOURCE_ID);
@@ -129,6 +134,14 @@ export function createSelection({
         outlineWidth: 2,
         disableDepthTestDistance: Number.POSITIVE_INFINITY,
       },
+    });
+    publishInspection({
+      layerId: 'bikeshare',
+      id: key,
+      label: record.stationName,
+      provider: `GBFS · ${record.cityId}`,
+      fetchedAt: layerState._lastUpdate ?? null,
+      raw: record,
     });
     const entry = createBikeshareSelectedOverlayEntry(key, record);
     if (entry) {

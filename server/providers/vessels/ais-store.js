@@ -1,4 +1,5 @@
 import { isRecognizedAisEnvelope } from '../../../src/data/aisStreamAdapter.js';
+import { observeShipForWentDark } from './went-dark.js';
 export const AISSTREAM_CACHE_MAX = 50000;
 export const AISSTREAM_STALE_MS = 30 * 60 * 1000;
 // Per-MMSI recent-path ring buffers (PRD WS-F F3). Float32 lat/lon (~1m
@@ -88,6 +89,7 @@ export function ingestAisStreamEnvelope(envelope) {
     last_position_epoch: aisEpochSeconds(metadata.time_utc ?? metadata.TimeUtc),
     _updatedAt: Date.now(),
   });
+  observeShipForWentDark(_aisStreamVessels.get(mmsi));
 
   appendAisTrackSample(
     mmsi,

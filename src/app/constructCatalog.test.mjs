@@ -39,7 +39,7 @@ test('catalogs construct distinct layers and classification from their supplied 
     signal: b.signal,
     surface: fixtureSurface(b.signal),
   });
-  assert.equal(first.layers.length, 62);
+  assert.equal(first.layers.length, 63);
   assert.ok(first.get('street-photos'), 'Street Photos is registered');
   assert.ok(first.get('local-adsb'), 'Local ADS-B is registered');
   assert.deepEqual(

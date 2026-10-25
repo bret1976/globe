@@ -50,6 +50,33 @@ function selectOverlayCohort(entries) {
     .slice(0, GPS_INTERFERENCE_OVERLAY_COHORT_LIMIT);
 }
 
+/**
+ * Slider descriptor over the published gpsjam days; the right end is the
+ * latest day (the layer's normal behaviour).
+ * @param {string[]} dates Oldest → newest.
+ * @param {number|null} index Selected index, or null for latest.
+ */
+export function gpsjamDateSlider(dates, index) {
+  const list = Array.isArray(dates) ? dates : [];
+  const max = Math.max(0, list.length - 1);
+  const latest = index == null || index >= max || index < 0;
+  const value = latest ? max : index;
+  const date = list[value] || null;
+  return {
+    id: 'gpsjam-date',
+    min: 0,
+    max,
+    step: 1,
+    value,
+    latest,
+    date: latest ? null : date,
+    disabled: list.length < 2,
+    label: 'DAY',
+    valueText: date ? `${date}${latest ? ' · LATEST' : ''}` : '—',
+    ariaLabel: 'gpsjam.org day',
+  };
+}
+
 /** Build the GPS interference globe layer. */
 export function createGpsInterferenceLayer({ source, overlayHost } = {}) {
   if (typeof source?.getSnapshot !== 'function')
@@ -65,6 +92,28 @@ export function createGpsInterferenceLayer({ source, overlayHost } = {}) {
   let lastUpdate = null;
   let lastError = null;
   let feedDate = null;
+  let dates = [];
+  let dateIndex = null;
+  let datesError = null;
+  let rowListener = null;
+  let scrubTimer = null;
+  const notifyRow = () => {
+    try {
+      rowListener?.();
+    } catch {
+      /* best-effort repaint */
+    }
+  };
+  async function loadDates() {
+    if (typeof source.getDates !== 'function') return;
+    try {
+      dates = await source.getDates();
+      datesError = null;
+    } catch (error) {
+      datesError = error?.message || 'gpsjam dates unavailable';
+    }
+    notifyRow();
+  }
 
   const layer = {
     id: GPS_INTERFERENCE_LAYER_ID,
@@ -82,8 +131,38 @@ export function createGpsInterferenceLayer({ source, overlayHost } = {}) {
       overlayHost.setVisible(GPS_INTERFERENCE_OVERLAY_SOURCE_ID, false);
     },
 
+    setRowControlsListener(listener) {
+      rowListener = typeof listener === 'function' ? listener : null;
+    },
+
+    getRowControls() {
+      const slider = gpsjamDateSlider(dates, dateIndex);
+      return {
+        chips: [],
+        slider: {
+          ...slider,
+          title:
+            'gpsjam.org publishes one file per UTC day. Drag left for earlier days; right end = latest.',
+          onInput: (value) => {
+            const next = Math.round(Number(value));
+            dateIndex = next >= dates.length - 1 ? null : next;
+            notifyRow();
+            clearTimeout(scrubTimer);
+            scrubTimer = setTimeout(() => void layer.update(), 250);
+          },
+        },
+        info: `Daily file${feedDate ? ` for ${feedDate} (UTC day)` : ''} · ${
+          dates.length
+        } recent days on the timeline${datesError ? ` · ${datesError}` : ''}`,
+        infoTitle:
+          'Each day is gpsjam.org\'s published aggregate of aircraft reporting low navigation accuracy. It is an inference from ADS-B, not a direct measurement of jamming.',
+        legend: [],
+      };
+    },
+
     enable() {
       enabled = true;
+      if (!dates.length) void loadDates();
       if (dataSource) dataSource.show = true;
       overlayHost.setVisible(GPS_INTERFERENCE_OVERLAY_SOURCE_ID, true);
     },
@@ -91,6 +170,8 @@ export function createGpsInterferenceLayer({ source, overlayHost } = {}) {
     disable() {
       request?.abort();
       request = null;
+      clearTimeout(scrubTimer);
+      scrubTimer = null;
       enabled = false;
       if (dataSource) dataSource.show = false;
       overlayHost.clearSource(GPS_INTERFERENCE_OVERLAY_SOURCE_ID);
@@ -103,7 +184,11 @@ export function createGpsInterferenceLayer({ source, overlayHost } = {}) {
       const controller = new AbortController();
       request = controller;
       try {
-        const payload = await source.getSnapshot({ signal: controller.signal });
+        const wanted = gpsjamDateSlider(dates, dateIndex).date;
+        const payload = await source.getSnapshot({
+          signal: controller.signal,
+          ...(wanted ? { date: wanted } : {}),
+        });
         if (controller.signal.aborted || request !== controller || !enabled)
           return false;
 
@@ -129,6 +214,8 @@ export function createGpsInterferenceLayer({ source, overlayHost } = {}) {
               bad: row.bad,
               total: row.total,
               date: payload.date || null,
+              provider: payload.provider || payload.source || 'gpsjam.org',
+              fetchedAt: payload.fetchedAt ?? null,
             },
           });
 
@@ -179,6 +266,7 @@ export function createGpsInterferenceLayer({ source, overlayHost } = {}) {
         feedDate = payload.date || null;
         lastUpdate = Date.now();
         lastError = null;
+        notifyRow();
         console.log(
           `[Data:GpsInterference] Updated: ${count} hexes (${feedDate || 'unknown date'})`,
         );
@@ -228,4 +316,5 @@ export { createGpsjamSource } from './source.js';
 export {
   parseGpsjamCsv,
   latestGpsjamDate,
+  gpsjamManifestDates,
 } from './parse.js';

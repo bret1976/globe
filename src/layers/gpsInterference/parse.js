@@ -89,3 +89,20 @@ export function latestGpsjamDate(manifestCsv) {
   }
   return latest;
 }
+
+/**
+ * Every published date in the gpsjam manifest, oldest → newest, de-duplicated.
+ * @param {string} manifestCsv
+ * @returns {string[]} YYYY-MM-DD dates.
+ */
+export function gpsjamManifestDates(manifestCsv) {
+  const text = String(manifestCsv || '').replace(/^\uFEFF/, '');
+  const dates = new Set();
+  for (const line of text.split(/\r?\n/)) {
+    const date = String(line.split(',')[0] || '')
+      .trim()
+      .replace(/[^0-9-]/g, '');
+    if (/^\d{4}-\d{2}-\d{2}$/.test(date)) dates.add(date);
+  }
+  return [...dates].sort();
+}

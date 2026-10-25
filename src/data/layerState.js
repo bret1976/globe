@@ -566,6 +566,11 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
     token: 'ws',
     disposition: 'enabled-only',
   }),
+  Object.freeze({
+    id: 'went-dark',
+    token: 'wd',
+    disposition: 'enabled-only',
+  }),
   Object.freeze({ id: 'wind', token: '2', disposition: 'enabled-only' }),
   Object.freeze({ id: 'world-sigmets', token: 'is', disposition: 'enabled-only' }),
 ]);

@@ -29,6 +29,7 @@ import { createAdsbGnssSource } from '../layers/gnss/source.js';
 import { createHurricaneConesSource } from '../layers/hurricaneCones/source.js';
 import { createIonosphereSource } from '../layers/ionosphere/source.js';
 import { createUkraineFiresSource } from '../layers/ukraineFires/source.js';
+import { createWentDarkSource } from '../layers/wentDark/source.js';
 import { createOceanCurrentsSource } from '../layers/oceanCurrents/source.js';
 import { createPowerPlantsSource } from '../layers/powerPlants/source.js';
 
@@ -68,5 +69,6 @@ export function createReferenceSources() {
     hurricaneCones: createHurricaneConesSource(),
     ionosphere: createIonosphereSource(),
     ukraineFires: createUkraineFiresSource(),
+    wentDark: createWentDarkSource(),
   };
 }

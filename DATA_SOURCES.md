@@ -359,6 +359,11 @@ ERDDAP → Open-Meteo).
 ### gpsjam.org GNSS interference
 
 > GPS interference hexes are fetched live from [gpsjam.org](https://gpsjam.org/) daily H3 CSVs (no API key). Values reflect aircraft-reported navigation accuracy aggregated over 24h; they indicate *potential* interference, not confirmed jamming. Attribution: gpsjam.org · airplanes.live · ADS-B Exchange.
+- **Past gpsjam days.** `/api/gpsjam/dates` lists the newest days in gpsjam.org's public `manifest.csv`; `/api/gpsjam?date=YYYY-MM-DD` fetches that day's published CSV (same source, same attribution, in-memory LRU cache). Replay overlays the day the replay starts in. No new provider.
+- **GNSS Integrity history.** `/api/gnss-integrity/history` is an in-memory 5-minute / 24-hour series of the adsb.lol integrity rows the proxy already fetched (only regions someone viewed). Nothing is persisted; a restart empties it and the UI says so. Same adsb.lol ODbL 1.0 attribution; no new requests.
+- **Went Dark (inferred).** Derived only from position reports the app already receives (AISStream via `/api/ais-live/dark`, and the Flights snapshot from OpenSky / adsb.lol in the browser). It marks the last-known position of a steady, moving target that stopped reporting while ≥ 3 neighbours kept reporting; it does not flag during stale, partial or regional feed periods. Held in memory only. Attribution follows the underlying AISStream / OpenSky / adsb.lol terms; no new provider. Switch off with `WENT_DARK_ENABLED=0`.
+- **Source panel.** Each picked item shows an OBSERVED / INFERRED / SIMULATED badge, provider, fetch age, the existing licence/attribution text from `dataCredits.js`, and the raw record fields. Responses gain additive `provider` / `fetchedAt` fields only.
+
 ### NASA FIRMS acknowledgement
 
 > We acknowledge the use of data and/or imagery from NASA's Fire Information for Resource Management System (FIRMS) (https://earthdata.nasa.gov/firms), part of NASA's Earth Observing System Data and Information System (EOSDIS).
