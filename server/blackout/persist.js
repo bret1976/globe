@@ -2,6 +2,9 @@ import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
 
+/** Per-file ceiling: five snapshot files (plus one temp each) stay well under 1 GB. */
+export const MAX_FILE_BYTES = 64 * 1024 * 1024;
+
 /**
  * Optional on-disk persistence for Blackout state (went-dark trackers, the
  * 24 h GNSS history, the recent-flags log).
@@ -21,6 +24,8 @@ export function resolvePersistDir(env = process.env) {
 export function createPersistStore({ dir = resolvePersistDir(), warn = (...a) => console.warn(...a), intervalMs = 120_000 } = {}) {
   let usable = false;
   let lastError = null;
+  const savedBytes = new Map();
+  const restored = new Map();
   if (dir) {
     try {
       fs.mkdirSync(dir, { recursive: true });
@@ -46,17 +51,23 @@ export function createPersistStore({ dir = resolvePersistDir(), warn = (...a) =>
     }
   }
 
+  // Remove temp files left by a crash mid-write.
+  if (usable) { try { for (const f of fs.readdirSync(dir)) if (f.endsWith('.tmp')) fs.rmSync(path.join(dir, f), { force: true }); } catch {} }
+
   async function saveOne(name, sync = false) {
     if (!usable) return false;
     const fn = savers.get(name);
     if (!fn) return false;
     try {
       const body = JSON.stringify(fn());
+      // Hard cap so a runaway source can never fill the 1 GB volume.
+      if (Buffer.byteLength(body) > MAX_FILE_BYTES) throw new Error(`${name} snapshot exceeds ${MAX_FILE_BYTES} bytes; not saved`);
       const file = path.join(dir, `${name}.json`);
       const tmp = `${file}.${process.pid}.tmp`;
       if (sync) { fs.writeFileSync(tmp, body); fs.renameSync(tmp, file); }
       else { await fsp.writeFile(tmp, body); await fsp.rename(tmp, file); }
       lastSavedAt.set(name, Date.now());
+      savedBytes.set(name, Buffer.byteLength(body));
       return true;
     } catch (e) {
       lastError = e?.message || 'write failed';
@@ -78,12 +89,14 @@ export function createPersistStore({ dir = resolvePersistDir(), warn = (...a) =>
       process.once('SIGTERM', () => { onExit(); process.exit(0); });
       process.once('beforeExit', onExit);
     }
-    return load(name);
+    const data = load(name);
+    restored.set(name, data != null);
+    return data;
   }
 
   function status() {
     return usable
-      ? { mode: 'disk', note: 'Went-dark state and GNSS history are saved to a persistent volume and survive restarts.', lastSavedAt: Object.fromEntries(lastSavedAt), error: lastError }
+      ? { mode: 'disk', note: 'Went-dark state and GNSS history are saved to a persistent volume and survive restarts.', lastSavedAt: Object.fromEntries(lastSavedAt), bytes: Object.fromEntries(savedBytes), restored: Object.fromEntries(restored), maxFileBytes: MAX_FILE_BYTES, error: lastError }
       : { mode: 'memory', note: dir ? `Persistent directory not writable (${lastError}); state is in memory and is lost on restart.` : 'No persistent volume attached; went-dark state and GNSS history are in memory and are lost on restart or redeploy.' };
   }
 
