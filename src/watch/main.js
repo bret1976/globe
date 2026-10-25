@@ -6,7 +6,7 @@ import './watch.css';
 import {
   REFRESH_MS, WARMING_NOTE, feedHealth, feedStateLabel, healthBanner, wentDarkRows, wentDarkSideNote,
   jammingTimeline, historyNote, jamPoints, regionCounts, project, provenanceRows,
-  updatedAgo, licenceFor,
+  updatedAgo, licenceFor, countNoun,
 } from './model.js';
 import { observeAircraftSnapshot, aircraftWentDarkSnapshot } from '../data/wentDarkAircraft.js';
 import { openSkySnapshot } from '../sources/live/aircraft.js';
@@ -15,6 +15,8 @@ const FOOTER_CREDIT_KEYS = ['opensky', 'adsblol', 'aisstream', 'gpsjam'];
 import { PROVENANCE_COLORS, PROVENANCE_LABELS } from '../provenance/provenance.js';
 
 const $ = (id) => document.getElementById(id);
+const CELL_NOUN = 'cell';
+
 const el = (tag, attrs = {}, ...kids) => {
   const n = document.createElement(tag);
   for (const [k, v] of Object.entries(attrs)) {
@@ -106,12 +108,12 @@ function renderProvenance(now, health) {
     el('span', { class: 'badge', style: `--badge:${PROVENANCE_COLORS[k]}`, text: PROVENANCE_LABELS[k] }),
     el('span', { class: 'total__n', text: String(totals[k] || 0) }), el('span', { class: 'total__l', text: 'layers' }))));
   $('prov-body').replaceChildren(...rows.map((r) => el('tr', {},
-    el('th', { scope: 'row', text: r.layerId }),
-    el('td', {}, el('span', { class: 'badge', style: `--badge:${PROVENANCE_COLORS[r.kind]}`, text: r.badge })),
-    el('td', { text: r.provider }),
-    el('td', { class: 'num', text: r.count == null ? '—' : r.count.toLocaleString('en-US') }),
-    el('td', { text: r.freshness }),
-    el('td', { class: 'licence', text: r.licence }),
+    el('th', { scope: 'row', 'data-label': 'Layer', text: r.layerId }),
+    el('td', { 'data-label': 'Badge' }, el('span', { class: 'badge', style: `--badge:${PROVENANCE_COLORS[r.kind]}`, text: r.badge })),
+    el('td', { 'data-label': 'Provider', text: r.provider }),
+    el('td', { class: 'num', 'data-label': 'Count', text: r.count == null ? '—' : r.count.toLocaleString('en-US') }),
+    el('td', { 'data-label': 'Freshness', text: r.freshness }),
+    el('td', { class: 'licence', 'data-label': 'Licence', text: r.licence }),
   )));
 }
 
@@ -154,7 +156,7 @@ function drawMap(points = []) {
   }
   $('jam-regions').replaceChildren(...counts.map((r) => el('li', { class: r.count ? 'hot' : '' },
     el('span', { text: r.name }), el('strong', { text: String(r.count) }))));
-  $('jam-count').textContent = `${points.length.toLocaleString('en-US')} cells`;
+  $('jam-count').textContent = countNoun(points.length, CELL_NOUN);
 }
 
 async function loadStep(step) {

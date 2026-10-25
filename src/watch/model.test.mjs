@@ -119,6 +119,19 @@ test('age wording never doubles "ago"', () => {
   for (const r of rows) assert.doesNotMatch(r.freshness, /ago ago/);
 });
 
+test('singular wording for a count of 1', () => {
+  assert.equal(m.countNoun(1, 'cell'), '1 cell');
+  assert.equal(m.countNoun(1241, 'cell'), '1,241 cells');
+  assert.equal(m.countNoun(0, 'cell'), '0 cells');
+  const one = { ok: true, payload: { frames: [{ at: NOW - 5 * MIN }], newestAt: NOW - 5 * MIN, bucketMs: 5 * MIN } };
+  assert.match(m.gnssFeed(one, NOW).detail, /^1 five-minute frame ·/);
+  assert.match(m.historyNote([], { frames: [{}], oldestAt: NOW, newestAt: NOW, bucketMs: 5 * MIN }, NOW), /1 five-minute frame covering/);
+  assert.match(m.historyNote([], { frames: [{}, {}], oldestAt: NOW, newestAt: NOW, bucketMs: 5 * MIN }, NOW), /2 five-minute frames covering/);
+  const main = readFileSync(new URL('./main.js', import.meta.url), 'utf8');
+  assert.doesNotMatch(main, /\} cells`/);
+  for (const label of ['Layer', 'Badge', 'Provider', 'Count', 'Freshness', 'Licence']) assert.match(main, new RegExp(`'data-label': '${label}'`));
+});
+
 test('updatedAgo wording', () => {
   assert.equal(m.updatedAgo(NaN, NOW), 'not updated yet');
   assert.equal(m.updatedAgo(NOW - 12_000, NOW), 'updated 12 s ago');
@@ -130,6 +143,9 @@ test('watch entry: build input, no external URLs, no Cesium, valid land data', (
   assert.ok(HTML_ENTRIES.watch.endsWith('watch.html'));
   const html = readFileSync(new URL('../../watch.html', import.meta.url), 'utf8');
   assert.doesNotMatch(html, /https?:\/\//);
+  assert.match(html, /<title>Blackout<\/title>/);
+  assert.match(html, /<h1>Blackout<\/h1>/);
+  assert.doesNotMatch(html, /Watch</);
   const css = readFileSync(new URL('./watch.css', import.meta.url), 'utf8');
   assert.doesNotMatch(css, /@import|url\(\s*['"]?https?:/);
   const js = readFileSync(new URL('./main.js', import.meta.url), 'utf8') + readFileSync(new URL('./model.js', import.meta.url), 'utf8');

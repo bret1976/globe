@@ -23,6 +23,11 @@ export const feedStateLabel = (s) => STATE_LABEL[s] || 'UNKNOWN';
 /** "5 s" / "3 min" (formatAge without its trailing "ago"). */
 const ageSpan = (atMs, nowMs) => formatAge(atMs, nowMs).replace(/ ago$/, '').replace('just now', 'under 5 s');
 
+/** "1 cell" / "2 cells" with thousands separators. */
+export function countNoun(n, singular, plural = `${singular}s`) {
+  return `${Number(n).toLocaleString('en-US')} ${Number(n) === 1 ? singular : plural}`;
+}
+
 const ageOf = (atMs, nowMs) => (Number.isFinite(atMs) ? Math.max(0, nowMs - atMs) : null);
 
 /** Civil flights from `/api/opensky` (payload `time` + x-flight-* headers). */
@@ -93,7 +98,7 @@ export function gnssFeed(probe, nowMs) {
   const out = { ...base, atMs: at, ageMs, count: frames };
   if (!frames) return { ...out, state: 'warming', detail: 'no frames yet — recorded only where the globe has looked' };
   if (ageMs > 60 * MIN) return { ...out, state: 'stale', detail: `newest frame ${ageSpan(p.newestAt, nowMs)} old` };
-  return { ...out, state: 'regional', detail: `${frames} five-minute frames · only regions someone viewed` };
+  return { ...out, state: 'regional', detail: `${countNoun(frames, 'five-minute frame')} · only regions someone viewed` };
 }
 
 /** All header rows in display order. */
@@ -206,7 +211,7 @@ export function historyNote(gpsjamDates = [], gnss = null, nowMs = Date.now()) {
   const since = Number.isFinite(gnss.startedAt) ? `kept in server memory since the restart ${formatAge(gnss.startedAt, nowMs)}` : 'kept in server memory';
   if (!frames) return `${gp} · NIC/NACp: no frames yet (${since}; only regions someone viewed on the globe are recorded; lost on restart)`;
   const span = Math.max(0, (gnss.newestAt ?? 0) - (gnss.oldestAt ?? 0)) + (gnss.bucketMs || 0);
-  return `${gp} · NIC/NACp: ${frames} five-minute frames covering about ${Math.round(span / MIN)} min of the possible 24 h (${since}; only viewed regions; lost on restart)`;
+  return `${gp} · NIC/NACp: ${countNoun(frames, 'five-minute frame')} covering about ${Math.round(span / MIN)} min of the possible 24 h (${since}; only viewed regions; lost on restart)`;
 }
 
 /** Highlighted regions with known recurring interference. Boxes are [w, s, e, n]. */
