@@ -51,6 +51,7 @@ test('wind source fetches Open-Meteo directly when the proxy is only warming', a
           json: async () => ({ samples: [], warming: true, model: 'gfs' }),
         };
       }
+      if (String(url).includes('erddap')) return { ok: false, status: 503 };
       const lats = new URL(String(url)).searchParams.get('latitude').split(',');
       return {
         ok: true,
@@ -71,4 +72,55 @@ test('wind source fetches Open-Meteo directly when the proxy is only warming', a
   assert.ok(urls.some((url) => url.startsWith('https://api.open-meteo.com/')));
   assert.equal(snapshot.samples.length, buildPoints().length);
   assert.ok(!snapshot.warming, 'direct grid must not keep the layer warming');
+});
+
+test('ERDDAP wind URL asks for the same 8° lattice as buildPoints', async () => {
+  const { buildErddapWindUrl } = await import('./source.js');
+  const url = decodeURIComponent(buildErddapWindUrl(Date.parse('2026-10-25T14:23:00Z')));
+  assert.match(url, /ugrd10m\[\(2026-10-25T14:00:00Z\)\]\[\(68\):16:\(-60\)\]\[\(4\):16:\(359\.5\)\]/);
+  assert.match(url, /,vgrd10m\[/);
+});
+
+test('parseErddapWind converts u/v m/s to km/h and degrees-from, wraps longitude', async () => {
+  const { parseErddapWind, windFromDirection } = await import('./source.js');
+  assert.equal(windFromDirection(0, -5), 0); // blowing south → from north
+  assert.equal(windFromDirection(-5, 0), 90); // blowing west → from east
+  const snap = parseErddapWind({
+    table: {
+      columnNames: ['time', 'latitude', 'longitude', 'ugrd10m', 'vgrd10m'],
+      rows: [
+        ['2026-10-25T15:00:00Z', 20, 180, 10, 0],
+        ['2026-10-25T15:00:00Z', 20, 188, null, 1],
+        ['2026-10-25T15:00:00Z', 20, 196, -9.99e8, -9.99e8],
+      ],
+    },
+  });
+  assert.equal(snap.samples.length, 1);
+  assert.deepEqual(snap.samples[0], { lat: 20, lon: -180, speed: 36, direction: 270 });
+  assert.equal(snap.valid, '2026-10-25T15:00');
+  assert.throws(() => parseErddapWind({ table: { columnNames: [], rows: [] } }));
+});
+
+test('wind source reads NOAA GFS from ERDDAP before Open-Meteo when the proxy is warming', async () => {
+  const urls = [];
+  const source = createWindSource({
+    fetchImpl: async (url) => {
+      urls.push(String(url));
+      if (String(url).endsWith('/api/wind'))
+        return { ok: true, json: async () => ({ samples: [], warming: true }) };
+      return {
+        ok: true,
+        json: async () => ({
+          table: {
+            columnNames: ['time', 'latitude', 'longitude', 'ugrd10m', 'vgrd10m'],
+            rows: [['2026-10-25T15:00:00Z', 52, 4, -12, 1.5]],
+          },
+        }),
+      };
+    },
+  });
+  const snap = await source.getSnapshot();
+  assert.equal(urls.length, 2);
+  assert.match(urls[1], /erddap\/griddap\/ncep_global/);
+  assert.equal(snap.samples[0].speed, 43.5);
 });

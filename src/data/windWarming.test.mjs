@@ -93,3 +93,73 @@ test('wind proxy backs off after a failed refresh instead of retrying each reque
     'logs the Open-Meteo reason',
   );
 });
+
+function erddapTable(rows) {
+  return {
+    table: {
+      columnNames: ['time', 'latitude', 'longitude', 'ugrd10m', 'vgrd10m'],
+      columnTypes: ['String', 'double', 'double', 'float', 'float'],
+      columnUnits: ['UTC', 'degrees_north', 'degrees_east', 'm s-1', 'm s-1'],
+      rows,
+    },
+  };
+}
+
+test('wind proxy fills the grid from one NOAA GFS ERDDAP request', async (t) => {
+  const urls = [];
+  const fetchImpl = async (url) => {
+    urls.push(String(url));
+    return new Response(
+      JSON.stringify(
+        erddapTable([
+          ['2026-10-25T15:00:00Z', 52, 4, -12, 1.5],
+          ['2026-10-25T15:00:00Z', 36, 244, 0.3, -0.2],
+        ]),
+      ),
+      { status: 200, headers: { 'Content-Type': 'application/json' } },
+    );
+  };
+  const request = install(windProxy({ cacheDir: tempCacheDir(t), fetchImpl }));
+  await request();
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  const body = JSON.parse((await request()).body);
+  assert.equal(urls.length, 1, 'one request for the whole lattice');
+  assert.match(urls[0], /pacioos\.hawaii\.edu\/erddap\/griddap\/ncep_global\.json\?ugrd10m/);
+  assert.ok(!urls.some((url) => url.includes('open-meteo')));
+  assert.equal(body.samples.length, 2);
+  assert.equal(body.provider, 'noaa-gfs-pacioos');
+  assert.equal(body.valid, '2026-10-25T15:00');
+  assert.deepEqual(body.samples[1], { lat: 36, lon: -116, speed: 1.3, direction: 304 });
+  assert.equal(body.samples[0].direction, 97);
+  assert.ok(!body.warming);
+});
+
+test('wind proxy falls back to paced Open-Meteo batches when ERDDAP fails', async (t) => {
+  const urls = [];
+  const fetchImpl = async (url) => {
+    urls.push(String(url));
+    if (String(url).includes('erddap')) return new Response('down', { status: 502 });
+    const lats = new URL(String(url)).searchParams.get('latitude').split(',');
+    return new Response(
+      JSON.stringify(
+        lats.map((lat) => ({
+          latitude: Number(lat),
+          longitude: 10,
+          current: { time: '2026-10-25T14:00', wind_speed_10m: 20, wind_direction_10m: 270 },
+        })),
+      ),
+      { status: 200, headers: { 'Content-Type': 'application/json' } },
+    );
+  };
+  t.mock.method(console, 'warn', () => {});
+  const request = install(
+    windProxy({ cacheDir: tempCacheDir(t), fetchImpl, chunkGapMs: 0 }),
+  );
+  await request();
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  const body = JSON.parse((await request()).body);
+  assert.ok(urls[0].includes('erddap'));
+  assert.ok(urls.slice(1).every((url) => url.startsWith('https://api.open-meteo.com/')));
+  assert.equal(body.provider, 'open-meteo');
+  assert.equal(body.samples.length, 765);
+});
