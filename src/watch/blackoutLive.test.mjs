@@ -200,3 +200,19 @@ test('HTTP: live, events, history exports, sign-up, confirm page, unsubscribe', 
     assert.ok(!JSON.stringify(health).includes('@example.test'));
   } finally { srv.close(); plugin._stop(); }
 });
+
+test('HTTP: large live payload is gzipped and decodes (regression)', async () => {
+  const rows = Array.from({ length: 2000 }, (_, i) => ({ mmsi: 200000000 + i, lat: -60 + (i % 120), lon: -170 + ((i * 7) % 340), speed: 5, course: 90, last_position_epoch: Date.now() / 1000 }));
+  const mil = { positions: () => ({ at: T0, list: [] }), snapshot: () => ({ status: 'stale', flagged: [] }), recent: () => [], start() {}, stop() {} };
+  const plugin = blackoutPlugin({ env: {}, store: memStore(), mailer: fakeMailer(), mil, regions: { status: () => ({ status: 'pending' }), latest: () => [], start() {} }, shipRowsImpl: () => rows, shipVesselImpl: () => null });
+  const { srv, base } = await serve(plugin);
+  try {
+    const r = await fetch(`${base}/api/blackout/v1/live`, { headers: { 'Accept-Encoding': 'gzip' } });
+    assert.equal(r.headers.get('content-encoding'), 'gzip');
+    const j = await r.json();
+    assert.equal(j.ships.total, 2000);
+    const plain = await new Promise((resolve) => http.get(`${base}/api/blackout/v1/live`, (res) => { let s = ''; res.on('data', (c) => { s += c; }); res.on('end', () => resolve({ enc: res.headers['content-encoding'], s })); }));
+    assert.equal(plain.enc, undefined);
+    assert.equal(JSON.parse(plain.s).ships.total, 2000);
+  } finally { srv.close(); plugin._stop?.(); }
+});
