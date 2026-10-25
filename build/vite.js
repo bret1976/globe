@@ -1,6 +1,13 @@
 import { applicationHtmlPlugin } from './application-html.js';
 import { hostedAssetsPlugin } from './hostedAssets.js';
 import cesium from 'vite-plugin-cesium';
+import { fileURLToPath } from 'node:url';
+
+/** HTML entry points: the globe and the standalone /watch dashboard. */
+export const HTML_ENTRIES = Object.freeze({
+  main: fileURLToPath(new URL('../index.html', import.meta.url)),
+  watch: fileURLToPath(new URL('../watch.html', import.meta.url)),
+});
 
 /** Build browser assets with explicit inputs; never load environment or providers. */
 export function createBrowserViteConfig({
@@ -56,7 +63,10 @@ export function createBrowserViteConfig({
       'import.meta.env.GOOGLE_MAPS_API_KEY': JSON.stringify(googleApiKey),
       'import.meta.env.CESIUM_ION_TOKEN': JSON.stringify(cesiumToken),
     },
-    build: { chunkSizeWarningLimit: 1500 },
+    build: {
+      chunkSizeWarningLimit: 1500,
+      rollupOptions: { input: { ...HTML_ENTRIES } },
+    },
     // Transformers.js / Kokoro stay excluded from optimizeDeps above. Do not
     // set COOP/COEP — that would block Cesium ion tiles on other origins.
   };

@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="description" content="God's Eye View Watch — feed health, went-dark targets and GNSS jamming history." />
+    <title>God's Eye View · Watch</title>
+    <link rel="icon" type="image/svg+xml" href="/logo.svg" />
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to content</a>
+    <header class="top">
+      <div class="brand">
+        <img src="/logo.svg" alt="" width="28" height="28" />
+        <div>
+          <h1>God's Eye View <span>Watch</span></h1>
+          <p class="sub">Live feed health · went dark · jamming</p>
+        </div>
+      </div>
+      <div class="top__actions">
+        <span class="updated" aria-live="polite"><span class="pulse" aria-hidden="true"></span><span id="updated">not updated yet</span> <span id="refresh-state" class="dim"></span></span>
+        <button id="refresh-now" type="button" class="btn">Refresh</button>
+        <a class="btn btn--accent" href="/">Open globe</a>
+      </div>
+    </header>
+
+    <main id="main">
+      <section aria-labelledby="h-feeds" class="panel panel--feeds">
+        <h2 id="h-feeds" class="visually-hidden">Feed health</h2>
+        <div id="banner" class="banner" role="status" hidden><strong>Heads up</strong> <span id="banner-text"></span></div>
+        <div id="feeds" class="feeds" role="list" aria-label="Feed health by source"></div>
+      </section>
+
+      <div class="grid">
+        <section aria-labelledby="h-dark" class="panel panel--dark">
+          <header class="panel__head">
+            <h2 id="h-dark">Went dark</h2>
+            <span class="tag tag--inferred">Inferred</span>
+          </header>
+          <div class="kpis">
+            <div class="kpi"><span class="kpi__n" id="dark-ships">—</span><span class="kpi__l">ships</span></div>
+            <div class="kpi"><span class="kpi__n" id="dark-aircraft">—</span><span class="kpi__l">aircraft</span></div>
+          </div>
+          <ul id="dark-notes" class="notes"></ul>
+          <ol id="dark-list" class="dark-list" aria-label="Targets that went dark, most recent first"></ol>
+          <p class="fine">A last-known position of a target that stopped reporting. Where it is now is unknown. Aircraft are tracked in this page from the flights feed and only when that feed is worldwide.</p>
+        </section>
+
+        <section aria-labelledby="h-jam" class="panel panel--jam">
+          <header class="panel__head">
+            <h2 id="h-jam">Jamming timeline</h2>
+            <span class="tag tag--inferred">Inferred</span>
+          </header>
+          <div class="map-wrap"><canvas id="jam-map" role="img" aria-label="World map of GPS interference cells for the selected time"></canvas></div>
+          <div class="scrub">
+            <button id="jam-play" type="button" class="btn" aria-pressed="false">Play</button>
+            <input id="jam-slider" type="range" min="0" max="0" value="0" step="1" aria-label="Jamming history time" />
+          </div>
+          <div class="scrub__meta"><strong id="jam-label">Loading…</strong> <span id="jam-count" class="dim"></span></div>
+          <p id="jam-source" class="fine"></p>
+          <ul id="jam-regions" class="regions" aria-label="Cells per highlighted region"></ul>
+          <ul class="legend" aria-label="Legend">
+            <li><i style="--c:#ff4444"></i>high</li><li><i style="--c:#ffb547"></i>medium</li><li><i style="--c:#c58cff"></i>NIC/NACp low-sample</li><li><i class="box"></i>highlighted region</li>
+          </ul>
+          <p id="jam-history" class="note"></p>
+        </section>
+      </div>
+
+      <section aria-labelledby="h-prov" class="panel panel--prov">
+        <header class="panel__head">
+          <h2 id="h-prov">Observed · inferred · simulated</h2>
+        </header>
+        <div id="prov-totals" class="totals"></div>
+        <div class="table-wrap" tabindex="0" role="region" aria-label="Provenance by layer">
+          <table>
+            <thead><tr><th scope="col">Layer</th><th scope="col">Badge</th><th scope="col">Provider</th><th scope="col" class="num">Count</th><th scope="col">Freshness</th><th scope="col">Licence / attribution</th></tr></thead>
+            <tbody id="prov-body"></tbody>
+          </table>
+        </div>
+        <p class="fine">Counts are shown only for layers this page polls; open the globe for the rest.</p>
+      </section>
+    </main>
+
+    <footer class="foot">
+      <p id="footer-licences"></p>
+      <p><span id="map-credit"></span> Full list in DATA_SOURCES.md. Code MIT; data keeps its own licence.</p>
+      <p><a href="/">← Back to the globe</a></p>
+    </footer>
+    <script type="module" src="/src/watch/main.js"></script>
+  </body>
+</html>
