@@ -147,17 +147,19 @@ export function wentDarkRows(ships, aircraft, nowMs = Date.now()) {
   const airList = aircraft?.status === 'ok' ? aircraft.flagged || [] : [];
   const rows = [
     ...shipList.map((f) => ({ ...f, kind: 'ship', layer: 'ais-live-vessels', serverNow: ships.generatedAt, localAt: ships.fetchedLocalMs })),
-    ...airList.map((f) => ({ ...f, kind: 'aircraft', layer: 'flights', serverNow: aircraft.feedNowMs, localAt: aircraft.fetchedLocalMs })),
+    ...airList.map((f) => ({ ...f, kind: 'aircraft', layer: aircraft.layer || 'flights', serverNow: aircraft.feedNowMs ?? aircraft.generatedAt, localAt: aircraft.fetchedLocalMs })),
   ].map((f) => {
     const silentMs = Number.isFinite(f.serverNow) ? Math.max(0, f.serverNow - f.lastAt) + Math.max(0, nowMs - (f.localAt ?? nowMs)) : f.silentMs;
     return {
       id: `${f.kind}:${f.id}`,
       kind: f.kind,
-      typeLabel: f.kind === 'ship' ? 'Vessel' : 'Aircraft',
+      typeLabel: f.kind === 'ship' ? 'Vessel' : f.layer === 'military' ? 'Military aircraft' : 'Aircraft',
       label: f.label || f.id,
       lat: f.lat,
       lon: f.lon,
       lastAt: f.lastAt,
+      rawId: String(f.id),
+      silentMs: Number.isFinite(silentMs) ? silentMs : null,
       lastSeen: lastSeenText(Number.isFinite(silentMs) ? silentMs : 0),
       position: formatLatLon(f.lat, f.lon),
       href: globeDeepLink({ lat: f.lat, lon: f.lon, altM: f.kind === 'ship' ? 60_000 : 150_000, layers: ['went-dark', f.layer] }),
@@ -203,15 +205,18 @@ export function jammingTimeline(gpsjamDates = [], gnssFrames = []) {
 }
 
 /** Plain words on how much jamming history exists. */
-export function historyNote(gpsjamDates = [], gnss = null, nowMs = Date.now()) {
+export function historyNote(gpsjamDates = [], gnss = null, nowMs = Date.now(), { regionsPolled = false } = {}) {
   const days = gpsjamDates.length;
   const gp = days ? `gpsjam: ${days} daily files (${gpsjamDates[0]} → ${gpsjamDates[days - 1]})` : 'gpsjam: no daily files listed';
   if (!gnss) return `${gp} · NIC/NACp: not loaded`;
   const frames = gnss.frames?.length || 0;
-  const since = Number.isFinite(gnss.startedAt) ? `kept in server memory since the restart ${formatAge(gnss.startedAt, nowMs)}` : 'kept in server memory';
-  if (!frames) return `${gp} · NIC/NACp: no frames yet (${since}; only regions someone viewed on the globe are recorded; lost on restart)`;
+  const persisted = gnss.persisted === true;
+  const since = persisted ? 'saved on a persistent volume' : Number.isFinite(gnss.startedAt) ? `kept in server memory since the restart ${formatAge(gnss.startedAt, nowMs)}` : 'kept in server memory';
+  const where = regionsPolled ? 'the six watch regions are sampled every 5 min, plus regions viewed on the globe' : 'only regions someone viewed on the globe are recorded';
+  const loss = persisted ? 'survives restarts' : 'lost on restart';
+  if (!frames) return `${gp} · NIC/NACp: no frames yet (${since}; ${where}; ${loss})`;
   const span = Math.max(0, (gnss.newestAt ?? 0) - (gnss.oldestAt ?? 0)) + (gnss.bucketMs || 0);
-  return `${gp} · NIC/NACp: ${countNoun(frames, 'five-minute frame')} covering about ${Math.round(span / MIN)} min of the possible 24 h (${since}; only viewed regions; lost on restart)`;
+  return `${gp} · NIC/NACp: ${countNoun(frames, 'five-minute frame')} covering about ${Math.round(span / MIN)} min of the possible 24 h (${since}; ${regionsPolled ? 'six watch regions + viewed regions' : 'only viewed regions'}; ${loss})`;
 }
 
 /** Highlighted regions with known recurring interference. Boxes are [w, s, e, n]. */
@@ -267,7 +272,7 @@ export const COUNTED_LAYERS = Object.freeze(['flights', 'military', 'ais-live-ve
  * for the ones this page polls.
  * @param {Record<string, {count: number|null, atMs: number|null}>} live
  */
-export function provenanceRows(live = {}, nowMs = Date.now()) {
+export function provenanceRows(live = {}, nowMs = Date.now(), { excludeSimulated = false } = {}) {
   const rows = Object.entries(LAYER_PROVENANCE).map(([layerId, p]) => {
     const l = live[layerId];
     return {
@@ -279,13 +284,15 @@ export function provenanceRows(live = {}, nowMs = Date.now()) {
       count: l ? l.count : null,
       freshness: l?.atMs ? formatAge(l.atMs, nowMs) : l ? 'unknown' : 'not polled here',
       licence: licenceFor(p.creditKey),
+      excluded: excludeSimulated && p.kind === 'simulated',
     };
   });
   const order = { observed: 0, inferred: 1, simulated: 2 };
   rows.sort((a, b) => (order[a.kind] ?? 9) - (order[b.kind] ?? 9) || (b.count != null) - (a.count != null) || a.layerId.localeCompare(b.layerId));
   const totals = { observed: 0, inferred: 0, simulated: 0 };
   for (const r of rows) totals[r.kind] = (totals[r.kind] || 0) + 1;
-  return { rows, totals };
+  for (const r of rows) if (r.excluded) { r.freshness = 'excluded from Blackout'; r.count = null; }
+  return { rows, totals, excluded: rows.filter((r) => r.excluded).map((r) => r.layerId) };
 }
 
 /** "updated 12 s ago" */
@@ -293,4 +300,116 @@ export function updatedAgo(atMs, nowMs = Date.now()) {
   if (!Number.isFinite(atMs)) return 'not updated yet';
   const s = Math.max(0, Math.round((nowMs - atMs) / 1000));
   return s < 90 ? `updated ${s} s ago` : `updated ${Math.round(s / 60)} min ago`;
+}
+
+/* ── URL state (deep links) ─────────────────────────── */
+
+const REGION_IDS = new Set(JAM_REGIONS.map((r) => r.id));
+export const PLAY_SPEEDS = Object.freeze([0.5, 1, 2, 4]);
+export const PROV_KINDS = Object.freeze(['observed', 'inferred', 'simulated']);
+/** Default chips: simulated layers are excluded from Blackout. */
+export const DEFAULT_KINDS = Object.freeze(['observed', 'inferred']);
+
+/**
+ * Parse the page hash. Keys: t (gpsjam day YYYY-MM-DD, or GNSS frame epoch
+ * ms), region, target (ship:<mmsi> | aircraft:<hex>), speed, kinds, sort.
+ */
+export function parseWatchHash(hash = '') {
+  const p = new URLSearchParams(String(hash).replace(/^#/, ''));
+  const t = p.get('t');
+  const speed = Number(p.get('speed'));
+  const kinds = (p.get('kinds') || '').split(',').filter((k) => PROV_KINDS.includes(k));
+  const sort = p.get('sort') || '';
+  return {
+    t: t && (/^\d{4}-\d{2}-\d{2}$/.test(t) || /^\d{10,14}$/.test(t)) ? t : null,
+    region: REGION_IDS.has(p.get('region')) ? p.get('region') : null,
+    target: /^(ship|aircraft):[\w.-]{1,40}$/.test(p.get('target') || '') ? p.get('target') : null,
+    speed: PLAY_SPEEDS.includes(speed) ? speed : 1,
+    kinds: kinds.length ? kinds : [...DEFAULT_KINDS],
+    sort: /^(layerId|kind|provider|count|freshness)(:desc)?$/.test(sort) ? sort : '',
+  };
+}
+
+/** Inverse of parseWatchHash; defaults are left out so links stay short. */
+export function watchHash(s = {}) {
+  const p = new URLSearchParams();
+  if (s.t) p.set('t', String(s.t));
+  if (s.region) p.set('region', s.region);
+  if (s.target) p.set('target', s.target);
+  if (s.speed && s.speed !== 1) p.set('speed', String(s.speed));
+  const kinds = s.kinds || DEFAULT_KINDS;
+  if (kinds.join(',') !== DEFAULT_KINDS.join(',')) p.set('kinds', kinds.join(','));
+  if (s.sort) p.set('sort', s.sort);
+  const out = p.toString();
+  return out ? `#${out}` : '';
+}
+
+/** Index of the timeline step a hash `t` names (null when absent/unknown). */
+export function stepIndexFor(steps, t) {
+  if (!t) return null;
+  const i = steps.findIndex((s) => s.key === String(t));
+  return i < 0 ? null : i;
+}
+
+/** Sort + filter the provenance rows for the table. */
+export function viewProvenanceRows(rows, { kinds = DEFAULT_KINDS, sort = '', query = '' } = {}) {
+  const q = String(query).trim().toLowerCase();
+  let out = rows.filter((r) => kinds.includes(r.kind));
+  if (q) out = out.filter((r) => `${r.layerId} ${r.provider} ${r.licence}`.toLowerCase().includes(q));
+  if (sort) {
+    const [key, dir] = sort.split(':');
+    const sign = dir === 'desc' ? -1 : 1;
+    out = [...out].sort((a, b) => {
+      const av = a[key], bv = b[key];
+      if (key === 'count') return sign * ((av ?? -1) - (bv ?? -1));
+      return sign * String(av ?? '').localeCompare(String(bv ?? ''));
+    });
+  }
+  return out;
+}
+
+/** Map view box [w, s, e, n] for a region id (padded), or the world. */
+export function viewBoxFor(regionId) {
+  const r = JAM_REGIONS.find((x) => x.id === regionId);
+  if (!r) return [-180, -90, 180, 90];
+  const [w, s, e, n] = r.box;
+  const cx = (w + e) / 2, cy = (s + n) / 2;
+  // Keep the map's 2:1 aspect so shapes are not stretched.
+  const half = Math.max((e - w) / 2, (n - s)) * 1.25;
+  const hw = half, hh = half / 2;
+  return [cx - hw, Math.max(-90, cy - hh), cx + hw, Math.min(90, cy + hh)];
+}
+
+/** Equirectangular projection into a view box. */
+export function projectView(lon, lat, w, h, box = [-180, -90, 180, 90]) {
+  const [x0, y0, x1, y1] = box;
+  return [((lon - x0) / (x1 - x0)) * w, ((y1 - lat) / (y1 - y0)) * h];
+}
+
+/** Which region box (if any) contains a lon/lat. */
+export function regionAt(lon, lat, regions = JAM_REGIONS) {
+  return regions.find((r) => lon >= r.box[0] && lon <= r.box[2] && lat >= r.box[1] && lat <= r.box[3]) || null;
+}
+
+/** "What changed" between two refreshes, in short phrases. */
+export function refreshDiff(prev, next) {
+  if (!prev) return [];
+  const out = [];
+  const prevIds = new Set(prev.darkIds || []);
+  const nextIds = new Set(next.darkIds || []);
+  const added = [...nextIds].filter((x) => !prevIds.has(x)).length;
+  const gone = [...prevIds].filter((x) => !nextIds.has(x)).length;
+  if (added) out.push(`${added} new went-dark`);
+  if (gone) out.push(`${gone} cleared`);
+  const d = (a, b) => (Number.isFinite(a) && Number.isFinite(b) ? b - a : 0);
+  const ships = d(prev.shipsTracked, next.shipsTracked);
+  if (ships) out.push(`ships tracked ${ships > 0 ? '+' : ''}${ships.toLocaleString('en-US')}`);
+  const mil = d(prev.milTracked, next.milTracked);
+  if (mil) out.push(`military aircraft tracked ${mil > 0 ? '+' : ''}${mil}`);
+  const frames = d(prev.frames, next.frames);
+  if (frames > 0) out.push(countNoun(frames, 'new jamming frame'));
+  for (const id of Object.keys(next.feeds || {})) {
+    if (prev.feeds?.[id] && prev.feeds[id] !== next.feeds[id]) out.push(`${id} ${feedStateLabel(prev.feeds[id]).toLowerCase()} → ${feedStateLabel(next.feeds[id]).toLowerCase()}`);
+  }
+  return out;
 }

@@ -58,9 +58,23 @@ import { worldSigmetsProxy } from './worldSigmets.js';
 import { coralBleachingProxy, CORAL_DISK_CACHE } from './coralBleaching.js';
 import { canadaAlertsProxy } from './canadaAlerts.js';
 import { gnssIntegrityProxy } from './gnssIntegrity.js';
+import { createGnssHistory } from '../../src/layers/gnss/history.js';
+import { blackoutStore } from '../blackout/persist.js';
+import { blackoutPlugin } from '../blackout/plugin.js';
+
+/** GNSS 24 h history, restored from and saved to the Blackout store when it has a disk. */
+function persistedGnssHistory() {
+  const store = blackoutStore();
+  const disk = store.status().mode === 'disk';
+  const history = createGnssHistory({ startedAt: Date.now(), persisted: disk });
+  const saved = store.register('gnss-history', () => history.exportState());
+  if (saved) history.importState(saved);
+  return history;
+}
 
 /** Construct the local provider plugins in their established order. */
 function localProviderPlugins() {
+  const gnss = gnssIntegrityProxy({ history: persistedGnssHistory() });
   return [
     openSkyProxy(),
     celestrakProxy(),
@@ -110,7 +124,8 @@ function localProviderPlugins() {
     worldSigmetsProxy(),
     coralBleachingProxy({ diskCache: CORAL_DISK_CACHE }),
     canadaAlertsProxy(),
-    gnssIntegrityProxy(),
+    gnss,
+    blackoutPlugin({ gnss }),
     fireballsProxy(),
     spcOutlookProxy(),
     airportDelaysProxy(),

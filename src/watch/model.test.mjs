@@ -164,3 +164,43 @@ test('dataCredits split keeps credit exports available', () => {
   const src = readFileSync(new URL('../data/dataCredits.js', import.meta.url), 'utf8');
   assert.match(src, /export \* from '\.\/dataCreditList\.js'/);
 });
+
+test('watch hash round-trips deep-link state and rejects junk', () => {
+  const s = { t: '2026-10-20', region: m.JAM_REGIONS[0].id, target: 'ship:123456789', speed: 2, kinds: ['observed', 'inferred', 'simulated'], sort: 'count:desc' };
+  const back = m.parseWatchHash(m.watchHash(s));
+  assert.deepEqual(back, s);
+  assert.equal(m.watchHash({ speed: 1, kinds: [...m.DEFAULT_KINDS] }), '');
+  const junk = m.parseWatchHash('#t=<script>&region=nowhere&target=x:1&speed=9&sort=evil');
+  assert.deepEqual(junk, { t: null, region: null, target: null, speed: 1, kinds: [...m.DEFAULT_KINDS], sort: '' });
+  assert.equal(m.stepIndexFor([{ key: 'a' }, { key: 'b' }], 'b'), 1);
+  assert.equal(m.stepIndexFor([{ key: 'a' }], 'z'), null);
+});
+
+test('provenance view filters by kind/query and sorts', () => {
+  const rows = [{ layerId: 'b', kind: 'observed', provider: 'P', licence: '', count: 5 }, { layerId: 'a', kind: 'simulated', provider: 'Q', licence: '', count: 9 }, { layerId: 'c', kind: 'inferred', provider: 'R', licence: '', count: null }];
+  assert.deepEqual(m.viewProvenanceRows(rows).map((r) => r.layerId), ['b', 'c']);
+  assert.deepEqual(m.viewProvenanceRows(rows, { kinds: m.PROV_KINDS, sort: 'count:desc' }).map((r) => r.layerId), ['a', 'b', 'c']);
+  assert.deepEqual(m.viewProvenanceRows(rows, { kinds: m.PROV_KINDS, query: 'q' }).map((r) => r.layerId), ['a']);
+  const { rows: pr } = m.provenanceRows({}, NOW, { excludeSimulated: true });
+  for (const r of pr.filter((x) => x.kind === 'simulated')) assert.equal(r.excluded, true);
+});
+
+test('map view zooms to a region keeping 2:1 and regionAt hits it', () => {
+  const r = m.JAM_REGIONS[0];
+  const box = m.viewBoxFor(r.id);
+  assert.ok(Math.abs((box[2] - box[0]) / (box[3] - box[1]) - 2) < 0.6);
+  const cx = (r.box[0] + r.box[2]) / 2, cy = (r.box[1] + r.box[3]) / 2;
+  const [x, y] = m.projectView(cx, cy, 200, 100, box);
+  assert.ok(x > 0 && x < 200 && y > 0 && y < 100);
+  assert.equal(m.regionAt(cx, cy).id, r.id);
+  assert.deepEqual(m.viewBoxFor(null), [-180, -90, 180, 90]);
+});
+
+test('refreshDiff says what changed', () => {
+  assert.deepEqual(m.refreshDiff(null, {}), []);
+  const d = m.refreshDiff({ darkIds: ['a'], shipsTracked: 10, feeds: { AIS: 'live' } }, { darkIds: ['b'], shipsTracked: 12, feeds: { AIS: 'stale' } });
+  assert.ok(d.includes('1 new went-dark'));
+  assert.ok(d.includes('1 cleared'));
+  assert.ok(d.includes('ships tracked +2'));
+  assert.ok(d.some((x) => /AIS live → stale/.test(x)));
+});

@@ -261,6 +261,9 @@ export function gnssIntegrityProxy({
 
   return {
     name: 'gnss-integrity',
+    /** Server-side read of one anchor (used by the Blackout region poller). */
+    sample: (anchor) => acquire(anchor, 'blackout-region-poller'),
+    history,
     configureServer({ middlewares }) {
       middlewares.use('/api/gnss-integrity', handler);
     },

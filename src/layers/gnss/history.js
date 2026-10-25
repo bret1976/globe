@@ -37,6 +37,7 @@ export function createGnssHistory({
   maxEntriesPerBucket = GNSS_HISTORY_MAX_ENTRIES_PER_BUCKET,
   startedAt = Date.now(),
   cellDeg = GNSS_CELL_DEG,
+  persisted = false,
 } = {}) {
   /** @type {Map<number, Map<string, {cell: string, degraded: boolean}>>} */
   const buckets = new Map();
@@ -104,7 +105,7 @@ export function createGnssHistory({
       retentionMs,
       oldestAt: list.length ? list[0] : null,
       newestAt: list.length ? list[list.length - 1] + bucketMs : null,
-      persisted: false,
+      persisted: Boolean(persisted),
       frames: list.map((start) => ({
         at: Math.min(start + bucketMs, nowMs),
         aircraft: buckets.get(start).size,
@@ -143,10 +144,36 @@ export function createGnssHistory({
     };
   }
 
+  /** Plain-JSON buckets for a persistent store. */
+  function exportState() {
+    return {
+      v: 1,
+      bucketMs,
+      buckets: [...buckets].map(([start, b]) => [start, [...b].map(([k, e]) => [k, e.cell, e.degraded ? 1 : 0])]),
+    };
+  }
+
+  /** Restore saved buckets (dropping anything past retention). */
+  function importState(saved, nowMs = Date.now()) {
+    if (saved?.v !== 1 || saved.bucketMs !== bucketMs || !Array.isArray(saved.buckets)) return 0;
+    let n = 0;
+    for (const [start, rows] of saved.buckets) {
+      if (!Number.isFinite(start) || !Array.isArray(rows) || buckets.has(start)) continue;
+      const b = new Map();
+      for (const [k, cell, deg] of rows.slice(0, maxEntriesPerBucket)) if (typeof k === 'string') b.set(k, { cell, degraded: Boolean(deg) });
+      buckets.set(start, b);
+      n += 1;
+    }
+    prune(nowMs);
+    return n;
+  }
+
   return {
     record,
     timeline,
     frame,
+    exportState,
+    importState,
     get size() {
       return buckets.size;
     },
