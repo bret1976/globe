@@ -178,7 +178,7 @@ export function blackoutPlugin({ gnss = null, env = process.env, now = () => Dat
       'X-Content-Type-Options': 'nosniff',
       ...extra,
     });
-    res.end(typeof body === 'string' ? body : JSON.stringify(body));
+    res.end(typeof body === 'string' || Buffer.isBuffer(body) ? body : JSON.stringify(body));
   }
 
   async function handler(req, res, next, base) {
