@@ -111,6 +111,9 @@ test('a degraded feed (watchdog not live) suppresses flags until healthy, and pr
   const degraded = tr.evaluate(t);
   assert.equal(degraded.status, 'degraded');
   assert.equal(degraded.flagged.length, 0);
+  // An outage (>= the 3-min stale budget), not a seconds-long socket recycle.
+  tr.noteFeedHealth(false, 'AIS feed reconnecting', t + 4 * MIN);
+  t += 4 * MIN;
   tr.noteFeedHealth(true, null, t);
   // "dark" went quiet BEFORE the degradation → its silence may be the feed's.
   assert.equal(tr.evaluate(t).flagged.length, 0);
@@ -284,4 +287,25 @@ test('a ship that is silent only ~20 min with a partial blip inside is NOT flagg
   const r = tr.evaluate(t + 59_000);
   assert.equal(r.flagged.length, 0);
   assert.ok(r.candidates.feedGap >= 1);
+});
+
+test('a few-second watchdog blip (socket recycle) does not void ships; a long one does', () => {
+  // SIMULATED reports only.
+  const run = (blipMs) => {
+    const tr = createDarkTracker(SHIP_DARK_CONFIG);
+    const peers = Array.from({ length: 30 }, (_, i) => `p${i}`);
+    let t = T0;
+    for (let m = 0; m < 50; m += 1) {
+      t = T0 + m * MIN;
+      for (let k = 0; k < 12; k += 1) peers.forEach((id, j) => tr.observe({ id, lat: 50 + j * 0.001, lon: 0.0001 * m, speed: 10 }, t + k * 4000));
+      if (m < 20) tr.observe({ id: 'dark', lat: 50.01, lon: 0.001 * m, speed: 10 }, t + 2000);
+      if (m === 25) { tr.noteFeedHealth(false, 'AIS feed reconnecting', t + 50_000); tr.evaluate(t + 50_000); tr.noteFeedHealth(false, 'AIS feed reconnecting', t + 50_000 + blipMs); tr.noteFeedHealth(true, null, t + 50_000 + blipMs + 1); }
+      tr.evaluate(t + 59_000);
+    }
+    return tr.evaluate(t + 59_000);
+  };
+  const short = run(5_000);
+  assert.deepEqual(short.flagged.map((f) => f.id), ['dark']);
+  assert.equal(short.feedTrips.byCause.degraded, 1);
+  assert.equal(run(4 * MIN).flagged.length, 0);
 });

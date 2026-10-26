@@ -163,9 +163,10 @@ export function createDarkTracker(config = SHIP_DARK_CONFIG, options = {}) {
   let prevEvalAt = null;
   /** Last moment of a HARD outage (gap, stale, degraded, restart). */
   let lastHardBadAt = null;
-  function markBad(start, end, cause) {
+  let degradedSince = null;
+  function markBad(start, end, cause, hard = cause !== 'partial', reason = null) {
     if (!(end >= start)) start = end;
-    if (cause !== 'partial') lastHardBadAt = Math.max(lastHardBadAt ?? -Infinity, end);
+    if (hard) lastHardBadAt = Math.max(lastHardBadAt ?? -Infinity, end);
     const last = badSpans[badSpans.length - 1];
     const lastTrip = recentTrips[recentTrips.length - 1];
     if (last && start <= last[1] + 1) {
@@ -173,7 +174,7 @@ export function createDarkTracker(config = SHIP_DARK_CONFIG, options = {}) {
       if (lastTrip && lastTrip.cause === cause && start <= lastTrip.end + 1) { lastTrip.end = Math.max(lastTrip.end, end); return; }
     } else badSpans.push([start, end]);
     trips[cause] = (trips[cause] || 0) + 1;
-    recentTrips.push({ cause, start, end });
+    recentTrips.push(reason ? { cause, start, end, reason } : { cause, start, end });
     while (recentTrips.length > 20) recentTrips.shift();
     while (badSpans.length > 2000) badSpans.shift();
   }
@@ -304,14 +305,23 @@ export function createDarkTracker(config = SHIP_DARK_CONFIG, options = {}) {
    */
   function noteFeedHealth(healthy, reason = null, nowMs = Date.now()) {
     if (healthy) {
+      if (degradedNow && degradedSince != null) {
+        // A watchdog blip (socket recycle/reconnect) shorter than the stale
+        // budget is a short bad stretch, not an outage: data kept flowing.
+        const span = nowMs - degradedSince;
+        markBad(degradedSince, nowMs, 'degraded', span >= cfg.feedStaleMs, degradedReason);
+      }
       degradedNow = false;
       degradedReason = null;
+      degradedSince = null;
       return;
     }
+    if (!degradedNow) degradedSince = nowMs;
     degradedNow = true;
     degradedReason = reason || 'feed degraded';
     lastDegradedAt = nowMs;
-    markBad(nowMs, nowMs, 'degraded');
+    // Long enough to be an outage → hard from now on.
+    if (nowMs - degradedSince >= cfg.feedStaleMs) markBad(degradedSince, nowMs, 'degraded', true, degradedReason);
   }
 
   function peersNear(t, nowMs) {
@@ -388,7 +398,7 @@ export function createDarkTracker(config = SHIP_DARK_CONFIG, options = {}) {
     if (status === 'stale' || status === 'partial' || status === 'degraded') {
       lastDegradedAt = nowMs;
       // The stretch since the previous evaluation is suspect (conservative).
-      markBad(prevEvalAt != null && nowMs - prevEvalAt <= 5 * 60_000 ? prevEvalAt : nowMs - 60_000, nowMs, status);
+      if (status !== 'degraded') markBad(prevEvalAt != null && nowMs - prevEvalAt <= 5 * 60_000 ? prevEvalAt : nowMs - 60_000, nowMs, status);
     }
     prevEvalAt = nowMs;
 
