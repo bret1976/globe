@@ -3,12 +3,14 @@ import { adsbLolMayRequest } from '../providers/aircraft/adsbLolGate.js';
 
 /**
  * Reads GNSS integrity (adsb.lol, 250 nm around the centre) for each Blackout
- * watch region every five minutes, server-side, through the same proxy the
+ * watch region every hour, server-side, through the same proxy the
  * globe uses. That is what lets the 24 h GNSS history fill in with nobody
  * watching. Only these six circles are sampled; the rest of the world is
  * recorded only when someone views it on the globe.
  */
-export const REGION_POLL_MS = 5 * 60_000;
+// Hourly: six reads an hour is 144/day of adsb.lol's 500/day per host, next
+// to the military detector's ~288 (it was every 5 min = 1,728/day).
+export const REGION_POLL_MS = 60 * 60_000;
 
 export const regionAnchor = (box) => ({ lat: Math.round((box[1] + box[3]) / 2), lon: Math.round((box[0] + box[2]) / 2) });
 

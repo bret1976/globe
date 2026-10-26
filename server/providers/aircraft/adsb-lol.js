@@ -1,10 +1,14 @@
 import {
   adsbLolCooldownRemainingMs,
+  adsbLolTake,
   noteAdsbLolResponse,
+  sharedAdsbLolMilBody,
 } from './adsbLolGate.js';
 
 /**
- * Vite plugin: adsb.lol military aircraft proxy with 12 s response cache.
+ * Vite plugin: adsb.lol military aircraft proxy with 12 s response cache. When the
+ * server-side detector has a /v2/mil body under 6 min old it is served instead
+ * (adsb.lol allows 500 requests/day per host).
  *
  * Proxies GET /api/adsblol/mil to https://api.adsb.lol/v2/mil. When upstream
  * fails — a thrown fetch OR a non-OK status such as 429 — the proxy serves its
@@ -30,6 +34,8 @@ export function adsbLolProxy() {
   let _cooldownStatus = 0;
   /** Response cache TTL (ms). */
   const CACHE_MS = 12000;
+  /** How long the detector's shared /v2/mil body counts as fresh (it refreshes every ~5 min). */
+  const SHARED_FRESH_MS = 6 * 60_000;
   /** Cooldown after a 429 when upstream sends no usable Retry-After (ms). */
   const RATE_LIMIT_COOLDOWN_MS = 30000;
   /** Cooldown after a 5xx (ms). */
@@ -75,6 +81,13 @@ export function adsbLolProxy() {
     server.middlewares.use('/api/adsblol/mil', async (req, res) => {
       try {
         const now = Date.now();
+        // The server-side detector already fetches /v2/mil on a budget; reuse
+        // its body instead of spending adsb.lol's daily quota per viewer.
+        const shared = sharedAdsbLolMilBody();
+        if (shared && now - shared.at < SHARED_FRESH_MS) {
+          serve(res, 200, shared.body, 'HIT', { 'X-ADS-B-Cache-Age-Ms': String(Math.max(0, now - shared.at)) });
+          return;
+        }
         if (_cache && now - _cacheAt < CACHE_MS) {
           serve(res, 200, _cache, 'HIT');
           return;
@@ -84,6 +97,10 @@ export function adsbLolProxy() {
         const sharedCooldownMs = adsbLolCooldownRemainingMs(now);
         if (sharedCooldownMs > 0 && now + sharedCooldownMs > _cooldownUntil) {
           _cooldownUntil = now + sharedCooldownMs;
+          _cooldownStatus = 429;
+        }
+        if (now >= _cooldownUntil && !adsbLolTake({ interactive: true }, now)) {
+          _cooldownUntil = now + RATE_LIMIT_COOLDOWN_MS;
           _cooldownStatus = 429;
         }
         if (now < _cooldownUntil) {

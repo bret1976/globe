@@ -1,4 +1,9 @@
 import test from 'node:test';
+import { resetAdsbLolGate } from '../../server/providers/aircraft/adsbLolGate.js';
+
+// The host-wide adsb.lol gate (429 cooldown + daily budget) is shared module
+// state; each case starts with a fresh one.
+test.beforeEach(() => resetAdsbLolGate());
 import assert from 'node:assert/strict';
 import {
   gnssIntegrityAnchor,
