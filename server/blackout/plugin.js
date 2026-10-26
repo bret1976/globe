@@ -150,7 +150,7 @@ export function blackoutPlugin({ gnss = null, env = process.env, now = () => Dat
     const a = milWatcher ? milWatcher.snapshot(t) : null;
     const store = st().status();
     const checks = {
-      ships: { status: s.status, tracked: s.tracked ?? 0, steady: s.steady ?? 0, flagged: s.flagged?.length ?? 0, feed: shipStatus(), reason: s.reason ?? null },
+      ships: { status: s.status, tracked: s.tracked ?? 0, steady: s.steady ?? 0, flagged: s.flagged?.length ?? 0, feed: shipStatus(), reason: s.reason ?? null, candidates: s.candidates ?? null, lastDegradedAt: s.lastDegradedAt ?? null },
       militaryAircraft: a ? { status: a.status, tracked: a.tracked ?? 0, steady: a.steady ?? 0, flagged: a.flagged?.length ?? 0, lastPollOkAt: a.lastPollOkAt, lastError: a.lastError, reason: a.reason ?? null } : { status: 'off' },
       gnssRegions: regionPoller ? regionPoller.status() : { status: 'off' },
       storage: store,
