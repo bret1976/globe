@@ -252,3 +252,36 @@ test('saved ship state is capped at persistMaxTargets (newest kept)', () => {
   ['a', 'b', 'c'].forEach((id, i) => tr.observe({ id, lat: 50, lon: 0, speed: 5 }, T0 + i * 1000));
   assert.deepEqual(tr.exportState(T0 + 5000).targets.map((x) => x.id).sort(), ['b', 'c']);
 });
+
+test('a partial (bursty low-rate) blip only removes that stretch from a ship\'s silence', () => {
+  // SIMULATED reports only.
+  const tr = createDarkTracker(SHIP_DARK_CONFIG);
+  const peers = Array.from({ length: 30 }, (_, i) => `p${i}`);
+  let t = T0;
+  for (let m = 0; m < 60; m += 1) {
+    t = T0 + m * MIN;
+    const burst = m >= 30 && m < 33 ? 1 : 12; // a starved 3-min stretch 10 min after "dark" stops
+    for (let k = 0; k < burst; k += 1) peers.forEach((id, j) => tr.observe({ id, lat: 50 + j * 0.001, lon: 0.0001 * m, speed: 10 }, t + k * 4000));
+    if (m < 20) tr.observe({ id: 'dark', lat: 50.01, lon: 0.001 * m, speed: 10 }, t + 2000);
+    tr.evaluate(t + 59_000);
+  }
+  const r = tr.evaluate(t + 59_000);
+  assert.ok(r.feedTrips.byCause.partial >= 1, 'the starved minute reads partial');
+  assert.deepEqual(r.flagged.map((f) => f.id), ['dark']);
+});
+
+test('a ship that is silent only ~20 min with a partial blip inside is NOT flagged (clean silence short)', () => {
+  const tr = createDarkTracker(SHIP_DARK_CONFIG);
+  const peers = Array.from({ length: 30 }, (_, i) => `p${i}`);
+  let t = T0;
+  for (let m = 0; m < 42; m += 1) {
+    t = T0 + m * MIN;
+    const burst = m >= 30 && m < 34 ? 1 : 12;
+    for (let k = 0; k < burst; k += 1) peers.forEach((id, j) => tr.observe({ id, lat: 50 + j * 0.001, lon: 0.0001 * m, speed: 10 }, t + k * 4000));
+    if (m < 20) tr.observe({ id: 'dark', lat: 50.01, lon: 0.001 * m, speed: 10 }, t + 2000);
+    tr.evaluate(t + 59_000);
+  }
+  const r = tr.evaluate(t + 59_000);
+  assert.equal(r.flagged.length, 0);
+  assert.ok(r.candidates.feedGap >= 1);
+});

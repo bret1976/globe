@@ -70,6 +70,13 @@ export const SHIP_DARK_CONFIG = Object.freeze({
    * "cleanly". A 3-minute average still catches a real sustained drop.
    */
   partialWindowMin: 3,
+  /**
+   * 'overlap': feed trouble only removes the bad stretch from a target's
+   * silence — a target is flagged when its CLEAN (feed-healthy) silence alone
+   * reaches the threshold. The default 'sticky' rule voids every target heard
+   * before ANY bad moment, which on bursty AISStream voided every ship.
+   */
+  gapRule: 'overlap',
   /** Minutes of rate history needed before the partial-feed check applies. */
   partialMinHistoryMin: 5,
   /** Minutes of rate history kept. */
@@ -149,6 +156,36 @@ export function createDarkTracker(config = SHIP_DARK_CONFIG, options = {}) {
   let lastDegradedAt = null;
   let degradedReason = null;
   let degradedNow = false;
+  /** Bad-feed stretches [start, end] (merged, oldest first) and trip stats. */
+  let badSpans = [];
+  const trips = { degraded: 0, stale: 0, partial: 0, gap: 0, restart: 0 };
+  const recentTrips = [];
+  let prevEvalAt = null;
+  /** Last moment of a HARD outage (gap, stale, degraded, restart). */
+  let lastHardBadAt = null;
+  function markBad(start, end, cause) {
+    if (!(end >= start)) start = end;
+    if (cause !== 'partial') lastHardBadAt = Math.max(lastHardBadAt ?? -Infinity, end);
+    const last = badSpans[badSpans.length - 1];
+    const lastTrip = recentTrips[recentTrips.length - 1];
+    if (last && start <= last[1] + 1) {
+      last[1] = Math.max(last[1], end);
+      if (lastTrip && lastTrip.cause === cause && start <= lastTrip.end + 1) { lastTrip.end = Math.max(lastTrip.end, end); return; }
+    } else badSpans.push([start, end]);
+    trips[cause] = (trips[cause] || 0) + 1;
+    recentTrips.push({ cause, start, end });
+    while (recentTrips.length > 20) recentTrips.shift();
+    while (badSpans.length > 2000) badSpans.shift();
+  }
+  function badOverlap(from, to) {
+    let ms = 0;
+    for (const [a, b] of badSpans) {
+      if (b < from) continue;
+      if (a > to) break;
+      ms += Math.min(b, to) - Math.max(a, from);
+    }
+    return ms;
+  }
   /** per-minute report counts: [minuteIndex, count] */
   const rate = [];
 
@@ -197,6 +234,7 @@ export function createDarkTracker(config = SHIP_DARK_CONFIG, options = {}) {
     // be flagged on the strength of that silence.
     if (lastReportAt != null && nowMs - lastReportAt > cfg.feedStaleMs) {
       lastDegradedAt = nowMs - 1;
+      markBad(lastReportAt, nowMs - 1, 'gap');
     }
     if (lastReportAt == null || nowMs > lastReportAt) lastReportAt = nowMs;
     countRate(nowMs);
@@ -273,6 +311,7 @@ export function createDarkTracker(config = SHIP_DARK_CONFIG, options = {}) {
     degradedNow = true;
     degradedReason = reason || 'feed degraded';
     lastDegradedAt = nowMs;
+    markBad(nowMs, nowMs, 'degraded');
   }
 
   function peersNear(t, nowMs) {
@@ -330,6 +369,7 @@ export function createDarkTracker(config = SHIP_DARK_CONFIG, options = {}) {
     for (const [id, t] of targets) {
       if (nowMs - t.lastAt > cfg.retentionMs) drop(id);
     }
+    while (badSpans.length && nowMs - badSpans[0][1] > cfg.retentionMs) badSpans.shift();
     let status = 'ok';
     let reason = null;
     if (degradedNow) {
@@ -345,7 +385,12 @@ export function createDarkTracker(config = SHIP_DARK_CONFIG, options = {}) {
       status = 'partial';
       reason = 'feed is delivering far fewer reports than usual';
     }
-    if (status === 'stale' || status === 'partial') lastDegradedAt = nowMs;
+    if (status === 'stale' || status === 'partial' || status === 'degraded') {
+      lastDegradedAt = nowMs;
+      // The stretch since the previous evaluation is suspect (conservative).
+      markBad(prevEvalAt != null && nowMs - prevEvalAt <= 5 * 60_000 ? prevEvalAt : nowMs - 60_000, nowMs, status);
+    }
+    prevEvalAt = nowMs;
 
     let steady = 0;
     const flagged = [];
@@ -364,7 +409,13 @@ export function createDarkTracker(config = SHIP_DARK_CONFIG, options = {}) {
       candidates.silent += 1;
       if (!isMovingReport(t, cfg)) { candidates.notMoving += 1; continue; }
       // Feed trouble after its last report → the silence may be the feed's.
-      if (lastDegradedAt != null && lastDegradedAt >= t.lastAt) { candidates.feedGap += 1; continue; }
+      if (cfg.gapRule === 'overlap') {
+        // A hard outage (no data / watchdog not live / restart) after its last
+        // report voids it: the feed may not re-deliver it. A bursty low-rate
+        // ("partial") stretch only removes that stretch from its silence.
+        if (lastHardBadAt != null && lastHardBadAt >= t.lastAt) { candidates.feedGap += 1; continue; }
+        if (silentMs - badOverlap(t.lastAt, nowMs) < threshold) { candidates.feedGap += 1; continue; }
+      } else if (lastDegradedAt != null && lastDegradedAt >= t.lastAt) { candidates.feedGap += 1; continue; }
       const peers = peersNear(t, nowMs);
       if (peers < cfg.minPeers) { candidates.fewPeers += 1; continue; }
       candidates.flagged += 1;
@@ -397,6 +448,7 @@ export function createDarkTracker(config = SHIP_DARK_CONFIG, options = {}) {
       lastReportAt,
       lastDegradedAt,
       candidates,
+      feedTrips: { byCause: { ...trips }, recent: recentTrips.slice(-8), badMsLastHour: badOverlap(nowMs - 3_600_000, nowMs) },
     };
   }
 
@@ -417,6 +469,7 @@ export function createDarkTracker(config = SHIP_DARK_CONFIG, options = {}) {
       startedAt,
       lastReportAt,
       lastDegradedAt,
+      badSpans: badSpans.filter(([, b]) => nowMs - b <= maxAge),
       targets: keep.map((t) => {
         const o = { ...t, lat: r5(t.lat), lon: r5(t.lon), ewma: Number.isFinite(t.ewma) ? Math.round(t.ewma) : t.ewma, trail: t.trail.slice(-trailN).map(([lon, lat, at]) => [r5(lon), r5(lat), at]) };
         delete o.cellR;
@@ -455,6 +508,9 @@ export function createDarkTracker(config = SHIP_DARK_CONFIG, options = {}) {
     }
     if (Number.isFinite(saved.lastReportAt) && (lastReportAt == null || saved.lastReportAt > lastReportAt)) lastReportAt = saved.lastReportAt;
     // Everything restored was heard before the downtime: mark that.
+    if (Array.isArray(saved.badSpans)) for (const sp of saved.badSpans) if (Array.isArray(sp) && Number.isFinite(sp[0]) && Number.isFinite(sp[1])) badSpans.push([sp[0], sp[1]]);
+    badSpans.sort((a, b) => a[0] - b[0]);
+    if (Number.isFinite(lastReportAt)) markBad(lastReportAt, nowMs, 'restart');
     lastDegradedAt = Math.max(lastDegradedAt ?? -Infinity, Number(saved.lastDegradedAt) || -Infinity, lastReportAt ?? -Infinity);
     restoredFrom = Number.isFinite(saved.startedAt) ? saved.startedAt : null;
     return n;
