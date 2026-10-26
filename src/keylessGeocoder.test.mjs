@@ -452,6 +452,17 @@ test('a "place, region" query is matched on the place, not the region', async ()
     true,
     `got ${result.label}`,
   );
+
+
+test('wrapped view bias stays near the antimeridian and malformed coordinates are omitted', () => {
+  for (const [bias, expected] of [['-20,170|-10,-171', 179.5], ['50,175|60,-165', -175], ['0,180|10,-180', 180], ['0,-180|10,180', 0]]) {
+    const params = new URL(photonSearchUrl('island', { bias })).searchParams;
+    assert.equal(Number(params.get('lon')), expected);
+  }
+  for (const bias of ['-91,0|0,1', '0,181|1,0', '10,0|0,1', ',|,', '0,1,2|3,4', '0,1|Infinity,2']) {
+    assert.equal(new URL(photonSearchUrl('island', { bias })).searchParams.has('lon'), false);
+  }
+});
 });
 
 test('accents and punctuation do not change what a name compares as', () => {

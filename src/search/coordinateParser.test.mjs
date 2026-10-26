@@ -52,6 +52,19 @@ test('hemisphere letters fix the axis, in either order', () => {
     label: '40.0000° N, 74.0000° W',
   });
   assert.deepEqual(parseCoordinateQuery('40° N, 74° W')?.lat, 40);
+  // Written the way a coordinate is usually pasted, with no comma.
+  assert.deepEqual(parseCoordinateQuery('40.7128 N 74.0060 W'), {
+    lat: 40.7128,
+    lon: -74.006,
+    label: '40.7128° N, 74.0060° W',
+  });
+  assert.deepEqual(parseCoordinateQuery('40.7128° N 74.0060° W')?.lon, -74.006);
+  assert.deepEqual(parseCoordinateQuery('N 40.7128 W 74.0060'), {
+    lat: 40.7128,
+    lon: -74.006,
+    label: '40.7128° N, 74.0060° W',
+  });
+  assert.deepEqual(parseCoordinateQuery('74.0060 W 40.7128 N')?.lat, 40.7128);
   // One letter is enough: it fixes its own axis, the other takes what is left.
   assert.deepEqual(parseCoordinateQuery('40 N, -74')?.lon, -74);
   assert.deepEqual(parseCoordinateQuery('-74, 40 N'), {
@@ -66,6 +79,21 @@ test('malformed and ambiguous coordinates are refused, never guessed', () => {
     // The reviewer's case: trailing text must not be discarded.
     '12junk, 34oops',
     '12junk,34',
+    '12junk 34',
+    '1e3 5',
+    '1e3',
+    '1E3',
+    '1e-3',
+    '1.2.3',
+    '12-34',
+    '40 NW 74',
+    '40 N 74',
+    '40 W 74',
+    '40 E 74',
+    '°40 74',
+    '40°° 74',
+    '40 74°°',
+    '40 26 46 N 79 58 56 W',
     '43.1731, -79.0384x',
     'abc, def',
     'Paris',
@@ -131,4 +159,26 @@ test('the label reads the way a coordinate is written', () => {
 test('the poles and the dateline are inside the accepted range', () => {
   assert.deepEqual(parseCoordinateQuery('90, 180')?.lat, 90);
   assert.deepEqual(parseCoordinateQuery('-90, -180')?.lon, -180);
+});
+
+test('whitespace boundaries preserve degree signs and hemisphere ownership', () => {
+  for (const query of ['40 ° 74', '40° 74', '40 N, 74', 'N 40 74']) {
+    assert.equal(parseCoordinateQuery(query)?.lat, 40, query);
+    assert.equal(parseCoordinateQuery(query)?.lon, 74, query);
+  }
+  for (const query of ['40 ° N 74 ° W', 'N 40 ° W 74 °', '40\tN\n74\tW']) {
+    assert.equal(parseCoordinateQuery(query)?.lat, 40, query);
+    assert.equal(parseCoordinateQuery(query)?.lon, -74, query);
+  }
+});
+
+test('a signed plain component leaves a spaced letter with the other component', () => {
+  assert.deepEqual(
+    parseCoordinateQuery('-40 N 74'),
+    parseCoordinateQuery('-40, N 74'),
+  );
+  assert.deepEqual(
+    parseCoordinateQuery('40 N -74'),
+    parseCoordinateQuery('40 N, -74'),
+  );
 });

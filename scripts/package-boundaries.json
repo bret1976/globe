@@ -1842,6 +1842,7 @@
       "src/director/playback.js",
       "src/scenes/recipes.js",
       "src/scenes/scenePolicy.js",
+      "src/sceneCommandRelease.js",
       "src/scopeMask.js",
       "src/search/defaults.js",
       "src/search/geospatial.js",

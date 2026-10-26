@@ -206,6 +206,16 @@ test('selection copy reads like a transit card and never leaks nulls', () => {
     'Reported 2 min ago (feed time)',
     'Vehicle abc',
   ]);
+  // Minutes count down, never up: 150 s old reads 2 min, not 3
+  // (gods-eye-view #1353, MIT).
+  const halfMinute = buildTransitSelectionCopy(
+    feed,
+    { id: 'h', lat: 1, lon: 1 },
+    'rail',
+    now,
+    now - 150_000,
+  );
+  assert.equal(halfMinute.details[1], 'Reported 2 min ago (feed time)');
   for (const line of [...full.details, ...sparse.details])
     assert.doesNotMatch(line, /null|undefined|NaN/);
   assert.equal(transitVehicleKey('mbta', '17'), 'mbta:17');
