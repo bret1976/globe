@@ -201,3 +201,54 @@ test('lastSeenText reads naturally', () => {
   assert.equal(lastSeenText(23 * MIN), 'last seen 23 min ago');
   assert.equal(lastSeenText(150 * MIN), 'last seen 2 h 30 min ago');
 });
+
+test('a one-minute dip in a bursty ship stream does not void every earlier ship', () => {
+  // SIMULATED bursty feed: 40 background ships per minute, one minute at 10%.
+  const tr = createDarkTracker(SHIP_DARK_CONFIG, { startedAt: T0 });
+  const bg = Array.from({ length: 40 }, (_, i) => `bg${i}`);
+  let t = T0;
+  for (let m = 0; m < 40; m += 1) {
+    t = T0 + m * MIN;
+    const ids = m === 15 ? bg.slice(0, 4) : bg;
+    ids.forEach((id, k) => tr.observe({ id, lat: 50 + k * 0.001, lon: 0.01, speed: 10 }, t + k * 100));
+    if (m < 10) tr.observe({ id: 'dark', lat: 50.01, lon: 0.001 * m, speed: 10 }, t + 5_000);
+    tr.evaluate(t + 30_000); // the server evaluates on every tick
+  }
+  const r = tr.evaluate(t + 30_000);
+  assert.equal(r.status, 'ok');
+  assert.deepEqual(r.flagged.map((f) => f.id), ['dark']);
+  assert.equal(r.candidates.flagged, 1);
+});
+
+test('a sustained drop in the ship stream still reads partial', () => {
+  const tr = createDarkTracker(SHIP_DARK_CONFIG, { startedAt: T0 });
+  const bg = Array.from({ length: 40 }, (_, i) => `bg${i}`);
+  let t = T0;
+  for (let m = 0; m < 20; m += 1) {
+    t = T0 + m * MIN;
+    (m >= 16 ? bg.slice(0, 5) : bg).forEach((id, k) => tr.observe({ id, lat: 50 + k * 0.001, lon: 0.01, speed: 10 }, t + k * 100));
+  }
+  assert.equal(tr.evaluate(T0 + 20 * MIN + 1_000).status, 'partial');
+});
+
+test('saved ship state drops long-silent targets and stays compact', () => {
+  const tr = createDarkTracker(SHIP_DARK_CONFIG, { startedAt: T0 });
+  feedShips(tr, ['old1', 'old2'], { count: 3 });
+  const later = T0 + 3 * 3_600_000;
+  feedShips(tr, ['new1', 'new2', 'new3'], { from: later, count: 10 });
+  const saved = tr.exportState(later + 10 * MIN);
+  assert.deepEqual(saved.targets.map((x) => x.id).sort(), ['new1', 'new2', 'new3']);
+  for (const x of saved.targets) {
+    assert.ok(x.trail.length <= SHIP_DARK_CONFIG.persistTrailPoints);
+    assert.equal(x.cellR, undefined);
+  }
+  const back = createDarkTracker(SHIP_DARK_CONFIG, { startedAt: later });
+  assert.equal(back.importState(saved, later + 11 * MIN), 3);
+  assert.equal(back.lastHeardAt('new1'), saved.targets.find((x) => x.id === 'new1').lastAt);
+});
+
+test('saved ship state is capped at persistMaxTargets (newest kept)', () => {
+  const tr = createDarkTracker({ ...SHIP_DARK_CONFIG, persistMaxTargets: 2 }, { startedAt: T0 });
+  ['a', 'b', 'c'].forEach((id, i) => tr.observe({ id, lat: 50, lon: 0, speed: 5 }, T0 + i * 1000));
+  assert.deepEqual(tr.exportState(T0 + 5000).targets.map((x) => x.id).sort(), ['b', 'c']);
+});

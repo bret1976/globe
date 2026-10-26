@@ -146,7 +146,7 @@ export function createActivity({ store, now = () => Date.now(), sources = {} } =
   }
 
   /** Disappearance history, newest first, filtered. */
-  function historyList({ kind = null, state = null, area = null, q = '', sinceMs = null, limit = 500 } = {}, t = now()) {
+  function historyList({ kind = null, state = null, area = null, q = '', sinceMs = null, limit = 500, offset = 0 } = {}, t = now()) {
     const needle = String(q || '').trim().toLowerCase();
     const out = [];
     for (const h of history.values()) {
@@ -160,9 +160,12 @@ export function createActivity({ store, now = () => Date.now(), sources = {} } =
     }
     out.sort((a, b) => b.flaggedAt - a.flaggedAt);
     const total = out.length;
+    const from = Math.max(0, Math.floor(Number(offset) || 0));
+    const n = Math.max(1, Math.min(HISTORY_MAX, Math.floor(Number(limit) || 500)));
     return {
       total,
-      rows: out.slice(0, Math.max(1, Math.min(HISTORY_MAX, limit))).map((h) => ({
+      offset: from,
+      rows: out.slice(from, from + n).map((h) => ({
         ...h, darkMin: h.reappearedAt ? h.durationMin : Math.max(0, Math.round((t - h.lastSeenAt) / 60_000)), state: h.reappearedAt ? 'reappeared' : 'dark',
       })),
     };
