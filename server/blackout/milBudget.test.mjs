@@ -47,3 +47,20 @@ test('military poller: 5 min cadence, honours Retry-After, backs off without ham
   assert.ok(sharedAdsbLolMilBody());
   assert.equal(w.snapshot().adsbLolBudget.used, 1);
 });
+
+test('a single 429 between good snapshots does not mark the military feed degraded', async () => {
+  resetAdsbLolGate();
+  let t = T0;
+  let status = 200;
+  const ac = [{ hex: 'aa', lat: 50, lon: 10, alt_baro: 25000, gs: 350, track: 0 }];
+  const fetchImpl = async () => status === 429
+    ? { ok: false, status, headers: new Headers(), body: null }
+    : { ok: true, status: 200, headers: new Headers(), text: async () => JSON.stringify({ now: t, ac }) };
+  const w = createMilAircraftWatcher({ fetchImpl, store: memStore(), now: () => t, random: () => 0.5 });
+  assert.equal(await w.pollOnce(), true);
+  t += MIL_POLL_MS; status = 429; resetAdsbLolGate();
+  assert.equal(await w.pollOnce(), false);
+  assert.equal(w.snapshot().status, 'ok');
+  t += 13 * 60_000;
+  assert.equal(w.snapshot().status, 'stale');
+});
