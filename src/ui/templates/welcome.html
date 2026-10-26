@@ -44,7 +44,14 @@
         <input type="checkbox" data-first-run-suppress />
         <span>Don't show this again</span>
       </label>
-      <span>ESC to dismiss</span>
+      <!-- A button, not just a hint: phones and tablets have no ESC key. It
+           closes exactly as ESC does, for this session only. Touch screens
+           see DISMISS; a keyboard keeps the ESC hint (first-run.css).
+           Upstream gods-eye-view #1226 (MIT). -->
+      <button type="button" class="first-run-dismiss" data-first-run-dismiss>
+        <span class="first-run-dismiss-key">ESC to dismiss</span>
+        <span class="first-run-dismiss-touch">DISMISS</span>
+      </button>
     </div>
     <!-- Kept out of the footer row: it swaps to mission progress and errors, and
          a live region that also holds layout makes the row jump as it speaks. -->

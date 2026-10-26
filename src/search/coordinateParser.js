@@ -42,15 +42,34 @@ function readComponent(text) {
   };
 }
 
-/** Split on a comma, a semicolon, or whitespace — never on anything else. */
+/**
+ * Split on a comma, a semicolon, or whitespace — never on anything else.
+ * A hemisphere letter stays with the number it names, so `40.7 N 74.0 W`
+ * is two components. Splitting on the space before that letter used to
+ * leave three pieces and the search declined the coordinate.
+ * (Ported from gods-eye-view #1340, MIT.)
+ */
 function splitComponents(query) {
   const text = String(query).trim();
   if (!text) return null;
-  const parts = /[,;]/.test(text)
-    ? text.split(/[,;]/)
-    : text.split(/\s+(?=[+-]?[.\d]|[NSEW]\s*[+-]?[.\d])/i);
-  const trimmed = parts.map((part) => part.trim()).filter(Boolean);
-  return trimmed.length === 2 ? trimmed : null;
+  if (/[,;]/.test(text)) {
+    const trimmed = text.split(/[,;]/).map((part) => part.trim());
+    return trimmed.length === 2 && trimmed.every(Boolean) ? trimmed : null;
+  }
+  const words = text.split(/\s+/);
+  if (words.length > 6) return null;
+  let result = null;
+  for (let boundary = words.length - 1; boundary > 0; boundary -= 1) {
+    const parts = [
+      words.slice(0, boundary).join(' '),
+      words.slice(boundary).join(' '),
+    ];
+    if (parts.every((part) => readComponent(part))) {
+      if (result) return null;
+      result = parts;
+    }
+  }
+  return result;
 }
 
 /** Present a parsed pair the way a coordinate is normally written. */

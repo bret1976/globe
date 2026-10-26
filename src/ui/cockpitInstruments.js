@@ -13,6 +13,7 @@ import {
   formatAltitudeRulerTick,
   formatCompassDivision,
   formatCockpitEmergency,
+  formatHeadingReadout,
   formatSpeedRulerTick,
   normalizeHeading,
   relativeBearing,
@@ -207,7 +208,7 @@ export function updateRoute(info) {
     );
   }
   if (this.routeDirectionLabel) {
-    this.routeDirectionLabel.textContent = `DEST ${String(Math.round(destinationBearing)).padStart(3, '0')}°`;
+    this.routeDirectionLabel.textContent = `DEST ${formatHeadingReadout(destinationBearing)}°`;
   }
 }
 

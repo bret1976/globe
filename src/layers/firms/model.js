@@ -3,6 +3,7 @@ import {
   satelliteShortName,
   fireDetectionKey,
   accentForSeverity,
+  formatFrpMw,
 } from '../../data/firmsLabels.js';
 import {
   VIEW_PADDING,
@@ -472,7 +473,7 @@ export function createModel({
   }
 
   function formatFrp(frp) {
-    return frp >= 10 ? frp.toFixed(0) : frp.toFixed(1);
+    return formatFrpMw(frp);
   }
 
   /** Millisecond delta → "<1h" / "Xh" / "Xd", or '' for invalid input. */

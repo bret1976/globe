@@ -395,7 +395,7 @@ export function buildTransitSelectionCopy(
   const reported =
     ageS < 90
       ? `Reported ${ageS} s ago`
-      : `Reported ${Math.round(ageS / 60)} min ago`;
+      : `Reported ${Math.floor(ageS / 60)} min ago`;
   // A time the feed did not give for THIS vehicle is labelled, so the card
   // never presents a borrowed or inferred time as the vehicle's own report.
   const ownTime =
