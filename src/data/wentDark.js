@@ -43,14 +43,33 @@ export const SHIP_DARK_CONFIG = Object.freeze({
   retentionMs: 6 * 3_600_000,
   /** Hard cap on tracked targets (oldest evicted first). */
   maxTargets: 60_000,
+  /**
+   * Saved state only keeps targets heard within this long (newest first, at
+   * most persistMaxTargets). A restore marks every saved target as heard
+   * before a feed gap, so an older one could never be flagged on its current
+   * silence anyway; keeping it only grew the file.
+   */
+  persistMaxAgeMs: 2 * 3_600_000,
+  persistMaxTargets: 40_000,
+  /** Trail points saved per target. */
+  persistTrailPoints: 3,
   /** At most this many flags returned (most recent first). */
   maxFlagged: 300,
   /** Smoothing weight for the reporting-interval average. */
   ewmaAlpha: 0.3,
   /** Feed-health: the feed reads "stale" when NOTHING arrived for this long. */
   feedStaleMs: 3 * 60_000,
-  /** Feed-health: a minute with fewer than this share of the median rate is "partial". */
+  /** Feed-health: a window with fewer than this share of the median rate is "partial". */
   partialRateRatio: 0.5,
+  /**
+   * Feed-health: the partial check averages this many latest complete
+   * minutes. AISStream is a bursty push stream (measured 2026-10-26: single
+   * minutes swing from ~4,000 to ~500 position reports and back), so a
+   * one-minute check read "partial" every few minutes — and each partial read
+   * voids every ship heard before it, so no ship could ever stay silent 20 min
+   * "cleanly". A 3-minute average still catches a real sustained drop.
+   */
+  partialWindowMin: 3,
   /** Minutes of rate history needed before the partial-feed check applies. */
   partialMinHistoryMin: 5,
   /** Minutes of rate history kept. */
@@ -290,9 +309,13 @@ export function createDarkTracker(config = SHIP_DARK_CONFIG, options = {}) {
     const latest = complete[complete.length - 1];
     // A minute with zero reports has no entry; treat a gap as partial too.
     if (latest[0] < minute - 1) return true;
-    const prior = complete.slice(0, -1).map(([, n]) => n);
+    const w = Math.max(1, Math.min(Math.floor(cfg.partialWindowMin || 1), complete.length - cfg.partialMinHistoryMin));
+    // Minutes with no entry inside the window count as zero.
+    const firstMin = latest[0] - w + 1;
+    const recent = complete.filter(([m]) => m >= firstMin).reduce((sum, [, n]) => sum + n, 0) / w;
+    const prior = complete.filter(([m]) => m < firstMin).map(([, n]) => n);
     const med = median(prior);
-    return med > 0 && latest[1] < med * cfg.partialRateRatio;
+    return med > 0 && recent < med * cfg.partialRateRatio;
   }
 
   /**
@@ -326,6 +349,8 @@ export function createDarkTracker(config = SHIP_DARK_CONFIG, options = {}) {
 
     let steady = 0;
     const flagged = [];
+    // Why steady, silent targets were (not) flagged — plain counters, no ids.
+    const candidates = { silent: 0, notMoving: 0, feedGap: 0, fewPeers: 0, flagged: 0 };
     for (const t of targets.values()) {
       const isSteady =
         t.n >= cfg.minReports &&
@@ -336,11 +361,13 @@ export function createDarkTracker(config = SHIP_DARK_CONFIG, options = {}) {
       const silentMs = nowMs - t.lastAt;
       const threshold = Math.max(cfg.darkAfterMs, cfg.intervalMultiple * t.ewma);
       if (silentMs < threshold) continue;
-      if (!isMovingReport(t, cfg)) continue;
+      candidates.silent += 1;
+      if (!isMovingReport(t, cfg)) { candidates.notMoving += 1; continue; }
       // Feed trouble after its last report → the silence may be the feed's.
-      if (lastDegradedAt != null && lastDegradedAt >= t.lastAt) continue;
+      if (lastDegradedAt != null && lastDegradedAt >= t.lastAt) { candidates.feedGap += 1; continue; }
       const peers = peersNear(t, nowMs);
-      if (peers < cfg.minPeers) continue;
+      if (peers < cfg.minPeers) { candidates.fewPeers += 1; continue; }
+      candidates.flagged += 1;
       flagged.push({
         id: t.id,
         kind: cfg.kind,
@@ -368,6 +395,8 @@ export function createDarkTracker(config = SHIP_DARK_CONFIG, options = {}) {
       steady,
       flagged: flagged.slice(0, cfg.maxFlagged),
       lastReportAt,
+      lastDegradedAt,
+      candidates,
     };
   }
 
@@ -375,14 +404,28 @@ export function createDarkTracker(config = SHIP_DARK_CONFIG, options = {}) {
    * Plain-JSON copy of what the tracker knows, for a persistent store.
    * Feed-health flags are kept so a restore never forgets a degraded feed.
    */
-  function exportState() {
+  function exportState(nowMs = Date.now()) {
+    const maxAge = Number.isFinite(cfg.persistMaxAgeMs) ? cfg.persistMaxAgeMs : cfg.retentionMs;
+    const maxN = Number.isFinite(cfg.persistMaxTargets) ? cfg.persistMaxTargets : cfg.maxTargets;
+    const trailN = Number.isFinite(cfg.persistTrailPoints) ? cfg.persistTrailPoints : 4;
+    const keep = [...targets.values()].filter((t) => nowMs - t.lastAt <= maxAge);
+    if (keep.length > maxN) keep.sort((a, b) => b.lastAt - a.lastAt).length = maxN;
+    const r5 = (x) => (Number.isFinite(x) ? Math.round(x * 1e5) / 1e5 : x);
     return {
       v: 1,
       kind: cfg.kind,
       startedAt,
       lastReportAt,
       lastDegradedAt,
-      targets: [...targets.values()].map((t) => ({ ...t, trail: t.trail.slice(-4).map((p) => [...p]) })),
+      targets: keep.map((t) => {
+        const o = { ...t, lat: r5(t.lat), lon: r5(t.lon), ewma: Number.isFinite(t.ewma) ? Math.round(t.ewma) : t.ewma, trail: t.trail.slice(-trailN).map(([lon, lat, at]) => [r5(lon), r5(lat), at]) };
+        delete o.cellR;
+        delete o.cellC;
+        delete o.resumeGap;
+        for (const k of ['altitudeM', 'verticalRateMps', 'heading', 'speed']) if (o[k] == null) delete o[k];
+        if (!o.onGround) delete o.onGround;
+        return o;
+      }),
     };
   }
 
