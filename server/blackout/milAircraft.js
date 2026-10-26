@@ -120,7 +120,10 @@ export function createMilAircraftWatcher({ fetchImpl = globalThis.fetch, store =
       return true;
     } catch (e) {
       lastError = e?.message || 'fetch failed';
-      tracker.noteFeedHealth(false, `adsb.lol mil: ${lastError}`, now());
+      // A 429 only means "ask later": no snapshot is missed until the next
+      // poll, so it is not an outage by itself. If the backoff runs long, the
+      // feed turns stale (feedStaleMs) and the gap voids silence as usual.
+      if (lastError !== 'HTTP 429') tracker.noteFeedHealth(false, `adsb.lol mil: ${lastError}`, now());
       return false;
     }
   }
