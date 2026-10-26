@@ -5,6 +5,7 @@ import {
 } from '../../src/layers/gnss/records.js';
 import { createGnssHistory } from '../../src/layers/gnss/history.js';
 import { adsbLolFallbackAnchor } from './aircraft/opensky.js';
+import { adsbLolTake, noteAdsbLolResponse } from './aircraft/adsbLolGate.js';
 import { coalesceProxyRequest, readResponseJsonCapped } from './common/http.js';
 import { makeRateLimiter, clientKey } from './common/rate-limit.js';
 
@@ -66,11 +67,14 @@ export function gnssIntegrityProxy({
   let cooldownUntil = 0;
   let cooldownStatus = 429;
 
-  async function load({ lat, lon }) {
+  async function load({ lat, lon }, background = false) {
     if (monotonicNow() < cooldownUntil)
       throw Object.assign(new Error('cooling_down'), {
         status: cooldownStatus,
       });
+    // Host-wide adsb.lol gate: shared 429 cooldown and rolling daily budget.
+    if (!adsbLolTake({ interactive: !background }, now()))
+      throw Object.assign(new Error('cooling_down'), { status: 429 });
     const signal = AbortSignal.timeout(TIMEOUT_MS);
     try {
       const response = await fetchImpl(
@@ -84,6 +88,7 @@ export function gnssIntegrityProxy({
           },
         },
       );
+      noteAdsbLolResponse(response.status, response.headers, now());
       if (!response.ok) {
         await response.body?.cancel();
         if (response.status === 429) {
@@ -158,7 +163,7 @@ export function gnssIntegrityProxy({
             status: 429,
             local: true,
           });
-        const value = await load(anchor);
+        const value = await load(anchor, peer === 'blackout-region-poller');
         // History records real reads only; it never polls on its own.
         try {
           history.record(value.rows, value.fetchedAt, now());

@@ -2,7 +2,7 @@ import {
   DEFAULT_FLIGHT_VIEW_ANCHOR,
   normalizeAdsbLolPointResponse,
 } from '../../../src/data/adsbLolFallback.js';
-import { adsbLolMayRequest, noteAdsbLolResponse } from './adsbLolGate.js';
+import { adsbLolMayRequest, adsbLolTake, noteAdsbLolResponse } from './adsbLolGate.js';
 import {
   coalesceProxyRequest,
   readResponseJsonCapped,
@@ -300,7 +300,8 @@ async function fetchAdsbLolPointFallback(req) {
   // without another upstream call (repeating it keeps the rate limit tripped).
   if (
     !adsbLolMayRequest(now) ||
-    now < (_adsbLolPointFailedUntil.get(cacheKey) || 0)
+    now < (_adsbLolPointFailedUntil.get(cacheKey) || 0) ||
+    (!_adsbLolPointInFlight.has(cacheKey) && !adsbLolTake({ interactive: true }, now))
   ) {
     return staleAdsbLolPointFrame(cacheKey, roundedLat, roundedLon, now);
   }

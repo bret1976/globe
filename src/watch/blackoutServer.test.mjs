@@ -85,7 +85,7 @@ test('military watcher polls a (fake) feed and reports honest status', async () 
   const ac = [{ hex: 'aa', lat: 50, lon: 10, alt_baro: 25000, gs: 350, track: 0 }, { hex: 'bb', lat: 50.5, lon: 10.5, alt_baro: 25000, gs: 350, track: 0 }];
   let fail = false;
   const fetchImpl = async () => (fail ? { ok: false, status: 502, headers: new Map(), json: async () => ({}) }
-    : { ok: true, status: 200, headers: new Map(), json: async () => ({ now: t, ac: ac.map((a) => ({ ...a, lat: a.lat + (t - T0) / 3.6e6 })) }) });
+    : { ok: true, status: 200, headers: new Map(), text: async () => JSON.stringify({ now: t, ac: ac.map((a) => ({ ...a, lat: a.lat + (t - T0) / 3.6e6 })) }) });
   const w = createMilAircraftWatcher({ fetchImpl, store: memStore(), now: () => t });
   assert.equal(w.snapshot().status, 'stale');
   assert.equal(await w.pollOnce(), true);
