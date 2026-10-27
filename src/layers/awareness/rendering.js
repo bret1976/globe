@@ -8,7 +8,10 @@ import {
   formatAwarenessDistance,
   AWARENESS_RADIUS_M,
 } from '../../data/militaryAwarenessEngine.js';
-import { bearingBetweenCoordinates } from '../../cockpitMath.js';
+import {
+  bearingBetweenCoordinates,
+  formatHeadingReadout,
+} from '../../cockpitMath.js';
 import { AWARENESS_PAGE_SIZE, CONTEXT_RIM_HEIGHT_M } from './policy.js';
 
 export function createRendering({
@@ -221,10 +224,10 @@ export function createRendering({
             )
           : null;
       const bearingText = Number.isFinite(bearing)
-        ? `BRG ${String(Math.round(bearing)).padStart(3, '0')}°`
+        ? `BRG ${formatHeadingReadout(bearing)}°`
         : 'BRG —';
       const courseText = Number.isFinite(item.track)
-        ? ` · CRS ${String(Math.round(item.track)).padStart(3, '0')}°`
+        ? ` · CRS ${formatHeadingReadout(item.track)}°`
         : '';
       marker._label.textContent = `${label} · ${formatAwarenessDistance(item.distanceM)}\n${bearingText}${courseText}`;
       marker.hidden = false;

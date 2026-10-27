@@ -407,7 +407,8 @@
 #param-slider-panel.collapsed #param-sliders,
 #location-bar.collapsed .poi-row-container,
 #location-bar.collapsed .location-bar-divider,
-#location-bar.collapsed .location-city-row {
+#location-bar.collapsed .location-city-row,
+#location-bar.collapsed .location-search-error {
   display: none !important;
 }
 
