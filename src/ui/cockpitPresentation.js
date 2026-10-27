@@ -91,7 +91,9 @@ export function formatCockpitWindDirection(value) {
   if (!Number.isFinite(value)) return 'DIR UNKNOWN';
   const labels = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
   const normalized = ((value % 360) + 360) % 360;
-  return `${labels[Math.round(normalized / 45) % labels.length]} · ${Math.round(normalized)}°`;
+  // 359.5° and above is north. Modulo keeps that from printing 360°.
+  const degrees = Math.round(normalized) % 360;
+  return `${labels[Math.round(normalized / 45) % labels.length]} · ${degrees}°`;
 }
 
 export function setCockpitRollingValue(

@@ -201,9 +201,13 @@ export function normalizeOsrmSteps(route) {
 export function formatRouteDistance(meters) {
   if (!Number.isFinite(meters) || meters < 0) return '';
   if (meters < 100) return `${Math.round(meters)} m`;
-  if (meters < 1000) return `${Math.round(meters / 10) * 10} m`;
+  // Round before each unit cut: 996 m was "1000 m" and 9,960 m was "10.0 km".
+  const tens = Math.round(meters / 10) * 10;
+  if (tens < 1000) return `${tens} m`;
   const km = meters / 1000;
-  return `${km < 10 ? km.toFixed(1) : Math.round(km)} km`;
+  return Math.round(km * 10) / 10 < 10
+    ? `${km.toFixed(1)} km`
+    : `${Math.round(km)} km`;
 }
 
 /**
@@ -213,7 +217,9 @@ export function formatRouteDistance(meters) {
  */
 export function formatRouteDuration(seconds) {
   if (!Number.isFinite(seconds) || seconds < 0) return '';
-  if (seconds < 60) return `${Math.round(seconds)} s`;
+  // 59.6 s rounds to a minute, not "60 s".
+  const wholeSeconds = Math.round(seconds);
+  if (wholeSeconds < 60) return `${wholeSeconds} s`;
   const minutes = Math.round(seconds / 60);
   if (minutes < 60) return `${minutes} min`;
   const hours = Math.floor(minutes / 60);
