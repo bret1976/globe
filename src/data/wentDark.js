@@ -77,6 +77,17 @@ export const SHIP_DARK_CONFIG = Object.freeze({
    * before ANY bad moment, which on bursty AISStream voided every ship.
    */
   gapRule: 'overlap',
+  /**
+   * Grace around every feed outage (socket closed / reconnecting). The bad
+   * stretch removed from a ship's silence is widened by these margins:
+   * BEFORE, because AISStream drops whatever it had buffered for us when the
+   * socket dies and the watchdog only notices on its next 15 s tick; AFTER,
+   * because a fresh subscription takes a moment to deliver every area again.
+   * Without this a ship heard just before a reconnect could be flagged
+   * "dark" for silence that was really the feed's.
+   */
+  outagePadBeforeMs: 90_000,
+  outagePadAfterMs: 60_000,
   /** Minutes of rate history needed before the partial-feed check applies. */
   partialMinHistoryMin: 5,
   /** Minutes of rate history kept. */
@@ -164,15 +175,22 @@ export function createDarkTracker(config = SHIP_DARK_CONFIG, options = {}) {
   /** Last moment of a HARD outage (gap, stale, degraded, restart). */
   let lastHardBadAt = null;
   let degradedSince = null;
+  const padBefore = Math.max(0, Number(cfg.outagePadBeforeMs) || 0);
+  const padAfter = Math.max(0, Number(cfg.outagePadAfterMs) || 0);
   function markBad(start, end, cause, hard = cause !== 'partial', reason = null) {
     if (!(end >= start)) start = end;
     if (hard) lastHardBadAt = Math.max(lastHardBadAt ?? -Infinity, end);
+    // Feed outages (watchdog not live) get grace on both sides; the trip log
+    // keeps the raw times.
+    const spanStart = cause === 'degraded' ? start - padBefore : start;
+    const spanEnd = cause === 'degraded' ? end + padAfter : end;
     const last = badSpans[badSpans.length - 1];
     const lastTrip = recentTrips[recentTrips.length - 1];
-    if (last && start <= last[1] + 1) {
-      last[1] = Math.max(last[1], end);
+    if (last && spanStart <= last[1] + 1) {
+      last[0] = Math.min(last[0], spanStart);
+      last[1] = Math.max(last[1], spanEnd);
       if (lastTrip && lastTrip.cause === cause && start <= lastTrip.end + 1) { lastTrip.end = Math.max(lastTrip.end, end); return; }
-    } else badSpans.push([start, end]);
+    } else badSpans.push([spanStart, spanEnd]);
     trips[cause] = (trips[cause] || 0) + 1;
     recentTrips.push(reason ? { cause, start, end, reason } : { cause, start, end });
     while (recentTrips.length > 20) recentTrips.shift();
