@@ -288,7 +288,18 @@ export function createAisStreamAdapter(options) {
     ingestEnvelope,
     clock = DEFAULT_CLOCK,
     warn = () => {},
+    keepaliveMs = 0,
   } = options;
+
+  /**
+   * Client keepalive. AISStream closes connections that show no keepalive
+   * activity ("missed keepalive activity" in its docs), and before this the
+   * live feed was being closed by the server roughly every 3-5 minutes. A
+   * websocket PING every keepaliveMs on the open socket keeps it alive. A ping
+   * is never liveness: only valid AIS data feeds the watchdog.
+   */
+  const keepalive = { pings: 0, pongs: 0, closes: 0, lastClose: null };
+  let lastPingMono = -Infinity;
 
   /** generation -> socket. Mutated only through the identity-checked helpers. */
   const sockets = new Map();
@@ -489,7 +500,17 @@ export function createAisStreamAdapter(options) {
       );
     });
 
-    on('close', () => {
+    on('pong', () => {
+      if (ownsSocket(generation, socket)) keepalive.pongs += 1;
+    });
+
+    on('close', (code, reasonBuf) => {
+      if (ownsSocket(generation, socket)) {
+        const reason = reasonBuf ? String(reasonBuf).slice(0, 120) : '';
+        keepalive.closes += 1;
+        keepalive.lastClose = { code: Number(code) || null, reason, at: clock.wall() };
+        warn(`[AISStream] upstream closed the socket (code ${code || 'none'}${reason ? `, ${reason}` : ''})`);
+      }
       releaseSocketEntry(generation, socket);
       runActions(owner, owner.onClose(generation));
     });
@@ -546,6 +567,24 @@ export function createAisStreamAdapter(options) {
     if (!watchdog) setWatchdogOptions();
     runActions(watchdog, watchdog.configure(env));
     runActions(watchdog, watchdog.tick());
+    sendKeepalive();
+  }
+
+  /** Ping the one owned, OPEN socket at most once per keepaliveMs. */
+  function sendKeepalive() {
+    if (!(keepaliveMs > 0) || !watchdog) return;
+    const monoNow = clock.mono();
+    if (monoNow - lastPingMono < keepaliveMs) return;
+    const owned = watchdog.debugState().owned;
+    const socket = owned === null ? null : sockets.get(owned);
+    if (!socket || socket.readyState !== 1 || typeof socket.ping !== 'function') return;
+    lastPingMono = monoNow;
+    try {
+      socket.ping();
+      keepalive.pings += 1;
+    } catch (error) {
+      warn(`[AISStream] keepalive ping failed: ${error?.message || error}`);
+    }
   }
 
   /** Tear down sockets and machine state, preserving the generation namespace. */
@@ -568,7 +607,17 @@ export function createAisStreamAdapter(options) {
     setWatchdogOptions,
     ensure,
     dispose,
-    snapshot: () => (watchdog ? watchdog.snapshot() : null),
+    snapshot: () =>
+      watchdog
+        ? {
+            ...watchdog.snapshot(),
+            keepalive: {
+              everyMs: keepaliveMs || null,
+              ...keepalive,
+              lastClose: keepalive.lastClose ? { ...keepalive.lastClose } : null,
+            },
+          }
+        : null,
     /** Diagnostics for tests. */
     debug: () => ({
       liveSockets: sockets.size,

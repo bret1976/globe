@@ -50,6 +50,8 @@ const AISSTREAM_DOWN_RETRY_MS = 900_000;
 const AISSTREAM_AUTH_PROBE_MS = 3_600_000;
 /** How often the watchdog re-evaluates without request traffic. */
 const AISSTREAM_TICK_MS = 15_000;
+/** Client websocket ping cadence (runs on the watchdog tick). */
+const AISSTREAM_KEEPALIVE_MS = 15_000;
 
 /**
  * @type {ReturnType<typeof createAisStreamAdapter>|null}
@@ -149,6 +151,7 @@ export function aisLiveProxy() {
             nextAttemptAt: feed.nextAttemptAt,
             staleAfterMs: feed.staleAfterMs,
             watchdog: feed.watchdog,
+            keepalive: feed.keepalive ?? null,
           }),
         );
       } catch (error) {
@@ -273,6 +276,7 @@ function aisAdapter() {
     buildSubscription: aisStreamSubscription,
     ingestEnvelope: ingestAisStreamEnvelope,
     warn: (message) => console.warn(message),
+    keepaliveMs: AISSTREAM_KEEPALIVE_MS,
   });
   _aisAdapter.setWatchdogOptions(aisWatchdogBudgets());
   return _aisAdapter;
