@@ -31,6 +31,7 @@ import { loadNycTmcSourcesFromOpenData } from './nyctmc.js';
 import { loadOregonSourcesFromOpenData } from './oregon.js';
 import { loadWsdotSourcesFromOpenData } from './wsdot.js';
 import { loadHongKongSourcesFromOpenData } from './hongkong.js';
+import { loadMndotSources } from './mndot.js';
 
 /** Env kill switch: unset or anything but "0" means enabled. */
 const envEnabled = (name) => String(process.env[name] || '1').trim() !== '0';
@@ -163,6 +164,12 @@ const LIVE_PACKS = [
     name: 'toronto',
     enabled: () => envEnabled('CCTV_TORONTO_ENABLED'),
     load: loadTorontoSourcesFromOpenData,
+  },
+  {
+    // Minnesota DOT (MnDOT) IRIS cameras; port of upstream gods-eye-view #1437.
+    name: 'mndot',
+    enabled: () => envEnabled('CCTV_MNDOT_ENABLED'),
+    load: loadMndotSources,
   },
 ];
 /**

@@ -362,7 +362,7 @@ export function buildTransitSelectionCopy(
   if (Number.isFinite(record.speedMps))
     reportedMotion.push(`reported ${Math.round(record.speedMps * 3.6)} km/h`);
   if (Number.isFinite(record.bearing))
-    reportedMotion.push(`reported hdg ${Math.round(record.bearing)}°`);
+    reportedMotion.push(`reported hdg ${Math.round(record.bearing) % 360}°`);
   // The operator's own claim, kept as a REPORT rather than as the live state.
   // It describes the moment of the report, which the display may not have
   // reached yet; presenting it as "now" is what put STOPPED on a moving metro.

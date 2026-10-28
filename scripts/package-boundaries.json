@@ -239,6 +239,7 @@
       "server/providers/cctv/mdchart.js",
       "server/providers/cctv/ddot.js",
       "server/providers/cctv/colorado.js",
+      "server/providers/cctv/mndot.js",
       "server/providers/common/http.js",
       "src/data/directionText.js",
       "server/providers/common/geo.js",
