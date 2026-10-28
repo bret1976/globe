@@ -137,8 +137,9 @@ export function createVoiceCommands({
     }
     if (session.isActive()) {
       if (capabilities.pushToTalk) {
-        // Self-hosted TALK: a later click means listen again, not hang up.
-        adapter.primeMic?.();
+        // Self-hosted TALK: a later click means listen to me now, not hang up.
+        if (typeof adapter.listenNow === 'function') adapter.listenNow();
+        else adapter.primeMic?.();
         adapter.cancelHold?.();
         return;
       }

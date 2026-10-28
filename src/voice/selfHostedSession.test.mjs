@@ -669,6 +669,223 @@ test('open-mic records a second command after the first reply', async () => {
   }
 });
 
+function tick() {
+  return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+test('three consecutive mic clicks each record and run a spoken command', async () => {
+  const mic = installMicRecorder();
+  const backend = backendFixture({
+    calls: [],
+    speech: 'Done.',
+    source: 'planner',
+  });
+  backend.speak = () => new Promise(() => {});
+  backend.act = async (payload) => {
+    backend.calls.push(['act', payload.text]);
+    if (/paris/i.test(payload.text)) {
+      return {
+        calls: [
+          {
+            name: 'fly_to_location',
+            arguments: { query: 'Paris', waitForArrival: true },
+          },
+        ],
+        speech: 'Flying to Paris.',
+        locationQuery: 'Paris',
+        place: { query: 'Paris' },
+        source: 'planner',
+      };
+    }
+    if (/aurora/i.test(payload.text)) {
+      return {
+        calls: [
+          {
+            name: 'set_layer_visibility',
+            arguments: { layerId: 'aurora', enabled: true },
+          },
+        ],
+        speech: "I'll turn on aurora.",
+        source: 'planner',
+      };
+    }
+    return {
+      calls: [
+        {
+          name: 'fly_to_location',
+          arguments: { query: 'London', waitForArrival: true },
+        },
+      ],
+      speech: 'Flying to London.',
+      locationQuery: 'London',
+      place: { query: 'London' },
+      source: 'planner',
+    };
+  };
+  const transcripts = [
+    'take me to Paris',
+    'turn on aurora',
+    'take me to London',
+  ];
+  let spokenTurn = 0;
+  backend.transcribe = async () => {
+    const text = transcripts[spokenTurn] || '';
+    spokenTurn += 1;
+    backend.calls.push(['transcribe', spokenTurn]);
+    return { text };
+  };
+  const actions = [];
+  try {
+    const session = createVoiceSession({
+      runner: async (name, args) => {
+        actions.push([name, args]);
+        return { ok: true, name };
+      },
+      createAdapter: (hooks) =>
+        createSelfHostedSession({
+          ...hooks,
+          backend,
+        }),
+    });
+    session.adapter.primeMic();
+    await session.start();
+    await tick();
+    assert.ok(
+      mic.recorders.some((recorder) => recorder.state === 'recording'),
+      'first mic click must open the recorder',
+    );
+    await session.adapter.releaseTalk();
+    await tick();
+    await tick();
+    session.adapter.primeMic();
+    await tick();
+    assert.ok(
+      mic.recorders.some((recorder) => recorder.state === 'recording'),
+      'second mic click must start a clean listen',
+    );
+    await session.adapter.releaseTalk();
+    await tick();
+    await tick();
+    session.adapter.primeMic();
+    await tick();
+    assert.ok(
+      mic.recorders.some((recorder) => recorder.state === 'recording'),
+      'third mic click must start a clean listen',
+    );
+    await session.adapter.releaseTalk();
+    await tick();
+    await tick();
+    assert.deepEqual(
+      actions.map(([name, args]) =>
+        name === 'set_layer_visibility'
+          ? [name, args.layerId, args.enabled]
+          : [name, args.query],
+      ),
+      [
+        ['fly_to_location', 'Paris'],
+        ['set_layer_visibility', 'aurora', true],
+        ['fly_to_location', 'London'],
+      ],
+    );
+    assert.equal(spokenTurn, 3);
+    session.stop();
+  } finally {
+    mic.restore();
+  }
+});
+
+test('a later mic click drops the half-heard clip and hears the next command', async () => {
+  const mic = installMicRecorder();
+  const backend = backendFixture({
+    calls: [],
+    speech: 'Done.',
+    source: 'planner',
+  });
+  let resolveLeftover;
+  const leftoverAsr = new Promise((resolve) => {
+    resolveLeftover = resolve;
+  });
+  let asrCalls = 0;
+  backend.transcribe = async () => {
+    asrCalls += 1;
+    backend.calls.push(['transcribe', asrCalls]);
+    if (asrCalls === 1) {
+      await leftoverAsr;
+      return { text: 'ignore this leftover clip' };
+    }
+    return { text: 'turn on aurora' };
+  };
+  backend.act = async (payload) => {
+    backend.calls.push(['act', payload.text]);
+    if (/aurora/i.test(payload.text)) {
+      return {
+        calls: [
+          {
+            name: 'set_layer_visibility',
+            arguments: { layerId: 'aurora', enabled: true },
+          },
+        ],
+        speech: "I'll turn on aurora.",
+        source: 'planner',
+      };
+    }
+    return {
+      calls: [
+        {
+          name: 'fly_to_location',
+          arguments: { query: payload.text, waitForArrival: true },
+        },
+      ],
+      speech: 'Done.',
+      source: 'planner',
+    };
+  };
+  const actions = [];
+  try {
+    const session = createVoiceSession({
+      runner: async (name, args) => {
+        actions.push([name, args]);
+        return { ok: true, name };
+      },
+      createAdapter: (hooks) =>
+        createSelfHostedSession({
+          ...hooks,
+          backend,
+        }),
+    });
+    session.adapter.primeMic();
+    await session.start();
+    await tick();
+    const leftoverFlush = session.adapter.releaseTalk();
+    await tick();
+    session.adapter.primeMic();
+    resolveLeftover();
+    await leftoverFlush;
+    await tick();
+    await tick();
+    assert.deepEqual(actions, []);
+    assert.ok(
+      mic.recorders.some((recorder) => recorder.state === 'recording'),
+      'the later click must open a fresh recorder after discarding the leftover clip',
+    );
+    await session.adapter.releaseTalk();
+    await tick();
+    await tick();
+    assert.deepEqual(
+      actions.map(([name, args]) => [name, args.layerId, args.enabled]),
+      [['set_layer_visibility', 'aurora', true]],
+    );
+    assert.ok(
+      !backend.calls.some(
+        ([kind, text]) => kind === 'act' && /leftover/i.test(String(text)),
+      ),
+    );
+    session.stop();
+  } finally {
+    mic.restore();
+  }
+});
+
 test('empty ASR after a clip still restarts the open-mic recorder', async () => {
   const mic = installMicRecorder();
   const backend = backendFixture({

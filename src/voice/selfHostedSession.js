@@ -67,6 +67,7 @@ export function createSelfHostedSession({
   let queuedUtterances = [];
   let speakEpoch = 0;
   let sessionEpoch = 0;
+  let recordEpoch = 0;
   let status = {
     asr: false,
     llm: true,
@@ -560,7 +561,12 @@ export function createSelfHostedSession({
     if (busy || flushing || pendingTranscript) return;
     const current = recorder;
     if (!current || !chunks.length) return;
-    const clipEpoch = sessionEpoch;
+    const clipSession = sessionEpoch;
+    const clipRecord = recordEpoch;
+    const clipStillCurrent = () =>
+      live &&
+      clipSession === sessionEpoch &&
+      clipRecord === recordEpoch;
     const clipChunks = chunks;
     flushing = true;
     clearRecordWatch();
@@ -578,7 +584,7 @@ export function createSelfHostedSession({
         finished,
         new Promise((resolve) => setTimeout(resolve, 3_000)),
       ]);
-      if (!live || clipEpoch !== sessionEpoch) return;
+      if (!clipStillCurrent()) return;
       const blob = new Blob(clipChunks, {
         type: current.mimeType || 'audio/webm',
       });
@@ -594,6 +600,7 @@ export function createSelfHostedSession({
         return;
       }
       const preferServer = await serverAsrAvailable();
+      if (!clipStillCurrent()) return;
       emit({
         type: 'state',
         state: 'executing',
@@ -640,7 +647,7 @@ export function createSelfHostedSession({
         ? [viaServer, browserVoice ? viaBrowser : null]
         : [browserVoice ? viaBrowser : null, viaServer];
       for (const attempt of order.filter(Boolean)) {
-        if (transcribed || !live || clipEpoch !== sessionEpoch) break;
+        if (transcribed || !clipStillCurrent()) break;
         try {
           await attempt();
         } catch (error) {
@@ -648,7 +655,7 @@ export function createSelfHostedSession({
         }
       }
       if (!transcribed && lastAsrError) throw lastAsrError;
-      if (!live || clipEpoch !== sessionEpoch) return;
+      if (!clipStillCurrent()) return;
       const spoken = String(result?.text || '').trim();
       if (!spoken) {
         emit({
@@ -669,7 +676,7 @@ export function createSelfHostedSession({
       });
       resumeAfter = live && !busy;
     } finally {
-      if (clipEpoch !== sessionEpoch) return;
+      if (clipSession !== sessionEpoch || clipRecord !== recordEpoch) return;
       flushing = false;
       if (resumeAfter) resumeListening();
     }
@@ -972,14 +979,60 @@ export function createSelfHostedSession({
     event.preventDefault();
   }
 
+  /**
+   * A click on a live mic means "listen to me now": stop any spoken reply,
+   * drop the half-heard clip so leftover echo/noise is not transcribed,
+   * reset VAD, and open a fresh recorder.
+   */
+  function listenNow() {
+    interruptSpeech();
+    recordEpoch += 1;
+    queuedUtterances = [];
+    pendingTranscript = '';
+    clearSilenceTimer();
+    heardSpeech = false;
+    lastSpeechAt = 0;
+    flushing = false;
+    chunks = [];
+    stopRecorder();
+    stopBrowserRecognition();
+    listenArmedAt = Date.now();
+    if (!live) return false;
+    enableMicTracks();
+    void audioContext?.resume?.();
+    emit({
+      type: 'state',
+      state: 'listening',
+      detail: 'Listening — speak now',
+    });
+    if (preferRecorder || mediaStream) {
+      if (mediaStream && micTracksLive()) {
+        startVisualizer(mediaStream);
+        if (!busy) startRecorder();
+        return true;
+      }
+      mediaStream = null;
+      if (pendingStream) attachMic(pendingStream, { record: !busy });
+      else {
+        micPromise = null;
+        requestMic();
+      }
+      return true;
+    }
+    if (!busy) startBrowserRecognition();
+    return true;
+  }
+
   return {
     protocol: 'self-hosted-qwen',
     capabilities: { costControls: false, pushToTalk: true },
     ignoreButtonClick: () => spaceHeld || holding,
+    listenNow,
     primeMic() {
       void loadStatus();
       unlockPlayback();
       preferRecorder = canUseRecorder();
+      if (live) return listenNow();
       if (preferRecorder) requestMic();
       return true;
     },
@@ -1057,6 +1110,7 @@ export function createSelfHostedSession({
     },
     stop() {
       sessionEpoch += 1;
+      recordEpoch += 1;
       interruptSpeech();
       live = false;
       busy = false;

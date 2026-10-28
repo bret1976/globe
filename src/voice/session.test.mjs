@@ -619,6 +619,10 @@ test('a later mic click keeps voice on so the next command can be spoken', async
             primed.push('prime');
             return true;
           },
+          listenNow() {
+            primed.push('listenNow');
+            return true;
+          },
           cancelHold() {
             primed.push('cancel');
             return true;
@@ -649,6 +653,7 @@ test('a later mic click keeps voice on so the next command can be spoken', async
     );
     await new Promise((done) => setTimeout(done, 0));
     assert.ok(primed.includes('prime'));
+    assert.ok(primed.includes('listenNow'));
     assert.equal(stopped, 0);
     lifetime.abort();
   } finally {
