@@ -56,7 +56,7 @@ export function createCards({
     if (record.speed !== null && record.speed !== undefined)
       parts.push(formatSpeed(record.speed));
     const direction = record.heading ?? record.course;
-    if (Number.isFinite(direction)) parts.push(`${Math.round(direction)}°`);
+    if (Number.isFinite(direction)) parts.push(`${Math.round(direction) % 360}°`);
     return {
       id: vesselOverlayEntryId(record),
       actionable: Boolean(record?.mmsi),
@@ -87,7 +87,7 @@ export function createCards({
       [
         vesselTypeShort(record) || 'VESSEL',
         formatSpeed(record.speed),
-        Number.isFinite(direction) ? `${Math.round(direction)}°` : '--°',
+        Number.isFinite(direction) ? `${Math.round(direction) % 360}°` : '--°',
       ].join(' · '),
     ];
     const destination = String(record.destination || '').trim();
@@ -159,7 +159,7 @@ export function createCards({
   }
 
   function formatHeading(heading) {
-    return Number.isFinite(heading) ? `${Math.round(heading)}DEG` : '--DEG';
+    return Number.isFinite(heading) ? `${Math.round(heading) % 360}DEG` : '--DEG';
   }
 
   function formatPositionTime(record) {
