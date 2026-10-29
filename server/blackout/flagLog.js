@@ -32,7 +32,7 @@ export function createFlagLog({ retentionMs = FLAG_LOG_RETENTION_MS, max = FLAG_
         if (prev && prev.lastAt === f.lastAt) { prev.silentMs = f.silentMs; prev.reappearedAt = null; continue; }
         entries.set(id, {
           id, kind: f.kind, label: f.label, lat: f.lat, lon: f.lon, lastAt: f.lastAt,
-          flaggedAt: nowMs, silentMs: f.silentMs, speed: f.speed ?? null, heading: f.heading ?? null,
+          flaggedAt: nowMs, silentMs: f.silentMs, feedGapMs: f.feedGapMs ?? null, speed: f.speed ?? null, heading: f.heading ?? null,
           altitudeM: f.altitudeM ?? null, reappearedAt: null,
         });
       }

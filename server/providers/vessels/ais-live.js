@@ -289,6 +289,8 @@ function aisWatchdogBudgets() {
     staleMs: policy.reportMs,
     recycleAfterMs: policy.recycleMs,
     backoffMs: [...AISSTREAM_BACKOFF_MS],
+    jitterRatio: 0.25,
+    quickReconnectMs: 1_500,
     downRetryMs: AISSTREAM_DOWN_RETRY_MS,
     authProbeMs: AISSTREAM_AUTH_PROBE_MS,
   };

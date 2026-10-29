@@ -306,6 +306,35 @@ export function createAisStreamAdapter(options) {
   /** Never reset, including across dispose(). See rule 1 at the top. */
   let generationHighWater = 0;
   let watchdog = null;
+  /** Last environment passed to ensure(), so a close can re-drive the machine. */
+  let lastEnv = null;
+  let redialTimer = null;
+  const setTimer = options.setTimer || ((fn, ms) => {
+    const t = setTimeout(fn, ms);
+    t?.unref?.();
+    return t;
+  });
+  const clearTimer = options.clearTimer || ((t) => clearTimeout(t));
+
+  /**
+   * After a close, re-drive the machine as soon as its retry deadline passes
+   * instead of waiting for the caller's next periodic ensure() (up to 15s).
+   */
+  function scheduleRedial(owner) {
+    if (owner !== watchdog || !lastEnv) return;
+    const waitMs = owner.snapshot().retryInMs;
+    if (!(Number.isFinite(waitMs) && waitMs <= 60_000)) return;
+    if (redialTimer) clearTimer(redialTimer);
+    redialTimer = setTimer(() => {
+      redialTimer = null;
+      if (owner !== watchdog || !lastEnv) return;
+      try {
+        ensure(lastEnv);
+      } catch (error) {
+        warn(`[AISStream] redial failed: ${error?.message || error}`);
+      }
+    }, waitMs + 25);
+  }
 
   /** (Re)build the state machine, preserving the generation namespace. */
   function setWatchdogOptions(watchdogOptions = {}) {
@@ -512,7 +541,9 @@ export function createAisStreamAdapter(options) {
         warn(`[AISStream] upstream closed the socket (code ${code || 'none'}${reason ? `, ${reason}` : ''})`);
       }
       releaseSocketEntry(generation, socket);
+      const wasOwned = owner.debugState().owned === generation;
       runActions(owner, owner.onClose(generation));
+      if (wasOwned) scheduleRedial(owner);
     });
   }
 
@@ -565,6 +596,7 @@ export function createAisStreamAdapter(options) {
   /** Drive the machine once: re-declare the environment, then advance time. */
   function ensure(env) {
     if (!watchdog) setWatchdogOptions();
+    lastEnv = env;
     runActions(watchdog, watchdog.configure(env));
     runActions(watchdog, watchdog.tick());
     sendKeepalive();
@@ -589,6 +621,9 @@ export function createAisStreamAdapter(options) {
 
   /** Tear down sockets and machine state, preserving the generation namespace. */
   function dispose() {
+    if (redialTimer) clearTimer(redialTimer);
+    redialTimer = null;
+    lastEnv = null;
     if (watchdog) {
       generationHighWater = Math.max(
         generationHighWater,

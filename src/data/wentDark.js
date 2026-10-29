@@ -88,6 +88,13 @@ export const SHIP_DARK_CONFIG = Object.freeze({
    */
   outagePadBeforeMs: 90_000,
   outagePadAfterMs: 60_000,
+  /**
+   * After the feed recovers from a degraded stretch, report 'recovering' and
+   * flag NOTHING for this long, so a fresh subscription can re-deliver every
+   * area before anyone is called dark. Flags are only deferred, never lost:
+   * a ship that is still silent after the grace is flagged as before.
+   */
+  recoveryGraceMs: 120_000,
   /** Minutes of rate history needed before the partial-feed check applies. */
   partialMinHistoryMin: 5,
   /** Minutes of rate history kept. */
@@ -167,6 +174,8 @@ export function createDarkTracker(config = SHIP_DARK_CONFIG, options = {}) {
   let lastDegradedAt = null;
   let degradedReason = null;
   let degradedNow = false;
+  /** When the feed last went degraded -> healthy (post-reconnect grace). */
+  let recoveredAt = null;
   /** Bad-feed stretches [start, end] (merged, oldest first) and trip stats. */
   let badSpans = [];
   const trips = { degraded: 0, stale: 0, partial: 0, gap: 0, restart: 0 };
@@ -329,6 +338,7 @@ export function createDarkTracker(config = SHIP_DARK_CONFIG, options = {}) {
         const span = nowMs - degradedSince;
         markBad(degradedSince, nowMs, 'degraded', span >= cfg.feedStaleMs, degradedReason);
       }
+      if (degradedNow) recoveredAt = nowMs;
       degradedNow = false;
       degradedReason = null;
       degradedSince = null;
@@ -388,7 +398,7 @@ export function createDarkTracker(config = SHIP_DARK_CONFIG, options = {}) {
   /**
    * Evaluate now.
    * @param {number} [nowMs]
-   * @returns {{status: 'ok'|'warming'|'stale'|'partial'|'degraded',
+   * @returns {{status: 'ok'|'warming'|'stale'|'partial'|'degraded'|'recovering',
    *   reason: string|null, startedAt: number, tracked: number,
    *   steady: number, flagged: object[], lastReportAt: number|null}}
    */
@@ -412,6 +422,9 @@ export function createDarkTracker(config = SHIP_DARK_CONFIG, options = {}) {
     } else if (partialFeed(nowMs)) {
       status = 'partial';
       reason = 'feed is delivering far fewer reports than usual';
+    } else if (recoveredAt != null && cfg.recoveryGraceMs > 0 && nowMs - recoveredAt < cfg.recoveryGraceMs) {
+      status = 'recovering';
+      reason = 'feed just reconnected; holding dark flags while it catches up';
     }
     if (status === 'stale' || status === 'partial' || status === 'degraded') {
       lastDegradedAt = nowMs;
@@ -444,6 +457,8 @@ export function createDarkTracker(config = SHIP_DARK_CONFIG, options = {}) {
         if (lastHardBadAt != null && lastHardBadAt >= t.lastAt) { candidates.feedGap += 1; continue; }
         if (silentMs - badOverlap(t.lastAt, nowMs) < threshold) { candidates.feedGap += 1; continue; }
       } else if (lastDegradedAt != null && lastDegradedAt >= t.lastAt) { candidates.feedGap += 1; continue; }
+      // How much of this silence overlapped feed trouble (annotation only).
+      const feedGapMs = cfg.gapRule === 'overlap' ? Math.round(badOverlap(t.lastAt, nowMs)) : null;
       const peers = peersNear(t, nowMs);
       if (peers < cfg.minPeers) { candidates.fewPeers += 1; continue; }
       candidates.flagged += 1;
@@ -455,6 +470,7 @@ export function createDarkTracker(config = SHIP_DARK_CONFIG, options = {}) {
         lon: t.lon,
         lastAt: t.lastAt,
         silentMs,
+        feedGapMs,
         thresholdMs: Math.round(threshold),
         typicalIntervalMs: Math.round(t.ewma),
         reports: t.n,
