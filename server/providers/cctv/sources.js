@@ -70,6 +70,7 @@ import {
   TORONTO_GROUND_ELEVATION_M,
   TORONTO_MAX_CATALOG_BYTES,
   CCTV_SOURCE_FETCH_TIMEOUT_MS,
+  TARKTEE_FETCH_TIMEOUT_MS,
   KING_COUNTY_CAMERAS_URL,
   KING_COUNTY_IMAGE_ORIGIN,
   DEFAULT_KING_COUNTY_MAX_SOURCES,
@@ -1246,11 +1247,11 @@ export async function loadTarkteeSourcesFromDatex() {
     const [locResp, imgResp] = await Promise.all([
       fetch(TARKTEE_LOCATIONS_URL, {
         headers: { Accept: 'application/xml,text/xml,*/*' },
-        signal: AbortSignal.timeout(CCTV_SOURCE_FETCH_TIMEOUT_MS),
+        signal: AbortSignal.timeout(TARKTEE_FETCH_TIMEOUT_MS),
       }),
       fetch(TARKTEE_IMAGES_URL, {
         headers: { Accept: 'application/xml,text/xml,*/*' },
-        signal: AbortSignal.timeout(CCTV_SOURCE_FETCH_TIMEOUT_MS),
+        signal: AbortSignal.timeout(TARKTEE_FETCH_TIMEOUT_MS),
       }),
     ]);
     if (!locResp.ok) {

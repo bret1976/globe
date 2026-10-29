@@ -1,6 +1,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { DEFAULT_CCTV_SOURCE_FILE, CCTV_SOURCE_CACHE_MS } from './constants.js';
+import {
+  DEFAULT_CCTV_SOURCE_FILE,
+  CCTV_SOURCE_CACHE_MS,
+  CCTV_PACK_LAST_GOOD_MAX_AGE_MS,
+} from './constants.js';
 import { allocateSourceCap, resolveCatalogCap } from './cap.js';
 import { loadGroundHeights, joinGroundHeights } from './groundHeights.js';
 import { normalizeSourceItem } from './normalize.js';
@@ -222,13 +226,19 @@ export function createCctvCatalog({ sourceRoot = process.cwd() } = {}) {
   /** @type {Promise<Array<object>>|null} In-flight refresh, shared by concurrent
    * callers so a post-TTL burst launches ONE refetch, not one per request. */
   let _cctvSourceInflight = null;
+  /** @type {Map<string, {sources: Array<object>, at: number}>} Each live
+   * pack's last non-empty result, kept so one slow or failed upstream fetch
+   * doesn't drop that region's cameras until the next refresh. */
+  const _packLastGood = new Map();
 
   /**
    * Assemble and cache the merged CCTV source list.
    *
    * Merges every source pack (live open-data packs, local file, env
    * variable), deduplicates by ID, shares the catalog cap fairly across
-   * packs, and caches for CCTV_SOURCE_CACHE_MS.
+   * packs, and caches for CCTV_SOURCE_CACHE_MS. Past that, the cached list is
+   * returned while a background refresh replaces it; only a first load waits
+   * (port of upstream gods-eye-view #1234).
    *
    * @returns {Promise<Array<object>>} Deduplicated, capped source list.
    */
@@ -243,11 +253,32 @@ export function createCctvCatalog({ sourceRoot = process.cwd() } = {}) {
     // Single-flight: a burst of requests arriving past the TTL shares ONE refresh
     // instead of each launching the full multi-provider refetch. The `.finally`
     // clears the ref so the next post-TTL cycle starts fresh.
-    if (_cctvSourceInflight) return _cctvSourceInflight;
-    _cctvSourceInflight = refreshCctvSources().finally(() => {
-      _cctvSourceInflight = null;
-    });
-    return _cctvSourceInflight;
+    if (!_cctvSourceInflight) {
+      _cctvSourceInflight = refreshCctvSources().finally(() => {
+        _cctvSourceInflight = null;
+      });
+      // A background refresh has no caller waiting on it: report its failure
+      // here, once per refresh rather than once per request it serves. Keep
+      // the old catalog for another TTL, as an empty refresh does, so a refresh
+      // that keeps failing is retried once per TTL, not back to back.
+      if (_cctvSourceCache.length) {
+        _cctvSourceInflight.catch((error) => {
+          _cctvSourceCacheAt = Date.now();
+          console.warn(
+            '[CCTV] background catalog refresh failed; serving',
+            _cctvSourceCache.length,
+            'cameras from the last catalog:',
+            error?.message || error,
+          );
+        });
+      }
+    }
+    // With a catalog in hand, answer with it while the refresh runs: the
+    // refresh lasts as long as the slowest pack (Tarktee's DATEX feeds take up
+    // to its 30 s timeout), and every camera frame/media/stream request would
+    // otherwise wait for it. Only the first load, with nothing to serve yet,
+    // waits.
+    return _cctvSourceCache.length ? _cctvSourceCache : _cctvSourceInflight;
   }
 
   getCctvSources.snapshot = () => _cctvSourceCache;
@@ -297,15 +328,38 @@ export function createCctvCatalog({ sourceRoot = process.cwd() } = {}) {
         .map((item) => normalizeSourceItem(item))
         .filter((item) => item.id),
     });
+    const refreshedAt = Date.now();
+    const livePacks = LIVE_PACKS.map((pack, index) => {
+      const fresh = normalizePack(
+        pack.name,
+        liveResults[index]?.status === 'fulfilled' &&
+          Array.isArray(liveResults[index].value)
+          ? liveResults[index].value
+          : [],
+      );
+      if (!needsLiveSources) return fresh;
+      if (fresh.sources.length) {
+        _packLastGood.set(pack.name, { sources: fresh.sources, at: refreshedAt });
+        return fresh;
+      }
+      // An enabled pack that timed out or came back empty keeps its last good
+      // cameras for a while; a pack switched off by its env flag drops them.
+      const last = _packLastGood.get(pack.name);
+      if (
+        pack.enabled() &&
+        last &&
+        refreshedAt - last.at <= CCTV_PACK_LAST_GOOD_MAX_AGE_MS
+      ) {
+        console.warn(
+          `[CCTV] ${pack.name} refresh returned no cameras; keeping its last ${last.sources.length} from ${Math.round((refreshedAt - last.at) / 60000)} min ago`,
+        );
+        return { name: pack.name, sources: last.sources };
+      }
+      _packLastGood.delete(pack.name);
+      return fresh;
+    });
     const packs = [
-      ...LIVE_PACKS.map((pack, index) =>
-        normalizePack(
-          pack.name,
-          liveResults[index]?.status === 'fulfilled'
-            ? liveResults[index].value
-            : [],
-        ),
-      ),
+      ...livePacks,
       normalizePack('file', fromFile),
       normalizePack('env', fromEnv),
     ];
