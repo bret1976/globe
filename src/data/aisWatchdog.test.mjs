@@ -827,6 +827,8 @@ test('snapshot exposes the honest fields the browser chip needs', () => {
     'lastMessageAt',
     'nextAttemptAt',
     'reconnectAttempt',
+    'retryInMs',
+    'sessions',
     'silentForMs',
     'staleAfterMs',
     'status',

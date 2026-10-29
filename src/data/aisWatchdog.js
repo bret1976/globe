@@ -44,6 +44,17 @@ export const AIS_WATCHDOG_DEFAULTS = Object.freeze({
   downRetryMs: 900_000,
   /** Probe cadence while the key is being rejected. Deliberately very slow. */
   authProbeMs: 3_600_000,
+  /**
+   * A session that delivered data for at least this long is "healthy". When
+   * the upstream drops a healthy session (AISStream's edge resets long-lived
+   * sockets every ~5 min), the reconnect is near-immediate instead of walking
+   * the transport ladder, which used to leave a ~15s hole each time.
+   */
+  healthySessionMs: 60_000,
+  /** Base delay before re-dialling after a healthy session closed. */
+  quickReconnectMs: 1_000,
+  /** Random jitter fraction applied to every retry delay (0 = none). */
+  jitterRatio: 0,
 });
 
 /**
@@ -149,6 +160,28 @@ export function createAisWatchdog(options = {}) {
     AIS_WATCHDOG_DEFAULTS.authProbeMs,
   );
   const clock = options.clock || DEFAULT_CLOCK;
+  const healthySessionMs = positiveOr(
+    options.healthySessionMs,
+    AIS_WATCHDOG_DEFAULTS.healthySessionMs,
+  );
+  const quickReconnectMs = positiveOr(
+    options.quickReconnectMs,
+    AIS_WATCHDOG_DEFAULTS.quickReconnectMs,
+  );
+  const jitterRatio =
+    Number.isFinite(options.jitterRatio) && options.jitterRatio > 0
+      ? Math.min(1, options.jitterRatio)
+      : 0;
+  const random = typeof options.random === 'function' ? options.random : Math.random;
+  /** Spread a delay by +/- jitterRatio so reconnects never synchronise. */
+  function jitter(ms) {
+    if (!jitterRatio) return ms;
+    return Math.max(0, Math.round(ms * (1 + jitterRatio * (2 * random() - 1))));
+  }
+  /** Session bookkeeping for diagnostics and the quick-reconnect decision. */
+  let sessionStartMono = 0;
+  let sessionMessages = 0;
+  const sessions = { quickReconnects: 0, lastLifetimeMs: null, lastMessages: null, recentLifetimesMs: [] };
 
   let status = 'idle';
   /**
@@ -224,7 +257,7 @@ export function createAisWatchdog(options = {}) {
       return;
     }
     status = 'reconnecting';
-    nextAttemptMono = monoNow + backoffMs[reconnectAttempt - 1];
+    nextAttemptMono = monoNow + jitter(backoffMs[reconnectAttempt - 1]);
   }
 
   /** Hard-abort whatever socket we hold, if any. */
@@ -344,6 +377,8 @@ export function createAisWatchdog(options = {}) {
     // The silence budget starts when the socket is COMMISSIONED, not when it
     // opens: a handshake that completes late must not buy extra silence.
     silenceSinceMono = monoNow;
+    sessionStartMono = monoNow;
+    sessionMessages = 0;
     // Once DOWN or AUTH-FAILED, the slow retry runs *behind* the reported
     // state: the chip must not flicker back to a hopeful "connecting". Only
     // real data clears them.
@@ -391,6 +426,7 @@ export function createAisWatchdog(options = {}) {
     const monoNow = clock.mono();
     silenceSinceMono = monoNow;
     lastMessageWall = clock.wall();
+    sessionMessages += 1;
     reconnectAttempt = 0;
     error = null;
     status = 'live';
@@ -401,6 +437,22 @@ export function createAisWatchdog(options = {}) {
   function onClose(eventGeneration) {
     if (!ownsGeneration(eventGeneration)) return [];
     release();
+    const monoNow = clock.mono();
+    const lifetime = Math.max(0, monoNow - sessionStartMono);
+    sessions.lastLifetimeMs = Math.round(lifetime);
+    sessions.lastMessages = sessionMessages;
+    sessions.recentLifetimesMs = [...sessions.recentLifetimesMs, Math.round(lifetime)].slice(-20);
+    if (status === 'live' && sessionMessages > 0 && lifetime >= healthySessionMs) {
+      // A healthy, data-carrying session was dropped by the far end. That is
+      // not a failing transport, so re-dial almost at once (jittered) rather
+      // than waiting out the ladder.
+      sessions.quickReconnects += 1;
+      reconnectAttempt = 0;
+      error = null;
+      status = 'reconnecting';
+      nextAttemptMono = monoNow + jitter(quickReconnectMs);
+      return [];
+    }
     if (!error) error = 'AISStream websocket closed';
     scheduleRetry('transport');
     return [];
@@ -472,6 +524,13 @@ export function createAisWatchdog(options = {}) {
           : null,
       watchdog: silenceWatchArmed ? 'armed' : 'custom-subscription-off',
       staleAfterMs: staleMs,
+      retryInMs: owned === null ? Math.round(waitingMs) : null,
+      sessions: {
+        ...sessions,
+        recentLifetimesMs: [...sessions.recentLifetimesMs],
+        currentLifetimeMs: owned !== null ? Math.round(monoNow - sessionStartMono) : null,
+        currentMessages: owned !== null ? sessionMessages : null,
+      },
     };
   }
 
