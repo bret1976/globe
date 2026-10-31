@@ -25,6 +25,15 @@ test('explicit build inputs preserve browser-only defines, plugin order and loop
   assert.ok(config.server.fs.deny.includes('**/ENVIRONMENT'));
   assert.ok(config.server.fs.deny.includes('.env.*'));
   assert.equal(config.server.headers['X-Frame-Options'], 'DENY');
+  assert.equal(
+    config.server.headers['Strict-Transport-Security'],
+    'max-age=31536000; includeSubDomains',
+  );
+  assert.equal(config.server.headers['X-Content-Type-Options'], 'nosniff');
+  assert.equal(
+    config.server.headers['Referrer-Policy'],
+    'strict-origin-when-cross-origin',
+  );
   assert.deepEqual(config.optimizeDeps.exclude, [
     '@huggingface/transformers',
     'kokoro-js',
