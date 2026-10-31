@@ -422,3 +422,28 @@ body.scene-playback-mode #first-run-launcher {
     scroll-behavior: auto;
   }
 }
+
+/* While the welcome card is open on desktop, the HUD summary line ran under
+   the card and was cut off mid-word. Keep it beside the card instead: wrap
+   to at most two lines and end with an ellipsis. Phones already clamp it in
+   phone-declutter.css. */
+@media (min-width: 761px) {
+  body:has(#first-run-launcher:not([hidden]))
+    #intel-hud
+    .hud-top-left
+    .hud-summary-wrap {
+    max-width: min(420px, calc(50vw - 17rem - 76px));
+  }
+
+  body:has(#first-run-launcher:not([hidden]))
+    #intel-hud
+    .hud-top-left
+    .hud-summary {
+    white-space: normal;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+}

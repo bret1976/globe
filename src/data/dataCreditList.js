@@ -387,7 +387,7 @@ export const DATA_CREDITS = [
     key: 'kingcounty-cctv',
     html:
       'CCTV cameras &amp; frames (King County, WA): King County Road Services — ' +
-      '<a href="https://kingcounty.gov/en/dept/local-services/roads" target="_blank" rel="noopener">kingcounty.gov</a>, ' +
+      '<a href="https://info.kingcounty.gov/" target="_blank" rel="noopener">kingcounty.gov</a>, ' +
       'per the ' +
       '<a href="https://kingcounty.gov/en/dept/kcit/data-information-services/gis-center/about/terms-conditions-copyrights" target="_blank" rel="noopener">KCGIS Center terms</a>. ' +
       'Partner-city cameras hosted on the county image handler (e.g. Newcastle) name their owner in the CCTV panel.',
@@ -588,7 +588,7 @@ export const DATA_CREDITS = [
     key: 'hongkong-td-cctv',
     html:
       'CCTV cameras &amp; frames (Hong Kong): ' +
-      '<a href="https://data.gov.hk/en-data/dataset/hk-td-tis-traffic-snapshot-images" target="_blank" rel="noopener">DATA.GOV.HK / Hong Kong Transport Department</a> — traffic snapshot images',
+      '<a href="https://data.gov.hk/en-data/dataset/hk-td-tis_2-traffic-snapshot-images" target="_blank" rel="noopener">DATA.GOV.HK / Hong Kong Transport Department</a> — traffic snapshot images',
   },
   {
     key: 'nyctmc-cctv',
