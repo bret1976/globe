@@ -81,6 +81,11 @@ export function createOpenSkySource({
       return { ...snapshot, status: response.status };
     },
     async getTrack(reference, { signal } = {}) {
+      // OpenSky only knows 24-bit ICAO addresses (6 hex chars). Non-ICAO
+      // ids such as TIS-B '~28963e' have no OpenSky history: skip the
+      // request and keep the locally recorded path (friendly fallback).
+      if (!/^[0-9a-f]{6}$/i.test(String(reference ?? '').trim()))
+        return { records: [], complete: false, fallback: 'non_icao' };
       const { response, payload } = await readResponse(
         fetchImpl,
         '/api/opensky-track?icao24=' + encodeURIComponent(reference),
