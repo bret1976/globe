@@ -25,12 +25,18 @@ export const SHIP_DARK_CONFIG = Object.freeze({
   minReports: 8,
   /** Its smoothed reporting interval must be at most this. */
   maxTypicalIntervalMs: 5 * 60_000,
-  /** Silence must exceed BOTH this … */
-  darkAfterMs: 20 * 60_000,
+  /**
+   * Silence must exceed BOTH this … Raised from 20 to 60 min (2026-11-02):
+   * on real AISStream data half of all 20-min flags reappeared within 35 min.
+   */
+  darkAfterMs: 60 * 60_000,
   /** … and this multiple of the ship's own typical interval. */
   intervalMultiple: 6,
-  /** Moving at its last report (knots). Anchored/moored ships are ignored. */
-  minSpeedKt: 2,
+  /**
+   * Moving at its last report (knots). Anchored/moored/manoeuvring ships are
+   * ignored. Raised from 2 to 5 kt (2026-11-02) to drop harbour and anchorage traffic.
+   */
+  minSpeedKt: 5,
   /** Coverage guard: at least this many OTHER targets … */
   minPeers: 3,
   /** … reported within this window … */

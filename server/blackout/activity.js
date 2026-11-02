@@ -10,9 +10,17 @@ import { placeName, areasAt } from './places.js';
  * it "reappeared". History outlives the 24 h detector logs (90 days, capped)
  * and is saved on the persistent volume with everything else.
  */
-export const EVENTS_MAX = 5_000;
+/**
+ * Caps sized so the full retention fits (2026-11-02; events ~750 B, 40k = ~30 MB; were 5,000 / 20,000,
+ * which trimmed history to ~3 days). Measured: ~1,000 events/day and, after
+ * the ship noise filters, ~750 ship + ~165 military-aircraft history rows/day,
+ * ~300 bytes each. Ships and aircraft are saved to separate files, each well
+ * under the 64 MB per-file cap at these caps.
+ */
+export const EVENTS_MAX = 40_000;
 export const EVENTS_RETENTION_MS = 14 * 86_400_000;
-export const HISTORY_MAX = 20_000;
+export const HISTORY_MAX_BY_KIND = Object.freeze({ ship: 150_000, other: 50_000 });
+export const HISTORY_MAX = HISTORY_MAX_BY_KIND.ship + HISTORY_MAX_BY_KIND.other;
 export const HISTORY_RETENTION_MS = 90 * 86_400_000;
 export const GNSS_RISE_MIN_SHARE = 0.2;
 export const GNSS_RISE_MIN_STEP = 0.1;
@@ -44,11 +52,35 @@ export function createActivity({ store, now = () => Date.now(), sources = {} } =
   let lastTickAt = null;
   let ticks = 0;
 
-  const saved = store?.register('activity', () => ({ v: 1, seq, events, history: [...history.values()], regionLastRise: Object.fromEntries(regionLastRise) }));
-  if (saved?.v === 1) {
+  const histGroup = (h) => (h.kind === 'ship' ? 'ship' : 'other');
+  // Compact rows on disk: the key is rebuilt on load, null fields dropped.
+  const packHistory = (group) => {
+    const rows = [];
+    for (const h of history.values()) {
+      if (histGroup(h) !== group) continue;
+      const o = {};
+      for (const [k, v] of Object.entries(h)) if (k !== 'key' && v != null && k !== '_reappearedNew') o[k] = v;
+      rows.push(o);
+    }
+    return { v: 1, rows };
+  };
+  const unpackHistory = (saved) => {
+    if (saved?.v !== 1 || !Array.isArray(saved.rows)) return;
+    for (const r of saved.rows) {
+      if (!r?.id || !r.kind || !Number.isFinite(r.lastSeenAt)) continue;
+      const h = { reappearedAt: null, durationMin: null, speedMps: null, headingDeg: null, altitudeM: null, place: null, areas: [], ...r };
+      h.key = `${h.kind}:${h.id}:${h.lastSeenAt}`;
+      history.set(h.key, h);
+    }
+  };
+  const saved = store?.register('activity', () => ({ v: 2, seq, events, regionLastRise: Object.fromEntries(regionLastRise) }));
+  unpackHistory(store?.register('history-ships', () => packHistory('ship')));
+  unpackHistory(store?.register('history-aircraft', () => packHistory('other')));
+  if (saved?.v === 1 || saved?.v === 2) {
     seq = Number(saved.seq) || 0;
     if (Array.isArray(saved.events)) events = saved.events.filter((e) => e?.id && Number.isFinite(e.at));
-    if (Array.isArray(saved.history)) for (const h of saved.history) if (h?.key) history.set(h.key, h);
+    // v1 kept history inside activity.json; migrate it (split files win).
+    if (Array.isArray(saved.history)) for (const h of saved.history) if (h?.key && !history.has(h.key)) history.set(h.key, h);
     for (const [k, v] of Object.entries(saved.regionLastRise || {})) if (Number.isFinite(v)) regionLastRise.set(k, v);
   }
   const restoredEvents = events.length;
@@ -71,9 +103,11 @@ export function createActivity({ store, now = () => Date.now(), sources = {} } =
     if (events.length > EVENTS_MAX) events = events.slice(events.length - EVENTS_MAX);
     const hcut = t - HISTORY_RETENTION_MS;
     for (const [k, h] of history) if (h.flaggedAt < hcut) history.delete(k);
-    if (history.size > HISTORY_MAX) {
-      const old = [...history.values()].sort((a, b) => a.flaggedAt - b.flaggedAt).slice(0, history.size - HISTORY_MAX);
-      for (const h of old) history.delete(h.key);
+    for (const [group, max] of Object.entries(HISTORY_MAX_BY_KIND)) {
+      const rows = [...history.values()].filter((h) => histGroup(h) === group);
+      if (rows.length <= max) continue;
+      rows.sort((a, b) => a.flaggedAt - b.flaggedAt);
+      for (const h of rows.slice(0, rows.length - max)) history.delete(h.key);
     }
   }
 
