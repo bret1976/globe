@@ -58,5 +58,5 @@ export function createFlagLog({ retentionMs = FLAG_LOG_RETENTION_MS, max = FLAG_
     prune(nowMs);
     return entries.size;
   }
-  return { update, list, exportState, importState, get size() { return entries.size; } };
+  return { update, list, exportState, importState, get: (id) => entries.get(String(id)) || null, get size() { return entries.size; } };
 }

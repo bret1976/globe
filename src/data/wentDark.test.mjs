@@ -3,13 +3,18 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   AIRCRAFT_DARK_CONFIG,
-  SHIP_DARK_CONFIG,
+  SHIP_DARK_CONFIG as SHIP_DARK_CONFIG_LIVE,
   WENT_DARK_ENABLED_DEFAULT,
   createDarkTracker,
   describeDarkStatus,
   isMovingReport,
   lastSeenText,
 } from './wentDark.js';
+
+// Mechanics tests keep the pre-2026-11-02 timings (20 min, 2 kt); the live
+// thresholds are asserted separately.
+const SHIP_DARK_CONFIG = Object.freeze({ ...SHIP_DARK_CONFIG_LIVE, darkAfterMs: 20 * 60_000, minSpeedKt: 2 });
+
 
 const MIN = 60_000;
 const T0 = 1_800_000_000_000;
@@ -28,12 +33,12 @@ function feedShips(tracker, ids, { from = T0, stepMs = MIN, count = 10, lat = 50
 
 test('thresholds are named, frozen constants and the feature is on by default', () => {
   assert.equal(WENT_DARK_ENABLED_DEFAULT, true);
-  assert.ok(Object.isFrozen(SHIP_DARK_CONFIG));
+  assert.ok(Object.isFrozen(SHIP_DARK_CONFIG_LIVE));
   assert.ok(Object.isFrozen(AIRCRAFT_DARK_CONFIG));
-  assert.equal(SHIP_DARK_CONFIG.minReports, 8);
-  assert.equal(SHIP_DARK_CONFIG.darkAfterMs, 20 * MIN);
-  assert.equal(SHIP_DARK_CONFIG.minSpeedKt, 2);
-  assert.equal(SHIP_DARK_CONFIG.minPeers, 3);
+  assert.equal(SHIP_DARK_CONFIG_LIVE.minReports, 8);
+  assert.equal(SHIP_DARK_CONFIG_LIVE.darkAfterMs, 60 * MIN);
+  assert.equal(SHIP_DARK_CONFIG_LIVE.minSpeedKt, 5);
+  assert.equal(SHIP_DARK_CONFIG_LIVE.minPeers, 3);
   assert.equal(AIRCRAFT_DARK_CONFIG.darkAfterMs, 3 * MIN);
   assert.equal(AIRCRAFT_DARK_CONFIG.minAltitudeM, 3000);
 });

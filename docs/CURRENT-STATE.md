@@ -4086,3 +4086,17 @@ factory are added to its viewer and removed on destruction.
 ## /watch dashboard (Blackout)
 
 `/watch` (`watch.html`, `src/watch/`) is the **Blackout** dashboard, a second Vite HTML entry: a 2D HUD with no Cesium (the build strips the Cesium tags vite-plugin-cesium injects). It polls existing endpoints every 30 s and shows per-feed health with a stale/partial/regional banner, went-dark ships (server tracker) and aircraft (tracked in-page, only when the flights feed is worldwide), a jamming timeline on a canvas map (30 gpsjam days + in-memory NIC/NACp frames, with region highlights and an honest history note), and the observed/inferred/simulated provenance table. Pure logic lives in `src/watch/model.js` (tested in `model.test.mjs`). Attribution strings that need no Cesium moved to `src/data/dataCreditList.js`; `dataCredits.js` re-exports them.
+
+### Blackout ship noise filters, history retention, AIS reconnect (2026-11-02)
+
+Ship went-dark thresholds (live config, `src/data/wentDark.js` + `server/providers/vessels/went-dark.js`):
+- Silence ≥ 60 min (was 20) and ≥ 6× the ship's own report interval; steady (≥ 8 reports, interval ≤ 5 min).
+- Moving ≥ 5 kt at last report (was 2); anchored/moored/manoeuvring ignored.
+- Last fix ≥ 20 km from the 1:110m coastline and not over land/inland waterways (ports, rivers, anchorages, coastal shadow).
+- One flag per MMSI per 24 h (repeat silences of the same ship not re-flagged).
+- Unchanged: ≥ 3 peers reporting within 10 min nearby; feed-health/outage grace rules. Military aircraft thresholds unchanged.
+- Measured on the live last-24 h history (2026-11-02): 7,337 ship flags/day before → ~750/day with these rules (−90%); still-dark-at-check ships 911 → ~360.
+
+History: caps raised (events 5,000 → 40,000 over 14 days; history 20,000 → 150,000 ships + 50,000 aircraft/GNSS over 90 days). Ship and aircraft history are saved to `history-ships.json` / `history-aircraft.json` (compacted rows), events stay in `activity.json`; an old v1 `activity.json` migrates on load. Each file stays well under the 64 MB per-file cap.
+
+AISStream: exponential reconnect ladder 2 s → 4 → 8 → … → 300 s (±25 % jitter), 5 s watchdog tick (was 15 s), and a reconnect log (`checks.ships.reconnects` in `/api/blackout/v1/health`: time, status, close code/reason, seconds down). Vessel rows are kept during reconnects (unchanged store TTL).

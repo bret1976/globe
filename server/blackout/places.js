@@ -37,6 +37,35 @@ export function onLand(lat, lon) {
   return false;
 }
 
+/**
+ * Approximate distance (km) from a point to the nearest 1:110m coastline, or
+ * Infinity when none is within limitKm. 0 when the point is on land. Coarse
+ * (the 110m outline cuts corners by a few km) but enough to tell open water
+ * from harbours, rivers and anchorages near shore.
+ */
+export function coastDistanceKm(lat, lon, limitKm = 50) {
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return Infinity;
+  if (onLand(lat, lon)) return 0;
+  const cl = Math.max(0.05, Math.cos((lat * Math.PI) / 180));
+  const dLat = limitKm / 111 + 0.01;
+  const dLon = dLat / cl;
+  let best = Infinity;
+  for (const { ring, box } of land()) {
+    if (lat < box[1] - dLat || lat > box[3] + dLat || lon < box[0] - dLon || lon > box[2] + dLon) continue;
+    for (let i = 0; i + 1 < ring.length; i++) {
+      const [x1, y1] = ring[i], [x2, y2] = ring[i + 1];
+      if (Math.min(y1, y2) > lat + dLat || Math.max(y1, y2) < lat - dLat) continue;
+      const dx = (x2 - x1) * cl * 111, dy = (y2 - y1) * 111;
+      const px = (lon - x1) * cl * 111, py = (lat - y1) * 111;
+      const L = dx * dx + dy * dy;
+      const u = L ? Math.max(0, Math.min(1, (px * dx + py * dy) / L)) : 0;
+      const d = Math.hypot(px - u * dx, py - u * dy);
+      if (d < best) best = d;
+    }
+  }
+  return best <= limitKm ? best : Infinity;
+}
+
 const deg = (v, pos, neg) => `${Math.abs(v).toFixed(1)}°${v >= 0 ? pos : neg}`;
 
 export const PLACES = Object.freeze([

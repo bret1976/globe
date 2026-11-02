@@ -39,7 +39,12 @@ const AISSTREAM_DEFAULT_MESSAGE_TYPES = [
 const AISSTREAM_SILENCE_REPORT_MS = 120_000;
 /** Recycle threshold as a multiple of the report threshold. */
 const AISSTREAM_RECYCLE_RATIO = 2.5;
-const AISSTREAM_BACKOFF_MS = Object.freeze([5_000, 15_000, 60_000, 300_000]);
+/**
+ * Exponential ladder (x2 per failed attempt, capped at 5 min), jittered +/-25%
+ * by the watchdog. Starts at 2 s (was 5 s, 15 s, 60 s, 300 s) so a single
+ * failed re-dial no longer costs 15 s+ of ships.
+ */
+const AISSTREAM_BACKOFF_MS = Object.freeze([2_000, 4_000, 8_000, 16_000, 32_000, 64_000, 128_000, 300_000]);
 /** Slow retry cadence once the ladder is spent and the feed reads DOWN. */
 const AISSTREAM_DOWN_RETRY_MS = 900_000;
 /**
@@ -49,7 +54,55 @@ const AISSTREAM_DOWN_RETRY_MS = 900_000;
  */
 const AISSTREAM_AUTH_PROBE_MS = 3_600_000;
 /** How often the watchdog re-evaluates without request traffic. */
-const AISSTREAM_TICK_MS = 15_000;
+const AISSTREAM_TICK_MS = 5_000;
+/**
+ * Reconnect log: each time the feed leaves 'live' we record when, why (the
+ * watchdog status, its error, and the upstream close code/reason), and how
+ * long until data flowed again. Kept in memory (last 50) and in the logs.
+ * The 5 s tick (was 15 s) tells the went-dark detector about an outage
+ * sooner, so the stretch excluded from ship silences is tighter.
+ */
+const AIS_RECONNECT_LOG_MAX = 50;
+const _aisReconnects = [];
+let _aisLastStatus = null;
+let _aisOpenOutage = null;
+function noteAisReconnect(snap, nowMs = Date.now()) {
+  const status = snap?.status || 'unknown';
+  if (status === _aisLastStatus) return;
+  const prev = _aisLastStatus;
+  _aisLastStatus = status;
+  if (status !== 'live' && (prev === 'live' || prev === null) && !_aisOpenOutage && prev !== null) {
+    const lc = snap?.keepalive?.lastClose;
+    _aisOpenOutage = {
+      at: nowMs,
+      status,
+      error: snap?.error ? String(snap.error).slice(0, 160) : null,
+      closeCode: lc && nowMs - lc.at < 60_000 ? lc.code : null,
+      closeReason: lc && nowMs - lc.at < 60_000 ? lc.reason || null : null,
+      downMs: null,
+    };
+    _aisReconnects.push(_aisOpenOutage);
+    while (_aisReconnects.length > AIS_RECONNECT_LOG_MAX) _aisReconnects.shift();
+    console.warn(`[AISStream] feed left live -> ${status}${_aisOpenOutage.closeCode ? ` (close ${_aisOpenOutage.closeCode}${_aisOpenOutage.closeReason ? `, ${_aisOpenOutage.closeReason}` : ''})` : ''}${_aisOpenOutage.error ? `: ${_aisOpenOutage.error}` : ''}`);
+  } else if (status === 'live' && _aisOpenOutage) {
+    _aisOpenOutage.downMs = nowMs - _aisOpenOutage.at;
+    console.warn(`[AISStream] feed live again after ${Math.round(_aisOpenOutage.downMs / 1000)} s`);
+    _aisOpenOutage = null;
+  }
+}
+/** Recent reconnects (newest last) with the time the feed was down. */
+export function aisReconnectLog() {
+  const done = _aisReconnects.filter((r) => r.downMs != null);
+  const hourAgo = Date.now() - 3_600_000;
+  return {
+    total: _aisReconnects.length,
+    lastHour: _aisReconnects.filter((r) => r.at >= hourAgo).length,
+    downMsLastHour: _aisReconnects.filter((r) => r.at >= hourAgo).reduce((s, r) => s + (r.downMs ?? Date.now() - r.at), 0),
+    medianDownMs: done.length ? done.map((r) => r.downMs).sort((a, b) => a - b)[done.length >> 1] : null,
+    recent: _aisReconnects.slice(-10).map((r) => ({ ...r })),
+  };
+}
+
 /** Client websocket ping cadence (runs on the watchdog tick). */
 const AISSTREAM_KEEPALIVE_MS = 15_000;
 
@@ -353,7 +406,9 @@ function startAisStreamWatchdogTick() {
   _aisStreamTickTimer = setInterval(() => {
     try {
       ensureAisStreamConnection();
-      noteShipFeedStatus(aisStreamStatusSnapshot().status);
+      const snap = aisStreamStatusSnapshot();
+      noteShipFeedStatus(snap.status);
+      noteAisReconnect(snap);
     } catch (error) {
       console.warn('[AISStream] watchdog tick failed', error?.message || '');
     }
@@ -426,4 +481,4 @@ function parseCsvOrJsonEnv(key, fallback) {
 }
 
 /** Blackout's always-on monitor: open the AIS stream at boot, not on first view. */
-export { ensureAisStreamConnection as ensureAisStreamForBlackout, aisStreamStatusSnapshot as aisStreamStatusForBlackout };
+export { ensureAisStreamConnection as ensureAisStreamForBlackout, aisReconnectLog as aisReconnectsForBlackout, aisStreamStatusSnapshot as aisStreamStatusForBlackout };

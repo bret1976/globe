@@ -4,7 +4,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createAisStreamAdapter, isRecognizedAisEnvelope } from './aisStreamAdapter.js';
-import { SHIP_DARK_CONFIG, createDarkTracker } from './wentDark.js';
+import { SHIP_DARK_CONFIG as SHIP_DARK_CONFIG_LIVE, createDarkTracker } from './wentDark.js';
+
+// Mechanics tests keep the pre-2026-11-02 timings (20 min, 2 kt); the live
+// thresholds are asserted separately.
+const SHIP_DARK_CONFIG = Object.freeze({ ...SHIP_DARK_CONFIG_LIVE, darkAfterMs: 20 * 60_000, minSpeedKt: 2 });
+
 
 const MIN = 60_000;
 const T0 = 1_800_000_000_000;
