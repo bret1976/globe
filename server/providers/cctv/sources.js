@@ -71,6 +71,8 @@ import {
   TORONTO_MAX_CATALOG_BYTES,
   CCTV_SOURCE_FETCH_TIMEOUT_MS,
   TARKTEE_FETCH_TIMEOUT_MS,
+  TARKTEE_LOCATIONS_FETCH_TIMEOUT_MS,
+  TARKTEE_LOCATIONS_CACHE_MAX_AGE_MS,
   KING_COUNTY_CAMERAS_URL,
   KING_COUNTY_IMAGE_ORIGIN,
   DEFAULT_KING_COUNTY_MAX_SOURCES,
@@ -95,6 +97,11 @@ import {
   KARTVERKET_USER_AGENT,
   KARTVERKET_MAX_RESPONSE_BYTES,
   KARTVERKET_HEIGHT_RANGE_M,
+  DEFAULT_A22_CCTV_URL,
+  A22_IMAGE_ORIGIN,
+  A22_MAX_CATALOG_BYTES,
+  A22_GROUND_ELEVATION_BY_KM,
+  A22_DEFAULT_GROUND_ELEVATION_M,
 } from './constants.js';
 import {
   toFiniteNumber,
@@ -116,6 +123,7 @@ import {
   decodeNumericEntities,
   isLikelyNorwayCoordinate,
   isLikelyTorontoCoordinate,
+  isLikelyA22Coordinate,
   cameraDisplayCode,
   rowArrayToObject,
   prioritizeSources,
@@ -1242,32 +1250,76 @@ export function parseTarkteeDatexImages(xml) {
  *
  * @returns {Promise<Array<object>>} Normalized camera source objects.
  */
+/**
+ * Last good parse of the Tarktee locations feed. Camera positions barely
+ * change, but that feed is slow (about 11 s to first byte from a US host) and
+ * sometimes overruns the timeout from Railway, which used to drop all of
+ * Estonia for the refresh. The images feed carries the current frame URLs and
+ * is still fetched fresh every time.
+ */
+let _tarkteeLocationsCache = null;
+
+/** Test hook: forget the cached Tarktee locations. */
+export function resetTarkteeLocationsCacheForTests() {
+  _tarkteeLocationsCache = null;
+}
+
+async function fetchTarkteeXml(url, timeoutMs) {
+  const resp = await fetch(url, {
+    headers: { Accept: 'application/xml,text/xml,*/*' },
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+  if (!resp.ok) {
+    try {
+      await resp.body?.cancel();
+    } catch {
+      /* no-op */
+    }
+    throw new Error(`HTTP ${resp.status}`);
+  }
+  return resp.text();
+}
+
 export async function loadTarkteeSourcesFromDatex() {
   try {
-    const [locResp, imgResp] = await Promise.all([
-      fetch(TARKTEE_LOCATIONS_URL, {
-        headers: { Accept: 'application/xml,text/xml,*/*' },
-        signal: AbortSignal.timeout(TARKTEE_FETCH_TIMEOUT_MS),
-      }),
-      fetch(TARKTEE_IMAGES_URL, {
-        headers: { Accept: 'application/xml,text/xml,*/*' },
-        signal: AbortSignal.timeout(TARKTEE_FETCH_TIMEOUT_MS),
-      }),
+    const [locResult, imgResult] = await Promise.allSettled([
+      fetchTarkteeXml(TARKTEE_LOCATIONS_URL, TARKTEE_LOCATIONS_FETCH_TIMEOUT_MS),
+      fetchTarkteeXml(TARKTEE_IMAGES_URL, TARKTEE_FETCH_TIMEOUT_MS),
     ]);
-    if (!locResp.ok) {
-      console.warn('[CCTV] Tarktee locations download failed:', locResp.status);
+    if (imgResult.status !== 'fulfilled') {
+      console.warn(
+        '[CCTV] Tarktee images download failed:',
+        imgResult.reason?.message || imgResult.reason,
+      );
       return [];
     }
-    if (!imgResp.ok) {
-      console.warn('[CCTV] Tarktee images download failed:', imgResp.status);
-      return [];
+    const images = parseTarkteeDatexImages(imgResult.value);
+    let locations =
+      locResult.status === 'fulfilled'
+        ? parseTarkteeDatexLocations(locResult.value)
+        : new Map();
+    if (locations.size) {
+      _tarkteeLocationsCache = { locations, at: Date.now() };
+    } else {
+      const cached = _tarkteeLocationsCache;
+      const ageMs = cached ? Date.now() - cached.at : Infinity;
+      if (cached && ageMs <= TARKTEE_LOCATIONS_CACHE_MAX_AGE_MS) {
+        const why =
+          locResult.status === 'fulfilled'
+            ? 'empty'
+            : locResult.reason?.message || String(locResult.reason);
+        console.warn(
+          `[CCTV] Tarktee locations unavailable (${why}); using the ${cached.locations.size} cached from ${Math.round(ageMs / 60000)} min ago`,
+        );
+        locations = cached.locations;
+      } else if (locResult.status !== 'fulfilled') {
+        console.warn(
+          '[CCTV] Tarktee locations download failed:',
+          locResult.reason?.message || locResult.reason,
+        );
+        return [];
+      }
     }
-    const [locXml, imgXml] = await Promise.all([
-      locResp.text(),
-      imgResp.text(),
-    ]);
-    const locations = parseTarkteeDatexLocations(locXml);
-    const images = parseTarkteeDatexImages(imgXml);
     if (!locations.size || !images.size) {
       console.warn('[CCTV] Tarktee DATEX parse empty:', {
         locations: locations.size,
@@ -2751,6 +2803,126 @@ export async function loadTorontoSourcesFromOpenData() {
       '[CCTV] Toronto camera download error:',
       error?.message || error,
     );
+    return [];
+  }
+}
+
+/**
+ * One Open Data Hub `WebcamInfo` item (source `a22`) -> one catalog source,
+ * or null.
+ *
+ * The frame must be the operator's own `WebCamImg/km<N>.jpg` for the
+ * camera's motorway kilometre. The feed names the place and the kilometre but
+ * no bearing, so the heading uses the shared id-hash fallback at low
+ * confidence, like Calgary and Vegvesen; the ground elevation comes from the
+ * per-kilometre DEM table because the road spans ~1,350 m of altitude.
+ *
+ * @param {object} item - One element of the API's `Items` array.
+ * @returns {?object}
+ */
+export function a22WebcamToSource(item) {
+  if (!item || typeof item !== 'object') return null;
+  if (item.Active === false) return null;
+  if (String(item.Source ?? '').toLowerCase() !== 'a22') return null;
+
+  const gps = Array.isArray(item.GpsInfo) ? item.GpsInfo[0] : null;
+  const lat = toFiniteNumber(gps?.Latitude);
+  const lon = toFiniteNumber(gps?.Longitude);
+  if (!isLikelyA22Coordinate(lat, lon)) return null;
+
+  const km = String(item.Mapping?.a22?.km ?? '').trim();
+  if (!/^\d{1,3}$/.test(km)) return null;
+  const imageUrl = `${A22_IMAGE_ORIGIN}km${Number(km)}.jpg`;
+  let image;
+  try {
+    image = new URL(String(item.Webcamurl ?? ''));
+  } catch {
+    return null;
+  }
+  if (image.username || image.password || image.href !== imageUrl) return null;
+
+  const place =
+    String(item.Shortname ?? item.Webcamname?.it ?? '')
+      .replace(/\s+/g, ' ')
+      .trim() || `Km ${Number(km)}`;
+  const cameraId = `it-a22-km${Number(km)}`;
+  const ground = A22_GROUND_ELEVATION_BY_KM[Number(km)];
+
+  return {
+    id: cameraId,
+    name: `A22 ${place} (km ${Number(km)})`,
+    // One motorway-wide category in the camera picker; the place is already
+    // in the name.
+    city: 'A22 Brennero',
+    cityId: 'a22',
+    provider: 'Autostrada del Brennero',
+    lat,
+    lon,
+    headingDeg: fallbackHeadingFromId(cameraId),
+    headingConfidence: 'low',
+    pitchDeg: -15,
+    fovDeg: 50,
+    rangeM: 160,
+    mountHeightM: 8,
+    groundElevationM: Number.isFinite(ground)
+      ? ground
+      : A22_DEFAULT_GROUND_ELEVATION_M,
+    feedType: 'image',
+    url: imageUrl,
+    snapshotUrl: imageUrl,
+    sourceKind: 'a22-opendatahub',
+    license:
+      'Webcam images © Autostrada del Brennero S.p.A., via the Open Data Hub (NOI Techpark)',
+    code: cameraDisplayCode(place.toUpperCase()),
+  };
+}
+
+/**
+ * Fetch the Autostrada del Brennero (A22) webcams from the keyless Open Data
+ * Hub tourism API. Frames are stills on www.autobrennero.it.
+ *
+ * @returns {Promise<Array<object>>} Normalized camera source objects.
+ */
+export async function loadA22SourcesFromOpenDataHub() {
+  try {
+    const endpoint = process.env.CCTV_A22_URL || DEFAULT_A22_CCTV_URL;
+    const resp = await fetch(endpoint, {
+      headers: { Accept: 'application/json' },
+      redirect: 'manual',
+      signal: AbortSignal.timeout(CCTV_SOURCE_FETCH_TIMEOUT_MS),
+    });
+    const discard = async () => {
+      try {
+        await resp.body?.cancel();
+      } catch {
+        /* no-op */
+      }
+      return [];
+    };
+    if (resp.status >= 300 && resp.status < 400) {
+      console.warn('[CCTV] A22 catalog redirected; redirects are not followed');
+      return discard();
+    }
+    if (!resp.ok) {
+      console.warn('[CCTV] A22 camera download failed:', resp.status);
+      return discard();
+    }
+    const payload = await readResponseJsonCapped(resp, A22_MAX_CATALOG_BYTES);
+    const items = Array.isArray(payload?.Items) ? payload.Items : [];
+    const cameras = [];
+    const seen = new Set();
+    for (const item of items) {
+      const camera = a22WebcamToSource(item);
+      if (!camera || seen.has(camera.id)) continue;
+      seen.add(camera.id);
+      cameras.push(camera);
+    }
+    // North to south along the motorway, so the picker reads in road order.
+    cameras.sort((a, b) => b.lat - a.lat);
+    console.log(`[CCTV] Loaded A22 camera sources: ${cameras.length}`);
+    return cameras;
+  } catch (error) {
+    console.warn('[CCTV] A22 camera download error:', error?.message || error);
     return [];
   }
 }

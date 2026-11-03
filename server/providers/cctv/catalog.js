@@ -25,6 +25,7 @@ import {
   loadKingCountySourcesFromOpenData,
   loadVegvesenSourcesFromOpenData,
   loadTorontoSourcesFromOpenData,
+  loadA22SourcesFromOpenDataHub,
 } from './sources.js';
 import { loadMdchartSourcesFromOpenData } from './mdchart.js';
 import { loadDdotSourcesFromGis } from './ddot.js';
@@ -174,6 +175,12 @@ const LIVE_PACKS = [
     name: 'mndot',
     enabled: () => envEnabled('CCTV_MNDOT_ENABLED'),
     load: loadMndotSources,
+  },
+  {
+    // Autostrada del Brennero (A22) webcams; port of upstream gods-eye-view #956.
+    name: 'a22',
+    enabled: () => envEnabled('CCTV_A22_ENABLED'),
+    load: loadA22SourcesFromOpenDataHub,
   },
 ];
 /**

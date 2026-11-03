@@ -474,6 +474,11 @@ export const CCTV_SOURCE_FETCH_TIMEOUT_MS = 15 * 1000;
  * (Port of upstream gods-eye-view #1234; on this fork 8 of 16 refreshes on
  * 2026-10-29 logged "Tarktee DATEX download error: ... timeout".) */
 export const TARKTEE_FETCH_TIMEOUT_MS = 30 * 1000;
+/** The Tarktee locations feed is the slow one (~11 s to first byte from the
+ * US); it gets longer, and a cached copy is used when it still fails. */
+export const TARKTEE_LOCATIONS_FETCH_TIMEOUT_MS = 45 * 1000;
+/** Camera positions barely move; reuse the last good locations for a day. */
+export const TARKTEE_LOCATIONS_CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 /** A live pack whose refresh fails or comes back empty keeps serving its last
  * good cameras for up to this long, instead of vanishing from the catalog
  * until the next 15-minute refresh. */
@@ -559,6 +564,40 @@ export const NYC_ANCHORS = Object.freeze([
   { lat: 40.6501, lon: -73.9496 }, // Flatbush
   { lat: 40.7614, lon: -73.9776 }, // Upper East / Central Park
 ]);
+
+/** Autostrada del Brennero (A22, Brenner–Modena) webcams: the keyless Open
+ * Data Hub (NOI Techpark, South Tyrol) tourism API republishes Autobrennero's
+ * own camera list with coordinates, one request for the whole motorway
+ * (13 cameras). Frames are stills on the operator's host, refreshed about
+ * once a minute. */
+export const DEFAULT_A22_CCTV_URL =
+  'https://tourism.api.opendatahub.com/v1/WebcamInfo?source=a22&pagesize=200&removenullvalues=true';
+/** The only origin A22 camera frames may come from: `km<N>.jpg` per camera. */
+export const A22_IMAGE_ORIGIN = 'https://www.autobrennero.it/WebCamImg/';
+/** Hard ceiling on the catalog body. The whole motorway is ~45 KB. */
+export const A22_MAX_CATALOG_BYTES = 2 * 1024 * 1024;
+/** Orthometric ground elevation (m) at each camera, keyed by its motorway
+ * kilometre, from the Copernicus GLO-90 DEM via Open-Meteo's elevation API.
+ * The feed's coordinates are 2D and the road climbs from the Po valley (~20 m)
+ * to the Brenner Pass (~1,370 m), so one flat prior would bury the Alpine
+ * cameras. A camera not listed here uses A22_DEFAULT_GROUND_ELEVATION_M. */
+export const A22_GROUND_ELEVATION_BY_KM = Object.freeze({
+  1: 1365,
+  68: 375,
+  77: 301,
+  100: 219,
+  129: 206,
+  138: 204,
+  159: 175,
+  205: 188,
+  228: 72,
+  240: 38,
+  272: 16,
+  285: 19,
+  313: 40,
+});
+export const A22_DEFAULT_GROUND_ELEVATION_M = 200;
+
 
 
 /** Oregon TripCheck (ODOT) cameras: keyless ArcGIS inventory (~337). Stills on

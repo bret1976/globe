@@ -591,6 +591,13 @@ export const DATA_CREDITS = [
       '<a href="https://data.gov.hk/en-data/dataset/hk-td-tis_2-traffic-snapshot-images" target="_blank" rel="noopener">DATA.GOV.HK / Hong Kong Transport Department</a> — traffic snapshot images',
   },
   {
+    key: 'a22-cctv',
+    html:
+      'Motorway webcams (A22 Brennero–Modena): images © ' +
+      '<a href="https://www.autobrennero.it/" target="_blank" rel="noopener">Autostrada del Brennero S.p.A.</a>, ' +
+      'camera list via the <a href="https://opendatahub.com/" target="_blank" rel="noopener">Open Data Hub</a> (NOI Techpark)',
+  },
+  {
     key: 'nyctmc-cctv',
     html:
       'CCTV cameras &amp; frames (New York City): ' +
