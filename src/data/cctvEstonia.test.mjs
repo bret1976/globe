@@ -5,6 +5,7 @@ import {
   loadTarkteeSourcesFromDatex,
   parseTarkteeDatexImages,
   parseTarkteeDatexLocations,
+  resetTarkteeLocationsCacheForTests,
 } from '../../server/providers/cctv/sources.js';
 
 const SAMPLE_LOCATIONS_XML = `<?xml version="1.0" encoding="UTF-8"?>
@@ -87,7 +88,8 @@ test('Tarktee DATEX image parser rejects non-official hosts', () => {
 });
 
 // Ported from upstream gods-eye-view #1234 (quanticsoul4772, MIT).
-test('Tarktee DATEX requests wait 30 s, past the slow answers measured live', async (t) => {
+test('Tarktee DATEX requests wait 45 s (slow locations) and 30 s (images)', async (t) => {
+  resetTarkteeLocationsCacheForTests();
   const timeouts = [];
   const timeout = AbortSignal.timeout;
   t.mock.method(AbortSignal, 'timeout', (ms) => {
@@ -106,6 +108,54 @@ test('Tarktee DATEX requests wait 30 s, past the slow answers measured live', as
       ),
   );
   const cameras = await loadTarkteeSourcesFromDatex();
-  assert.deepEqual(timeouts, [30_000, 30_000]);
+  assert.deepEqual(timeouts, [45_000, 30_000]);
   assert.equal(cameras.length, 1);
+});
+
+test('a Tarktee locations timeout reuses the last good locations with fresh frames', async (t) => {
+  resetTarkteeLocationsCacheForTests();
+  t.mock.method(console, 'log', () => {});
+  const warnings = [];
+  t.mock.method(console, 'warn', (...args) => warnings.push(args.join(' ')));
+  let failLocations = false;
+  const freshImages = SAMPLE_IMAGES_XML.replace(
+    '42_202608251542.jpg',
+    '42_202608251600.jpg',
+  );
+  let images = SAMPLE_IMAGES_XML;
+  t.mock.method(globalThis, 'fetch', async (url) => {
+    if (String(url).includes('roadCameraLocations')) {
+      if (failLocations) throw new DOMException('timed out', 'TimeoutError');
+      return new Response(SAMPLE_LOCATIONS_XML);
+    }
+    return new Response(images);
+  });
+  const first = await loadTarkteeSourcesFromDatex();
+  assert.equal(first.length, 1);
+
+  failLocations = true;
+  images = freshImages;
+  const second = await loadTarkteeSourcesFromDatex();
+  assert.equal(second.length, 1);
+  assert.equal(second[0].name, first[0].name);
+  assert.match(second[0].url, /42_202608251600\.jpg$/);
+  assert.ok(warnings.some((w) => w.includes('using the 1 cached')));
+});
+
+test('a Tarktee locations failure with nothing cached, or an images failure, returns empty', async (t) => {
+  resetTarkteeLocationsCacheForTests();
+  t.mock.method(console, 'log', () => {});
+  t.mock.method(console, 'warn', () => {});
+  let mode = 'loc-fail';
+  t.mock.method(globalThis, 'fetch', async (url) => {
+    const isLoc = String(url).includes('roadCameraLocations');
+    if (mode === 'loc-fail' && isLoc) return new Response('x', { status: 503 });
+    if (mode === 'img-fail' && !isLoc) throw new Error('offline');
+    return new Response(isLoc ? SAMPLE_LOCATIONS_XML : SAMPLE_IMAGES_XML);
+  });
+  assert.deepEqual(await loadTarkteeSourcesFromDatex(), []);
+  mode = 'ok';
+  assert.equal((await loadTarkteeSourcesFromDatex()).length, 1);
+  mode = 'img-fail';
+  assert.deepEqual(await loadTarkteeSourcesFromDatex(), []);
 });

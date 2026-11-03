@@ -1,6 +1,7 @@
 import { Readable } from 'node:stream';
 import { hashSeed, escapeXml } from './normalize.js';
 import {
+  A22_IMAGE_ORIGIN,
   CCTV_FRAME_FETCH_TIMEOUT_MS,
   CCTV_FRAME_MAX_BODY_BYTES,
   CCTV_MEDIA_FETCH_TIMEOUT_MS,
@@ -385,6 +386,15 @@ export async function fetchTxdotSnapshot(
 const MAX_SAME_HOST_REDIRECTS = 2;
 
 /**
+ * Hosts whose frames live under one path prefix: a same-host redirect must
+ * stay under it too, so an operator site redirect (e.g. to a login page) is
+ * never proxied as a camera frame. Adapted from upstream gods-eye-view #956.
+ */
+const CCTV_PINNED_PREFIX_BY_HOST = new Map(
+  [A22_IMAGE_ORIGIN].map((prefix) => [new URL(prefix).hostname, prefix]),
+);
+
+/**
  * Fetch a registered frame URL following redirects ONLY within the original
  * origin (scheme, host and port; at most MAX_SAME_HOST_REDIRECTS hops).
  * Default redirect-following would let an upstream steer a host-pinned
@@ -428,6 +438,8 @@ export async function fetchWithinHost(url, init, fetchImpl = fetch) {
       return null;
     }
     if (next.origin !== origin) return null;
+    const pinned = CCTV_PINNED_PREFIX_BY_HOST.get(next.hostname);
+    if (pinned && !next.href.startsWith(pinned)) return null;
     current = next;
   }
   return null;
