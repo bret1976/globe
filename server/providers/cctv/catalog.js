@@ -26,6 +26,7 @@ import {
   loadVegvesenSourcesFromOpenData,
   loadTorontoSourcesFromOpenData,
   loadA22SourcesFromOpenDataHub,
+  loadDriveNcSourcesFromOpenData,
 } from './sources.js';
 import { loadMdchartSourcesFromOpenData } from './mdchart.js';
 import { loadDdotSourcesFromGis } from './ddot.js';
@@ -181,6 +182,11 @@ const LIVE_PACKS = [
     name: 'a22',
     enabled: () => envEnabled('CCTV_A22_ENABLED'),
     load: loadA22SourcesFromOpenDataHub,
+  },
+  {
+    name: 'drivenc',
+    enabled: () => envEnabled('CCTV_DRIVENC_ENABLED'),
+    load: loadDriveNcSourcesFromOpenData,
   },
 ];
 /**

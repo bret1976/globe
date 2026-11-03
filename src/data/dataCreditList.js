@@ -598,6 +598,13 @@ export const DATA_CREDITS = [
       'camera list via the <a href="https://opendatahub.com/" target="_blank" rel="noopener">Open Data Hub</a> (NOI Techpark)',
   },
   {
+    key: 'drivenc-cctv',
+    html:
+      'CCTV cameras &amp; frames (North Carolina): ' +
+      '<a href="https://www.drivenc.gov/" target="_blank" rel="noopener">NCDOT DriveNC</a> ' +
+      '(public NCDOT camera frames, fetched at request time; images are neither stored nor recorded)',
+  },
+  {
     key: 'nyctmc-cctv',
     html:
       'CCTV cameras &amp; frames (New York City): ' +

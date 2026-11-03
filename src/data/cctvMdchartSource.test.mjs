@@ -199,5 +199,5 @@ test('mdchart loader uses the bundled snapshot when the live catalog is empty', 
 });
 
 test('the shipped catalog ceiling is not raised to make room for this pack', () => {
-  assert.equal(DEFAULT_CCTV_MAX_SOURCES, 8000);
+  assert.equal(DEFAULT_CCTV_MAX_SOURCES, 12000); // raised 8000 -> 12000 for DriveNC (11-03, approved)
 });
