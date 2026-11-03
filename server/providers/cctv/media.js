@@ -2,6 +2,7 @@ import { Readable } from 'node:stream';
 import { hashSeed, escapeXml } from './normalize.js';
 import {
   A22_IMAGE_ORIGIN,
+  DRIVENC_IMAGE_ORIGIN,
   CCTV_FRAME_FETCH_TIMEOUT_MS,
   CCTV_FRAME_MAX_BODY_BYTES,
   CCTV_MEDIA_FETCH_TIMEOUT_MS,
@@ -391,7 +392,7 @@ const MAX_SAME_HOST_REDIRECTS = 2;
  * never proxied as a camera frame. Adapted from upstream gods-eye-view #956.
  */
 const CCTV_PINNED_PREFIX_BY_HOST = new Map(
-  [A22_IMAGE_ORIGIN].map((prefix) => [new URL(prefix).hostname, prefix]),
+  [A22_IMAGE_ORIGIN, DRIVENC_IMAGE_ORIGIN].map((prefix) => [new URL(prefix).hostname, prefix]),
 );
 
 /**

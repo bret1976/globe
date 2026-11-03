@@ -419,6 +419,6 @@ test('CCTV_TORONTO_ENABLED=0 keeps the lane from being loaded at all', async (t)
 });
 
 test('the shipped catalog ceiling is not raised to make room for this pack', () => {
-  // GodsEye ships an 8000 shared ceiling (raised in our tree before this port); the pack must not raise it further.
-  assert.equal(DEFAULT_CCTV_MAX_SOURCES, 8000);
+  // GodsEye ships a 12000 shared ceiling (raised in our tree, last for DriveNC 11-03); the pack must not raise it further.
+  assert.equal(DEFAULT_CCTV_MAX_SOURCES, 12000); // raised 8000 -> 12000 for DriveNC (11-03, approved)
 });

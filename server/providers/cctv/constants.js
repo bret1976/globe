@@ -11,9 +11,9 @@ export const DEFAULT_AUSTIN_MAX_SOURCES = 250;
  * cap.js) so no region is silently dropped. Sized above the sum of the
  * default per-pack caps so a default install never trims.
  */
-export const DEFAULT_CCTV_MAX_SOURCES = 8000;
+export const DEFAULT_CCTV_MAX_SOURCES = 12000;
 /** Hard upper bound for CCTV_MAX_SOURCES; also sizes the health map. */
-export const CCTV_MAX_SOURCES_CEILING = 10000;
+export const CCTV_MAX_SOURCES_CEILING = 15000;
 /** Reference point for Austin camera prioritization (Congress & 6th). */
 export const AUSTIN_DOWNTOWN = { lat: 30.2672, lon: -97.7431 };
 /** Caltrans CCTV: one JSON feed per district, identical schema statewide. */
@@ -404,6 +404,45 @@ export const COLORADO_ANCHORS = Object.freeze([
  * features and under 100 KB; this only exists so an upstream that streams an
  * unbounded body cannot be buffered without limit. */
 export const COLORADO_MAX_CATALOG_BYTES = 4 * 1024 * 1024;
+
+/** NCDOT DriveNC (North Carolina): keyless. The camera list is the catalog the
+ * drivenc.gov map itself loads — every camera's id and position (~1,024 today)
+ * in one ~73 KB request — and each camera's NCDOT code and still-view id come
+ * from its tooltip page. DriveNC is a TravelIQ site like Ontario 511, so its
+ * keyed `api/v2/get/cameras` answers in the Ontario shape; with a free
+ * developer key (DRIVENC_API_KEY, drivenc.gov/developers/doc) that one request
+ * replaces the tooltip sweep. Live video needs HTTP Basic credentials the site
+ * holds, so the pack is stills-only. */
+export const DRIVENC_MAP_ICONS_URL =
+  'https://www.drivenc.gov/map/mapIcons/Cameras';
+export const DRIVENC_TOOLTIP_URL = (id) =>
+  `https://www.drivenc.gov/tooltip/Cameras/${encodeURIComponent(id)}`;
+export const DRIVENC_CAMERAS_URL =
+  'https://www.drivenc.gov/api/v2/get/cameras?format=json&lang=en';
+/** The only directory DriveNC frames may come from: `<origin><viewId>`. */
+export const DRIVENC_IMAGE_ORIGIN = 'https://www.drivenc.gov/map/Cctv/';
+export const DEFAULT_DRIVENC_MAX_SOURCES = 1100;
+/** Prioritization anchors: the three largest metros, which hold most of the
+ * state's cameras between them (the Triangle, Charlotte and the Triad). */
+export const DRIVENC_ANCHORS = [
+  { lat: 35.7796, lon: -78.6382 }, // Raleigh
+  { lat: 35.2271, lon: -80.8431 }, // Charlotte
+  { lat: 36.0726, lon: -79.792 }, // Greensboro
+];
+/** Hard ceiling on the DriveNC catalog body (~73 KB today) and on one tooltip
+ * page (~4 KB today); they only exist so an upstream that streams an unbounded
+ * body cannot be buffered without limit. */
+export const DRIVENC_MAX_CATALOG_BYTES = 4 * 1024 * 1024;
+export const DRIVENC_MAX_TOOLTIP_BYTES = 256 * 1024;
+/** Tooltip pages in flight at once, and the deadline for one refresh's sweep.
+ * A page answers in ~0.2 s, so 400 cameras resolve in ~10 s on a cold start;
+ * after that only cameras not yet seen are asked about. */
+export const DRIVENC_TOOLTIP_CONCURRENCY = 8;
+export const DRIVENC_TOOLTIP_SWEEP_TIMEOUT_MS = 30 * 1000;
+/** Ground-elevation prior (m): the catalog is 2D and most cameras sit in the
+ * Piedmont (Raleigh ~100 m, Greensboro ~260 m, Charlotte ~230 m); the client's
+ * ground resolution owns placement. */
+export const DRIVENC_GROUND_ELEVATION_M = 120;
 
 /** King County, WA road cameras: keyless public ArcGIS FeatureServer layer
  * ("King County and WSDOT Traffic Cameras", King County DOT Road Services).
