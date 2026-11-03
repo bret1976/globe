@@ -180,7 +180,7 @@ export function createActivity({ store, now = () => Date.now(), sources = {} } =
   }
 
   /** Disappearance history, newest first, filtered. */
-  function historyList({ kind = null, state = null, area = null, q = '', sinceMs = null, limit = 500, offset = 0 } = {}, t = now()) {
+  function historyList({ kind = null, state = null, area = null, q = '', sinceMs = null, untilMs = null, limit = 500, offset = 0 } = {}, t = now()) {
     const needle = String(q || '').trim().toLowerCase();
     const out = [];
     for (const h of history.values()) {
@@ -189,15 +189,24 @@ export function createActivity({ store, now = () => Date.now(), sources = {} } =
       if (state === 'dark' && h.reappearedAt) continue;
       if (area && !(h.areas || []).includes(area)) continue;
       if (Number.isFinite(sinceMs) && h.flaggedAt < sinceMs) continue;
+      if (Number.isFinite(untilMs) && h.flaggedAt >= untilMs) continue;
       if (needle && !`${h.label} ${h.id} ${h.place}`.toLowerCase().includes(needle)) continue;
       out.push(h);
     }
     out.sort((a, b) => b.flaggedAt - a.flaggedAt);
     const total = out.length;
+    // Exact totals over the whole filtered set (not just this page).
+    const totals = { all: { total, dark: 0, reappeared: 0 }, ship: { total: 0, dark: 0, reappeared: 0 }, aircraft: { total: 0, dark: 0, reappeared: 0 } };
+    for (const h of out) {
+      const k = h.kind === 'ship' ? 'ship' : 'aircraft';
+      const st = h.reappearedAt ? 'reappeared' : 'dark';
+      totals[k].total += 1; totals[k][st] += 1; totals.all[st] += 1;
+    }
     const from = Math.max(0, Math.floor(Number(offset) || 0));
     const n = Math.max(1, Math.min(HISTORY_MAX, Math.floor(Number(limit) || 500)));
     return {
       total,
+      totals,
       offset: from,
       rows: out.slice(from, from + n).map((h) => ({
         ...h, darkMin: h.reappearedAt ? h.durationMin : Math.max(0, Math.round((t - h.lastSeenAt) / 60_000)), state: h.reappearedAt ? 'reappeared' : 'dark',
