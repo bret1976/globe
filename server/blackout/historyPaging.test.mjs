@@ -19,3 +19,18 @@ test('history list pages with limit/offset, newest first', () => {
   assert.equal(p1.rows[0].id, 's149');
   assert.equal(p2.rows[49].id, 's0');
 });
+
+test('history totals are exact across pages and honour since/until', () => {
+  const T = 1_800_000_000_000;
+  const flags = Array.from({ length: 150 }, (_, i) => ({ id: `s${i}`, label: `s${i}`, lat: 10, lon: 10, lastAt: T + i * 1000, flaggedAt: T + i * 1000 + 1 }));
+  const act = createActivity({ now: () => T + 10_000_000, sources: { shipFlags: () => flags } });
+  act.tick(T + 10_000_000);
+  const p = act.historyList({ limit: 10 });
+  assert.equal(p.rows.length, 10);
+  assert.equal(p.totals.ship.total, 150);
+  assert.equal(p.totals.aircraft.total, 0);
+  assert.equal(p.totals.all.dark + p.totals.all.reappeared, 150);
+  const w = act.historyList({ sinceMs: T + 50_000, untilMs: T + 100_000 });
+  assert.equal(w.total, 50);
+  assert.equal(w.totals.ship.total, 50);
+});

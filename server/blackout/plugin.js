@@ -233,7 +233,7 @@ export function blackoutPlugin({ gnss = null, env = process.env, now = () => Dat
         const list = activity.list({ since: url.searchParams.get('since'), limit, type: url.searchParams.get('type') || null, kind: url.searchParams.get('kind') || null });
         return json(200, { generatedAt: new Date(t).toISOString(), provenance: 'inferred', status: activity.status(), count: list.length, events: list, attribution: ATTRIBUTION });
       }
-      if (path === '/api/blackout/v1/history') {
+      if (path === '/api/blackout/v1/history' || path === '/api/blackout/v1/history/totals') {
         const p = url.searchParams;
         const kindQ = p.get('kind') || 'all';
         const kind = { all: null, ships: 'ship', ship: 'ship', aircraft: 'military-aircraft' }[kindQ];
@@ -245,13 +245,20 @@ export function blackoutPlugin({ gnss = null, env = process.env, now = () => Dat
         const format = p.get('format') || 'json';
         if (!['json', 'csv', 'geojson'].includes(format)) return send(res, 400, { error: 'invalid_format', allowed: ['json', 'csv', 'geojson'] });
         const days = Number(p.get('days'));
-        const out = activity.historyList({ kind, state: state === 'all' ? null : state, area, q: String(p.get('q') || '').slice(0, 60), sinceMs: days > 0 ? t - days * 86_400_000 : null, limit: Number(p.get('limit')) || (format === 'json' ? HISTORY_JSON_DEFAULT_LIMIT : 20_000), offset: Number(p.get('offset')) || 0 }, t);
+        const parseT = (v) => { if (v == null || v === '') return null; const n = /^\d+$/.test(v) ? Number(v) : Date.parse(v); return Number.isFinite(n) ? n : NaN; };
+        const sinceQ = parseT(p.get('since')); const untilQ = parseT(p.get('until'));
+        if (Number.isNaN(sinceQ) || Number.isNaN(untilQ)) return send(res, 400, { error: 'invalid_time', hint: 'since/until take ISO-8601 or epoch ms' });
+        const sinceMs = sinceQ != null ? (days > 0 ? Math.max(sinceQ, t - days * 86_400_000) : sinceQ) : (days > 0 ? t - days * 86_400_000 : null);
+        const totalsOnly = path === '/api/blackout/v1/history/totals';
+        const out = activity.historyList({ kind, state: state === 'all' ? null : state, area, q: String(p.get('q') || '').slice(0, 60), sinceMs, untilMs: untilQ, limit: Number(p.get('limit')) || (format === 'json' ? HISTORY_JSON_DEFAULT_LIMIT : 20_000), offset: Number(p.get('offset')) || 0 }, t);
+        const win = { since: sinceMs != null ? new Date(sinceMs).toISOString() : null, until: untilQ != null ? new Date(untilQ).toISOString() : null };
+        if (totalsOnly) return json(200, { generatedAt: new Date(t).toISOString(), provenance: 'inferred', retentionDays: 90, filters: { kind: kindQ, state, area, ...win }, total: out.total, totals: out.totals });
         const stamp = new Date(t).toISOString().replace(/[:.]/g, '-');
         const meta = { generatedAt: new Date(t).toISOString(), provenance: 'inferred', retentionDays: 90, attribution: [ATTRIBUTION.ships, ATTRIBUTION.aircraft] };
         if (format === 'csv') return send(res, 200, historyCsv(out.rows), 'text/csv; charset=utf-8', { 'Content-Disposition': `attachment; filename="blackout-disappearances-${stamp}.csv"` });
         if (format === 'geojson') return send(res, 200, historyGeoJson(out.rows, meta), 'application/geo+json; charset=utf-8', { 'Content-Disposition': `attachment; filename="blackout-disappearances-${stamp}.geojson"` });
         const nextOffset = out.offset + out.rows.length < out.total ? out.offset + out.rows.length : null;
-        return json(200, { ...meta, total: out.total, count: out.rows.length, offset: out.offset, nextOffset, rows: out.rows, areas: ALERT_AREAS.map(({ id, name }) => ({ id, name })) });
+        return json(200, { ...meta, total: out.total, totals: out.totals, count: out.rows.length, offset: out.offset, nextOffset, rows: out.rows, areas: ALERT_AREAS.map(({ id, name }) => ({ id, name })) });
       }
       if (path === '/api/blackout/v1/alerts') {
         const s = alerts.status();
@@ -312,7 +319,8 @@ export function blackoutPlugin({ gnss = null, env = process.env, now = () => Dat
             'GET /api/blackout/v1/live?kinds=ships,aircraft,dark&bbox=w,s,e,n&grid=deg': 'Live map positions (ships grid-thinned) and current went-dark targets.',
             'GET /api/blackout/v1/target?kind=ship|aircraft&id=': 'Details for one target.',
             'GET /api/blackout/v1/events?since=id': 'Activity feed (went dark, reappeared, GPS interference rose). SSE: /events/stream.',
-            'GET /api/blackout/v1/history?kind=&state=&area=&q=&days=&limit=&offset=&format=json|csv|geojson': 'Disappearance history (90 days). JSON returns up to 1000 rows by default; page with limit/offset (nextOffset).',
+            'GET /api/blackout/v1/history?kind=&state=&area=&q=&days=&limit=&offset=&format=json|csv|geojson': 'Disappearance history (90 days). JSON returns up to 1000 rows by default; page with limit/offset (nextOffset). since/until (ISO or epoch ms) bound flaggedAt; total/totals are exact over the filtered set.',
+            'GET /api/blackout/v1/history/totals?kind=&state=&area=&q=&days=&since=&until=': 'Exact counts only (no rows), by kind (ship/aircraft) and state (dark/reappeared).',
             'POST /api/blackout/v1/alerts/subscribe': 'Email-alert sign-up (double opt-in).',
             'GET /api/gnss-integrity/history': '24 h GNSS-integrity frames (?at=ms for one frame).',
             'GET /api/gpsjam/dates': 'Daily GPSJam dates (?date=YYYY-MM-DD for one day).',
